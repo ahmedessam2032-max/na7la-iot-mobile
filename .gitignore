@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.env
+venv/
+.venv/
+
+# Flutter & Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+build/
+mobile_app/build/
+mobile_app/.dart_tool/
+mobile_app/.flutter-plugins
+mobile_app/.flutter-plugins-dependencies
+mobile_app/.packages
+
+# Android
+mobile_app/android/.gradle
+mobile_app/android/local.properties
+mobile_app/android/**/build/
+
+# Media and Logs
+scratch/
+.tempmediaStorage/
+*.mp4
+*.apk
+others programmers APKs/
+تسجيل المشترك/
+تسجيل المشترك darwish-smart-power/
+Siam-OTA-Portable-1.1.3/

@@ -1,0 +1,77 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+class SecureStorageService {
+  static const _storage = FlutterSecureStorage();
+
+  static const String keyToken = 'na7la_auth_token';
+  static const String keyUserRole = 'na7la_user_role';
+  static const String keyUserEmail = 'na7la_user_email';
+  static const String keySelectedMac = 'na7la_selected_mac';
+  static const String keyPinCode = 'na7la_pin_code';
+  static const String keyBiometricEnabled = 'na7la_biometric_enabled';
+  static const String keyDarkMode = 'na7la_dark_mode';
+
+  static Future<void> saveToken(String token) async {
+    await _storage.write(key: keyToken, value: token);
+  }
+
+  static Future<String?> getToken() async {
+    return await _storage.read(key: keyToken);
+  }
+
+  static Future<void> saveUserRole(String role) async {
+    await _storage.write(key: keyUserRole, value: role);
+  }
+
+  static Future<String?> getUserRole() async {
+    return await _storage.read(key: keyUserRole);
+  }
+
+  static Future<void> saveUserEmail(String email) async {
+    await _storage.write(key: keyUserEmail, value: email);
+  }
+
+  static Future<String?> getUserEmail() async {
+    return await _storage.read(key: keyUserEmail);
+  }
+
+  static Future<void> saveSelectedMac(String mac) async {
+    await _storage.write(key: keySelectedMac, value: mac);
+  }
+
+  static Future<String?> getSelectedMac() async {
+    return await _storage.read(key: keySelectedMac);
+  }
+
+  static Future<void> savePin(String pin) async {
+    await _storage.write(key: keyPinCode, value: pin);
+  }
+
+  static Future<String?> getPin() async {
+    return await _storage.read(key: keyPinCode);
+  }
+
+  static Future<void> setBiometricEnabled(bool enabled) async {
+    await _storage.write(key: keyBiometricEnabled, value: enabled.toString());
+  }
+
+  static Future<bool> isBiometricEnabled() async {
+    final val = await _storage.read(key: keyBiometricEnabled);
+    return val == 'true';
+  }
+
+  static Future<void> setDarkMode(bool dark) async {
+    await _storage.write(key: keyDarkMode, value: dark.toString());
+  }
+
+  static Future<bool> isDarkMode() async {
+    final val = await _storage.read(key: keyDarkMode);
+    return val == 'true';
+  }
+
+  static Future<void> clearSession() async {
+    await _storage.delete(key: keyToken);
+    await _storage.delete(key: keyUserRole);
+    await _storage.delete(key: keyUserEmail);
+  }
+}
