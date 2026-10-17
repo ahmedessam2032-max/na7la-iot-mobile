@@ -191,6 +191,48 @@ class StripRepository {
     return response.statusCode == 200;
   }
 
+  Future<bool> deleteStrip(String mac) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('${ApiConstants.baseUrl}/strips/$mac'),
+      headers: headers,
+    );
+    return response.statusCode == 200;
+  }
+
+  Future<bool> updateStripMetadata(String mac, {String? name, String? roomCategory, String? icon}) async {
+    final headers = await _getHeaders();
+    final response = await http.patch(
+      Uri.parse('${ApiConstants.baseUrl}/strips/$mac'),
+      headers: headers,
+      body: jsonEncode({
+        if (name != null) 'strip_name': name,
+        if (roomCategory != null) 'room_category': roomCategory,
+        if (icon != null) 'icon': icon,
+      }),
+    );
+    return response.statusCode == 200;
+  }
+
+  Future<Map<String, dynamic>> registerStrip(String mac, {String? name, String? roomCategory, String? icon}) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('${ApiConstants.baseUrl}/strips/register'),
+      headers: headers,
+      body: jsonEncode({
+        'mac': mac,
+        if (name != null) 'name': name,
+        if (roomCategory != null) 'room_category': roomCategory,
+        if (icon != null) 'icon': icon,
+      }),
+    );
+    try {
+      return jsonDecode(response.body);
+    } catch (_) {
+      return {'ok': response.statusCode == 200};
+    }
+  }
+
   // --- Admin Endpoints ---
 
   Future<List<dynamic>> getAdminUsers() async {
@@ -202,6 +244,19 @@ class StripRepository {
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
       return data['users'] as List? ?? [];
+    }
+    return [];
+  }
+
+  Future<List<dynamic>> getAdminStrips() async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/admin/strips'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      return data['strips'] as List? ?? [];
     }
     return [];
   }

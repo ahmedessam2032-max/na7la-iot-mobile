@@ -170,6 +170,197 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
+  void _openStripSettingsDialog() {
+    if (_selectedStrip == null) return;
+    final nameCtrl = TextEditingController(text: _selectedStrip!.stripName);
+    String chosenRoom = _selectedStrip!.roomCategory;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: _isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 2.5),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.settings_suggest_rounded, color: AppColors.honeyAmber),
+              const SizedBox(width: 8),
+              Text('إعدادات المشترك', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('اسم المشترك:', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 12),
+
+                Text('مكان المشترك (الغرفة):', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String>(
+                  value: ['living', 'office', 'bedroom', 'kitchen'].contains(chosenRoom) ? chosenRoom : 'living',
+                  items: const [
+                    DropdownMenuItem(value: 'living', child: Text('صالة المعيشة 🛋️')),
+                    DropdownMenuItem(value: 'office', child: Text('غرفة المكتب 💻')),
+                    DropdownMenuItem(value: 'bedroom', child: Text('غرفة النوم 🛏️')),
+                    DropdownMenuItem(value: 'kitchen', child: Text('المطبخ 🍳')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => chosenRoom = val);
+                  },
+                  decoration: InputDecoration(
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Technical Info Card
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _isDark ? Colors.white10 : Colors.black.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.black26),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('معلومات الهاردوير:', style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900)),
+                      const SizedBox(height: 2),
+                      Text('MAC: ${_selectedStrip!.macAddress}', style: GoogleFonts.jetBrainsMono(fontSize: 10)),
+                      Text('IP: ${_selectedStrip!.ipAddress ?? "-"}', style: GoogleFonts.jetBrainsMono(fontSize: 10)),
+                      Text('Firmware: ${_selectedStrip!.fwVersion}', style: GoogleFonts.jetBrainsMono(fontSize: 10)),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 18),
+
+                // Save Name & Room Button
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    await _repo.updateStripMetadata(
+                      _selectedStrip!.macAddress,
+                      name: nameCtrl.text.trim(),
+                      roomCategory: chosenRoom,
+                    );
+                    Navigator.of(ctx).pop();
+                    _loadStrips();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('تم حفظ بيانات المشترك بنجاح')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.check_rounded, size: 18),
+                  label: Text('حفظ التعديلات', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.honeyYellow,
+                    foregroundColor: AppColors.inkBlack,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+
+                // Delete Strip Button
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Navigator.of(ctx).pop();
+                    _confirmDeleteStrip(_selectedStrip!);
+                  },
+                  icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 18),
+                  label: Text('حذف المشترك وإلغاء الربط 🗑️', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, color: Colors.redAccent)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.redAccent, width: 1.5),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteStrip(StripModel strip) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: Colors.redAccent, width: 2.5),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+            const SizedBox(width: 8),
+            Text('تأكيد حذف المشترك', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
+          ],
+        ),
+        content: Text(
+          'هل أنت متأكد من حذف المشترك "${strip.stripName}" (${strip.macAddress})؟\n\nسيتم فك ربطه من حسابك وتصفير إعداداته وإتاحته لأي مستخدم آخر.',
+          style: GoogleFonts.cairo(fontSize: 12, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('إلغاء', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              showDialog(
+                context: context,
+                builder: (_) => PinBiometricDialog(
+                  title: 'تأكيد أمني لحذف المشترك',
+                  isDark: _isDark,
+                  onSuccess: () async {
+                    final ok = await _repo.deleteStrip(strip.macAddress);
+                    if (ok) {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('تم حذف المشترك ${strip.stripName} بنجاح')),
+                        );
+                      }
+                      _loadStrips();
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('حدث خطأ أثناء حذف المشترك')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text('تأكيد الحذف 🗑️', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -238,6 +429,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           style: GoogleFonts.cairo(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.black),
                         ),
                       ),
+                      if (_selectedStrip != null)
+                        GestureDetector(
+                          onTap: _openStripSettingsDialog,
+                          child: Container(
+                            margin: const EdgeInsets.only(left: 6),
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: _isDark ? Colors.white12 : Colors.black.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.settings_rounded,
+                              size: 14,
+                              color: _isDark ? Colors.white70 : AppColors.inkBlack,
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                   if (_strips.length > 1)
@@ -299,7 +507,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                 ),
 
-              // Add Strip Wizard Button (+)
+              // Prominent Add Strip Button
               GestureDetector(
                 onTap: () async {
                   final added = await Navigator.of(context).push<bool>(
@@ -308,15 +516,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   if (added == true) _loadStrips();
                 },
                 child: Container(
-                  width: 36,
-                  height: 36,
                   margin: const EdgeInsets.only(left: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   decoration: BoxDecoration(
                     color: _isDark ? AppColors.cardSurfaceDark : Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 2),
                   ),
-                  child: Icon(Icons.add_rounded, size: 20, color: _isDark ? Colors.white : AppColors.inkBlack),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add_rounded, size: 16, color: _isDark ? Colors.white : AppColors.inkBlack),
+                      const SizedBox(width: 2),
+                      Text(
+                        'إضافة',
+                        style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900, color: _isDark ? Colors.white : AppColors.inkBlack),
+                      ),
+                    ],
+                  ),
                 ),
               ),
 
@@ -471,6 +688,33 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ],
             ),
           ),
+          if (!(_selectedStrip?.isOnline ?? false))
+            Container(
+              margin: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade900.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.amber.shade700, width: 1.5),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_off_rounded, color: Colors.amber, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '⚠️ المشترك غير متصل بالكهرباء أو الواي فاي (أوفلاين) - القراءات متوقفة لحين عودة الاتصال بالسيرفر.',
+                      style: GoogleFonts.cairo(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: _isDark ? Colors.white : AppColors.inkBlack,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
           const SizedBox(height: 16),
 
           // Outlets Section Header

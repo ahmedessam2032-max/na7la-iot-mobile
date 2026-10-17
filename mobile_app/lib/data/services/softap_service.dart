@@ -6,14 +6,58 @@ import '../../core/constants/api_constants.dart';
 class SoftApService {
   static const MethodChannel _channel = MethodChannel('com.na7la.iot/native_wifi');
 
+  /// Request Location & Nearby Devices permissions
+  static Future<bool> requestPermissions() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('requestWifiPermissions');
+      return res ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Get current home Wi-Fi SSID that the phone is connected to
+  static Future<String> getCurrentSsid() async {
+    try {
+      final ssid = await _channel.invokeMethod<String>('getCurrentSsid');
+      return ssid ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  /// Scan for all nearby Wi-Fi SSIDs
+  static Future<List<String>> scanNearbyWifi() async {
+    try {
+      final list = await _channel.invokeListMethod<String>('scanNearbyWifi');
+      return list ?? [];
+    } catch (_) {
+      return [];
+    }
+  }
+
   /// Calculate MTTL-W01 factory SoftAP password: LGU_ + last 7 characters of MAC
-  static String calculateSoftApPassword(String mac) {
-    final cleanMac = mac.replaceAll(':', '').replaceAll('-', '').toUpperCase();
-    if (cleanMac.length >= 7) {
-      final suffix = cleanMac.substring(cleanMac.length - 7);
+  static String calculateSoftApPassword(String macOrSsid) {
+    var clean = macOrSsid.replaceAll('TONLY_TAP_', '').replaceAll(':', '').replaceAll('-', '').toUpperCase();
+    if (clean.length >= 7) {
+      final suffix = clean.substring(clean.length - 7);
       return 'LGU_$suffix';
     }
-    return 'LGU_$cleanMac';
+    return 'LGU_$clean';
+  }
+
+  /// Extract potential MAC address from TONLY_TAP_ SSID
+  static String extractMacFromSsid(String ssid) {
+    if (ssid.startsWith('TONLY_TAP_')) {
+      final suffix = ssid.replaceFirst('TONLY_TAP_', '').toUpperCase();
+      // Most MTTL-W01 chips have OUI 88D039 (Tonly Technology)
+      if (suffix.length == 7) {
+        // e.g. 9394B53 -> 88D039394B53
+        return '88D03${suffix}';
+      }
+      return suffix;
+    }
+    return ssid;
   }
 
   /// Connect to the strip's temporary AP using Android's native WifiNetworkSpecifier
