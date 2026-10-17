@@ -75,7 +75,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).shade500,
+                        color: const Color(0xFF10B981),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -180,7 +180,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                 _buildTimelineItem('🌐 راوتر الإنترنت', '00:00 (فوراً)', AppColors.routerCyan),
                 _buildTimelineItem('📱 شاحن الموبايل', '+ 00:05 ثوانٍ', AppColors.honeyYellow),
                 _buildTimelineItem('❄️ تلاجة المطبخ', '+ 03:00 دقائق (كمبريسور)', AppColors.honeyAmber),
-                _buildTimelineItem('🌀 تكييف الصالة', '+ 05:00 دقائق (كمبريسور)', Colors.roseAccent),
+                _buildTimelineItem('🌀 تكييف الصالة', '+ 05:00 دقائق (كمبريسور)', Colors.redAccent),
               ],
             ),
           ),
