@@ -124,7 +124,7 @@ class SocketCard extends StatelessWidget {
                       width: 30,
                       height: 30,
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.08),
+                        color: isDark ? Colors.white10 : Colors.black.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Icon(
@@ -160,7 +160,7 @@ class SocketCard extends StatelessWidget {
                   ),
                   Text(
                     '#${socket.socketIndex}',
-                    style: GoogleFonts.jetbrainsMono(
+                    style: GoogleFonts.jetBrainsMono(
                       fontSize: 10,
                       fontWeight: FontWeight.w700,
                       color: isDark ? Colors.white54 : Colors.black45,
@@ -204,7 +204,7 @@ class SocketCard extends StatelessWidget {
                 RichText(
                   text: TextSpan(
                     text: socket.state ? socket.currentWatt.toStringAsFixed(0) : '0',
-                    style: GoogleFonts.jetbrainsMono(
+                    style: GoogleFonts.jetBrainsMono(
                       fontSize: 13,
                       fontWeight: FontWeight.w900,
                       color: isDark ? Colors.white : AppColors.inkBlack,
@@ -212,7 +212,7 @@ class SocketCard extends StatelessWidget {
                     children: [
                       TextSpan(
                         text: ' W',
-                        style: GoogleFonts.jetbrainsMono(
+                        style: GoogleFonts.jetBrainsMono(
                           fontSize: 9,
                           fontWeight: FontWeight.w700,
                           color: AppColors.honeyAmber,

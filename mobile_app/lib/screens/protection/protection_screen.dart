@@ -75,12 +75,12 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                       decoration: BoxDecoration(
-                        color: Colors.emerald.shade500,
+                        color: const Color(0xFF10B981).shade500,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         'الجهد: ${widget.strip.currentVoltage?.toStringAsFixed(0) ?? 224}V',
-                        style: GoogleFonts.jetbrainsMono(
+                        style: GoogleFonts.jetBrainsMono(
                           fontSize: 10,
                           fontWeight: FontWeight.w800,
                           color: Colors.white,
@@ -111,7 +111,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                           Text('الحد الأدنى للفصل (Low Cut-off):',
                               style: GoogleFonts.cairo(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700)),
                           Text('${_minVoltage.round()} V',
-                              style: GoogleFonts.jetbrainsMono(fontSize: 13, color: AppColors.honeyYellow, fontWeight: FontWeight.w900)),
+                              style: GoogleFonts.jetBrainsMono(fontSize: 13, color: AppColors.honeyYellow, fontWeight: FontWeight.w900)),
                         ],
                       ),
                       Slider(
@@ -129,7 +129,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                           Text('الحد الأقصى للفصل (High Cut-off):',
                               style: GoogleFonts.cairo(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w700)),
                           Text('${_maxVoltage.round()} V',
-                              style: GoogleFonts.jetbrainsMono(fontSize: 13, color: AppColors.honeyAmber, fontWeight: FontWeight.w900)),
+                              style: GoogleFonts.jetBrainsMono(fontSize: 13, color: AppColors.honeyAmber, fontWeight: FontWeight.w900)),
                         ],
                       ),
                       Slider(
@@ -249,11 +249,11 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.2),
+              color: color.withOpacity(0.2),
               borderRadius: BorderRadius.circular(6),
               border: Border.all(color: color, width: 1),
             ),
-            child: Text(time, style: GoogleFonts.jetbrainsMono(fontSize: 9, fontWeight: FontWeight.w800)),
+            child: Text(time, style: GoogleFonts.jetBrainsMono(fontSize: 9, fontWeight: FontWeight.w800)),
           ),
         ],
       ),

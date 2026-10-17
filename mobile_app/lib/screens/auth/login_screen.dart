@@ -84,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: GoogleFonts.cairo(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.inkBlack.withValues(alpha: 0.75),
+                    color: AppColors.inkBlack.withOpacity(0.75),
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -207,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _inviteController,
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.jetbrainsMono(
+                          style: GoogleFonts.jetBrainsMono(
                             fontSize: 22,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 4,

@@ -186,7 +186,7 @@ class _WizardScreenState extends State<WizardScreen> {
           children: _scannedNetworks.map((ssid) {
             final isSel = _selectedSsid == ssid;
             return ChoiceChip(
-              label: Text(ssid, style: GoogleFonts.jetbrainsMono(fontSize: 10, fontWeight: FontWeight.w800)),
+              label: Text(ssid, style: GoogleFonts.jetBrainsMono(fontSize: 10, fontWeight: FontWeight.w800)),
               selected: isSel,
               selectedColor: AppColors.honeyAmber,
               backgroundColor: widget.isDark ? AppColors.cardMutedDark : Colors.white,
@@ -256,7 +256,7 @@ class _WizardScreenState extends State<WizardScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_detectedSsid, style: GoogleFonts.jetbrainsMono(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
+                      Text(_detectedSsid, style: GoogleFonts.jetBrainsMono(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13)),
                       Text('إشارة ممتازة • جاهز للاقتران', style: GoogleFonts.cairo(color: Colors.white60, fontSize: 10)),
                     ],
                   ),
@@ -264,7 +264,7 @@ class _WizardScreenState extends State<WizardScreen> {
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: Colors.emerald, borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(color: const Color(0xFF10B981), borderRadius: BorderRadius.circular(6)),
                 child: Text('تم الالتقاط ✓', style: GoogleFonts.cairo(color: Colors.black, fontSize: 9, fontWeight: FontWeight.w900)),
               ),
             ],
@@ -308,7 +308,7 @@ class _WizardScreenState extends State<WizardScreen> {
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('$_countdownSeconds', style: GoogleFonts.jetbrainsMono(fontSize: 28, fontWeight: FontWeight.w900)),
+                Text('$_countdownSeconds', style: GoogleFonts.jetBrainsMono(fontSize: 28, fontWeight: FontWeight.w900)),
                 Text('ثانية', style: GoogleFonts.cairo(fontSize: 10)),
               ],
             ),
@@ -396,10 +396,10 @@ class _WizardScreenState extends State<WizardScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: isDone ? Colors.emerald.withValues(alpha: 0.15) : (widget.isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.04)),
+        color: isDone ? const Color(0xFF10B981).withOpacity(0.15) : (widget.isDark ? Colors.white10 : Colors.black.withOpacity(0.04)),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isDone ? Colors.emerald : (widget.isDark ? Colors.white24 : Colors.black12),
+          color: isDone ? const Color(0xFF10B981) : (widget.isDark ? Colors.white24 : Colors.black12),
           width: 1.5,
         ),
       ),
@@ -407,7 +407,7 @@ class _WizardScreenState extends State<WizardScreen> {
         children: [
           Icon(
             isDone ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
-            color: isDone ? Colors.emerald : (widget.isDark ? Colors.white38 : Colors.black38),
+            color: isDone ? const Color(0xFF10B981) : (widget.isDark ? Colors.white38 : Colors.black38),
             size: 18,
           ),
           const SizedBox(width: 10),
@@ -416,7 +416,7 @@ class _WizardScreenState extends State<WizardScreen> {
             style: GoogleFonts.cairo(
               fontSize: 11,
               fontWeight: isDone ? FontWeight.w900 : FontWeight.w700,
-              color: isDone ? Colors.emerald : (widget.isDark ? Colors.white60 : Colors.black54),
+              color: isDone ? const Color(0xFF10B981) : (widget.isDark ? Colors.white60 : Colors.black54),
             ),
           ),
         ],

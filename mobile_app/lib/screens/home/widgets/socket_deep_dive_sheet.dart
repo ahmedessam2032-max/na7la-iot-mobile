@@ -276,7 +276,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
   Widget _buildPresetChip(String label, VoidCallback onTap) {
     return ActionChip(
       label: Text(label, style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w800)),
-      backgroundColor: widget.isDark ? AppColors.cardMutedDark : AppColors.honeyYellow.withValues(alpha: 0.2),
+      backgroundColor: widget.isDark ? AppColors.cardMutedDark : AppColors.honeyYellow.withOpacity(0.2),
       side: BorderSide(color: widget.isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 1.5),
       onPressed: onTap,
     );
@@ -291,7 +291,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
           padding: const EdgeInsets.symmetric(vertical: 8),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.honeyAmber : (widget.isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
+            color: isSelected ? AppColors.honeyAmber : (widget.isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isSelected ? AppColors.inkBlack : Colors.transparent,

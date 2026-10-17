@@ -229,7 +229,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
                         decoration: BoxDecoration(
-                          color: (_selectedStrip?.isOnline ?? false) ? Colors.emerald : Colors.redAccent,
+                          color: (_selectedStrip?.isOnline ?? false) ? const Color(0xFF10B981) : Colors.redAccent,
                           borderRadius: BorderRadius.circular(10),
                           border: Border.all(color: AppColors.inkBlack, width: 1),
                         ),
@@ -391,12 +391,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             children: [
                               Text(
                                 totalWatts.toStringAsFixed(0),
-                                style: GoogleFonts.jetbrainsMono(fontSize: 32, fontWeight: FontWeight.w900),
+                                style: GoogleFonts.jetBrainsMono(fontSize: 32, fontWeight: FontWeight.w900),
                               ),
                               const SizedBox(width: 4),
                               Text(
                                 'WATTS',
-                                style: GoogleFonts.jetbrainsMono(
+                                style: GoogleFonts.jetBrainsMono(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w900,
                                   color: AppColors.honeyAmber,
@@ -426,7 +426,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             ),
                             child: Text(
                               '⚡ ${_selectedStrip!.currentVoltage?.toStringAsFixed(0) ?? 224}V  |  ${totalAmps.toStringAsFixed(2)}A  |  ${totalKwh.toStringAsFixed(1)}kWh',
-                              style: GoogleFonts.jetbrainsMono(fontSize: 9.5, color: AppColors.honeyYellow, fontWeight: FontWeight.w800),
+                              style: GoogleFonts.jetBrainsMono(fontSize: 9.5, color: AppColors.honeyYellow, fontWeight: FontWeight.w800),
                             ),
                           ),
                         ],

@@ -104,7 +104,7 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
                               style: GoogleFonts.cairo(fontSize: 9, color: Colors.white60)),
                           Text(
                             _inviteCode,
-                            style: GoogleFonts.jetbrainsMono(
+                            style: GoogleFonts.jetBrainsMono(
                               fontSize: 22,
                               fontWeight: FontWeight.w900,
                               color: AppColors.honeyYellow,
@@ -200,7 +200,7 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: widget.isDark ? AppColors.cardMutedDark : Colors.black.withValues(alpha: 0.04),
+        color: widget.isDark ? AppColors.cardMutedDark : Colors.black.withOpacity(0.04),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: widget.isDark ? AppColors.darkBorder : AppColors.inkBlack,
@@ -242,10 +242,10 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
         padding: const EdgeInsets.symmetric(vertical: 3),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isAllowed ? Colors.emerald.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.15),
+          color: isAllowed ? const Color(0xFF10B981).withOpacity(0.2) : Colors.red.withOpacity(0.15),
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: isAllowed ? Colors.emerald : Colors.red.withValues(alpha: 0.3),
+            color: isAllowed ? const Color(0xFF10B981) : Colors.red.withOpacity(0.3),
             width: 1,
           ),
         ),

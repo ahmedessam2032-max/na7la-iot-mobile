@@ -98,7 +98,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> {
                             margin: const EdgeInsets.only(bottom: 10),
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: widget.isDark ? AppColors.cardMutedDark : Colors.black.withValues(alpha: 0.04),
+                              color: widget.isDark ? AppColors.cardMutedDark : Colors.black.withOpacity(0.04),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
                                 color: widget.isDark ? AppColors.darkBorder : AppColors.inkBlack,
@@ -185,7 +185,7 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(title, style: GoogleFonts.cairo(fontSize: 9, fontWeight: FontWeight.w700)),
-                  Text(val, style: GoogleFonts.jetbrainsMono(fontSize: 13, fontWeight: FontWeight.w900)),
+                  Text(val, style: GoogleFonts.jetBrainsMono(fontSize: 13, fontWeight: FontWeight.w900)),
                 ],
               ),
             ),

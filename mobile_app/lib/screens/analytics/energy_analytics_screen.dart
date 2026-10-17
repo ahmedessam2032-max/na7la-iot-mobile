@@ -105,7 +105,7 @@ class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
                     ),
                     Text(
                       '${estimatedCost.toStringAsFixed(1)} ج.م',
-                      style: GoogleFonts.jetbrainsMono(
+                      style: GoogleFonts.jetBrainsMono(
                         fontSize: 22,
                         fontWeight: FontWeight.w900,
                         color: AppColors.honeyAmber,
@@ -237,7 +237,7 @@ class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
                           children: [
                             Text(s.name, style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
                             Text('${(pct * 100).toStringAsFixed(0)}% (${(s.rawEnergyKwh * 1.45).toStringAsFixed(1)} ج.م)',
-                                style: GoogleFonts.jetbrainsMono(fontSize: 10, fontWeight: FontWeight.w800)),
+                                style: GoogleFonts.jetBrainsMono(fontSize: 10, fontWeight: FontWeight.w800)),
                           ],
                         ),
                         const SizedBox(height: 4),

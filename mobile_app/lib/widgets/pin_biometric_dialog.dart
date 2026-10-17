@@ -94,7 +94,7 @@ class _PinBiometricDialogState extends State<PinBiometricDialog> {
         ),
         child: Text(
           digit,
-          style: GoogleFonts.jetbrainsMono(
+          style: GoogleFonts.jetBrainsMono(
             fontSize: 20,
             fontWeight: FontWeight.w900,
             color: widget.isDark ? Colors.white : AppColors.inkBlack,

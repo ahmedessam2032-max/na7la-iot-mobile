@@ -30,7 +30,7 @@ class HoneyJarGauge extends StatelessWidget {
             color: AppColors.inkBlack,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
             border: Border.all(
-              color: AppColors.honeyYellow.withValues(alpha: 0.4),
+              color: AppColors.honeyYellow.withOpacity(0.4),
               width: 1.5,
             ),
           ),
@@ -64,7 +64,7 @@ class HoneyJarGauge extends StatelessWidget {
                     itemBuilder: (context, i) => Container(
                       height: 2,
                       margin: const EdgeInsets.only(bottom: 4),
-                      color: AppColors.inkBlack.withValues(alpha: 0.5),
+                      color: AppColors.inkBlack.withOpacity(0.5),
                     ),
                   ),
                 ),
@@ -96,7 +96,7 @@ class HoneyJarGauge extends StatelessWidget {
                     ),
                     child: Text(
                       '$displayPct%',
-                      style: GoogleFonts.jetbrainsMono(
+                      style: GoogleFonts.jetBrainsMono(
                         fontSize: 9,
                         fontWeight: FontWeight.w900,
                         color: AppColors.honeyYellow,
@@ -114,7 +114,7 @@ class HoneyJarGauge extends StatelessWidget {
           style: GoogleFonts.cairo(
             fontSize: 9,
             fontWeight: FontWeight.w800,
-            color: isDark ? Colors.white70 : AppColors.inkBlack.withValues(alpha: 0.7),
+            color: isDark ? Colors.white70 : AppColors.inkBlack.withOpacity(0.7),
           ),
         ),
       ],
