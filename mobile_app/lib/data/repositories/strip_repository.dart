@@ -34,6 +34,37 @@ class StripRepository {
     return {'success': false, 'message': data['detail'] ?? 'فشل تسجيل الدخول'};
   }
 
+  Future<Map<String, dynamic>> register(String email, String password, String fullName) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email,
+          'password': password,
+          'full_name': fullName,
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && (data['ok'] == true || data['success'] == true)) {
+        final token = data['token'];
+        if (token != null) {
+          await SecureStorageService.saveToken(token);
+          await SecureStorageService.saveUserRole(data['role'] ?? data['user']?['role'] ?? 'USER');
+          await SecureStorageService.saveUserEmail(email);
+        }
+        return {
+          'success': true,
+          'user': data['user'] != null ? UserModel.fromJson(data['user']) : null,
+          'data': data,
+        };
+      }
+      return {'success': false, 'message': data['detail'] ?? 'فشل إنشاء الحساب'};
+    } catch (e) {
+      return {'success': false, 'message': 'تعذر الاتصال بالسيرفر: $e'};
+    }
+  }
+
   Future<Map<String, dynamic>> loginInvite(String inviteCode) async {
     final response = await http.post(
       Uri.parse('${ApiConstants.baseUrl}/auth/login-invite'),
@@ -48,6 +79,17 @@ class StripRepository {
       return {'success': true, 'data': data};
     }
     return {'success': false, 'message': data['detail'] ?? 'كود الدعوة غير صالح أو منتهي'};
+  }
+
+  Future<void> logout() async {
+    try {
+      final headers = await _getHeaders();
+      await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/auth/logout'),
+        headers: headers,
+      );
+    } catch (_) {}
+    await SecureStorageService.deleteToken();
   }
 
   Future<UserModel?> getAuthStatus() async {

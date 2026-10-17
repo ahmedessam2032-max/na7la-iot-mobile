@@ -16,6 +16,7 @@ import '../protection/protection_screen.dart';
 import '../family/family_sharing_screen.dart';
 import '../admin/admin_console_screen.dart';
 import '../onboarding/wizard_screen.dart';
+import '../auth/login_screen.dart';
 import 'widgets/socket_deep_dive_sheet.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
@@ -401,7 +402,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         children: [
           Row(
             children: [
-              Image.asset('assets/icons/app_icon.png', width: 40, height: 40),
+              Image.asset('assets/icons/app_icon.png', width: 38, height: 38),
               const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,20 +417,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           color: _isDark ? Colors.white : AppColors.inkBlack,
                         ),
                       ),
-                      const SizedBox(width: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                        decoration: BoxDecoration(
-                          color: (_selectedStrip?.isOnline ?? false) ? const Color(0xFF10B981) : Colors.redAccent,
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: AppColors.inkBlack, width: 1),
+                      if (_selectedStrip != null) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: _selectedStrip!.isOnline ? const Color(0xFF10B981) : Colors.redAccent,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: AppColors.inkBlack, width: 1),
+                          ),
+                          child: Text(
+                            _selectedStrip!.isOnline ? 'متصل' : 'أوفلاين',
+                            style: GoogleFonts.cairo(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.black),
+                          ),
                         ),
-                        child: Text(
-                          (_selectedStrip?.isOnline ?? false) ? 'متصل' : 'أوفلاين',
-                          style: GoogleFonts.cairo(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.black),
-                        ),
-                      ),
-                      if (_selectedStrip != null)
                         GestureDetector(
                           onTap: _openStripSettingsDialog,
                           child: Container(
@@ -446,34 +447,42 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             ),
                           ),
                         ),
+                      ],
                     ],
                   ),
-                  if (_strips.length > 1)
-                    DropdownButton<StripModel>(
-                      value: _selectedStrip,
-                      underline: const SizedBox(),
-                      isDense: true,
-                      items: _strips.map((s) {
-                        return DropdownMenuItem(
-                          value: s,
-                          child: Text(
-                            '${s.stripName} (${s.roomCategory})',
-                            style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w800),
-                          ),
-                        );
-                      }).toList(),
-                      onChanged: (newStrip) {
-                        if (newStrip != null) {
-                          setState(() => _selectedStrip = newStrip);
-                          _connectWebSocket();
-                        }
-                      },
-                    )
-                  else
+                  if (_selectedStrip != null) ...[
+                    if (_strips.length > 1)
+                      DropdownButton<StripModel>(
+                        value: _selectedStrip,
+                        underline: const SizedBox(),
+                        isDense: true,
+                        items: _strips.map((s) {
+                          return DropdownMenuItem(
+                            value: s,
+                            child: Text(
+                              '${s.stripName} (${s.roomCategory})',
+                              style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w800),
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (newStrip) {
+                          if (newStrip != null) {
+                            setState(() => _selectedStrip = newStrip);
+                            _connectWebSocket();
+                          }
+                        },
+                      )
+                    else
+                      Text(
+                        _selectedStrip!.stripName,
+                        style: GoogleFonts.cairo(fontSize: 10, color: _isDark ? Colors.white70 : Colors.black54),
+                      ),
+                  ] else ...[
                     Text(
-                      _selectedStrip?.stripName ?? 'مشترك الصالة الذكي',
-                      style: GoogleFonts.cairo(fontSize: 10, color: _isDark ? Colors.white70 : Colors.black54),
+                      'مرحباً ${_currentUser?.fullName ?? _currentUser?.email.split('@').first ?? ''} 👋',
+                      style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w700, color: _isDark ? Colors.white70 : Colors.black54),
                     ),
+                  ],
                 ],
               ),
             ],
@@ -494,7 +503,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     decoration: BoxDecoration(
                       color: AppColors.honeyAmber,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.inkBlack, width: 2),
+                      border: Border.all(color: AppColors.inkBlack, width: 1.5),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -521,7 +530,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   decoration: BoxDecoration(
                     color: _isDark ? AppColors.cardSurfaceDark : Colors.white,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 2),
+                    border: Border.all(color: _isDark ? AppColors.darkBorder : const Color(0xFFCBD5E1), width: 1.5),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -537,6 +546,26 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 ),
               ),
 
+              // Profile & Account Button
+              GestureDetector(
+                onTap: _openProfileSheet,
+                child: Container(
+                  width: 36,
+                  height: 36,
+                  margin: const EdgeInsets.only(left: 6),
+                  decoration: BoxDecoration(
+                    color: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _isDark ? AppColors.darkBorder : const Color(0xFFCBD5E1), width: 1.5),
+                  ),
+                  child: Icon(
+                    Icons.person_outline_rounded,
+                    size: 18,
+                    color: _isDark ? Colors.white : AppColors.inkBlack,
+                  ),
+                ),
+              ),
+
               // Dark Theme Toggle
               GestureDetector(
                 onTap: _toggleTheme,
@@ -547,7 +576,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   decoration: BoxDecoration(
                     color: AppColors.inkBlack,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.honeyYellow, width: 2),
+                    border: Border.all(color: AppColors.honeyYellow, width: 1.5),
                   ),
                   child: Icon(
                     _isDark ? Icons.wb_sunny_rounded : Icons.nightlight_round,
@@ -561,6 +590,147 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         ],
       ),
     );
+  }
+
+  void _openProfileSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: _isDark ? AppColors.darkBorder : const Color(0xFFE2E8F0)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 26,
+                  backgroundColor: AppColors.honeyYellow,
+                  child: Text(
+                    (_currentUser?.fullName?.isNotEmpty == true ? _currentUser!.fullName![0] : (_currentUser?.email.isNotEmpty == true ? _currentUser!.email[0] : 'U')).toUpperCase(),
+                    style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.inkBlack),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _currentUser?.fullName ?? 'مستخدم نحلة IoT',
+                        style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+                      ),
+                      Text(
+                        _currentUser?.email ?? '',
+                        style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (_currentUser?.isAdmin ?? false) ? AppColors.honeyAmber : Colors.blue.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    (_currentUser?.isAdmin ?? false) ? '👑 مدير المنظومة' : '👤 مستخدم',
+                    style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: Colors.black87),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            const Divider(),
+            if (_currentUser?.isAdmin ?? false) ...[
+              ListTile(
+                leading: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.honeyAmber),
+                title: Text('لوحة إدارة المنظومة والأسطول', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => AdminConsoleScreen(isDark: _isDark)));
+                },
+              ),
+            ],
+            ListTile(
+              leading: Icon(_isDark ? Icons.wb_sunny_rounded : Icons.nightlight_round, color: AppColors.honeyYellow),
+              title: Text(_isDark ? 'الوضع النهاري' : 'الوضع الليلي', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+              trailing: Switch(
+                value: _isDark,
+                activeColor: AppColors.honeyYellow,
+                onChanged: (val) {
+                  Navigator.of(ctx).pop();
+                  _toggleTheme();
+                },
+              ),
+            ),
+            const Divider(),
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                _confirmLogout();
+              },
+              icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
+              label: Text('تسجيل الخروج', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmLogout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+        title: Text('تسجيل الخروج', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+        content: Text('هل أنت متأكد من رغبتك في تسجيل الخروج؟', style: GoogleFonts.cairo(fontSize: 12)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+            child: const Text('خروج'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await _repo.logout();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    }
   }
 
   Widget _buildActiveTabContent() {
@@ -755,31 +925,103 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Image.asset('assets/icons/app_icon.png', width: 90, height: 90),
-          const SizedBox(height: 14),
-          Text('أهلاً بك في عالم نحلة الذكي!', style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.w900)),
-          Text('لم يتم ربط أي مشترك بحسابك حتى الآن', style: GoogleFonts.cairo(fontSize: 11, color: Colors.black54)),
-          const SizedBox(height: 18),
-          ElevatedButton.icon(
-            onPressed: () async {
-              final added = await Navigator.of(context).push<bool>(
-                MaterialPageRoute(builder: (_) => WizardScreen(isDark: _isDark)),
-              );
-              if (added == true) _loadStrips();
-            },
-            icon: const Icon(Icons.add_rounded),
-            label: Text('ربط أول مشترك الآن 🚀', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.honeyYellow,
-              foregroundColor: AppColors.inkBlack,
-              side: const BorderSide(color: AppColors.inkBlack, width: 2),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 16,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Image.asset('assets/icons/app_icon.png', width: 70, height: 70),
             ),
-          ),
-        ],
+            const SizedBox(height: 18),
+            Text(
+              'أهلاً بك في عالم نحلة الذكي! 🐝',
+              style: GoogleFonts.cairo(fontSize: 18, fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'لم يتم ربط أي مشترك بحسابك حتى الآن.\nاضغط على الزر أدناه لبدء ربط أول مشترك بخطوات سريعة.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.cairo(fontSize: 12, color: Colors.black54, height: 1.4),
+            ),
+            const SizedBox(height: 22),
+            ElevatedButton.icon(
+              onPressed: () async {
+                final added = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(builder: (_) => WizardScreen(isDark: _isDark)),
+                );
+                if (added == true) _loadStrips();
+              },
+              icon: const Icon(Icons.add_rounded, size: 20),
+              label: Text('ربط أول مشترك الآن 🚀', style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.honeyYellow,
+                foregroundColor: AppColors.inkBlack,
+                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+              ),
+            ),
+            if (_currentUser?.isAdmin ?? false) ...[
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.honeyAmber, width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.admin_panel_settings_rounded, color: AppColors.honeyAmber, size: 20),
+                        const SizedBox(width: 6),
+                        Text(
+                          'أنت مسجل بصلاحية مدير المنظومة 👑',
+                          style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'يمكنك مراقبة كافة أجهزة العملاء والأسطول المسجل على السيرفر مباشرة.',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cairo(fontSize: 10.5, color: Colors.black54),
+                    ),
+                    const SizedBox(height: 12),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => AdminConsoleScreen(isDark: _isDark)),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.honeyAmber,
+                        foregroundColor: AppColors.inkBlack,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: Text('فتح لوحة إدارة المنصة (Admin Console)', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/strip_repository.dart';
+import '../auth/login_screen.dart';
+import '../home/home_dashboard_screen.dart';
 
 class AdminConsoleScreen extends StatefulWidget {
   final bool isDark;
@@ -75,24 +77,68 @@ class _AdminConsoleScreenState extends State<AdminConsoleScreen> {
     }
   }
 
+  Future<void> _confirmLogout() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: widget.isDark ? AppColors.cardSurfaceDark : Colors.white,
+        title: Text('تسجيل الخروج', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+        content: Text('هل أنت متأكد من رغبتك في تسجيل الخروج من حساب الأدمن؟', style: GoogleFonts.cairo(fontSize: 12)),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+            child: const Text('خروج'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true) {
+      await _repo.logout();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final onlineCount = _strips.where((s) => s['is_online'] == true).length;
 
     return Scaffold(
-      backgroundColor: widget.isDark ? AppColors.darkBg : AppColors.outerYellow,
+      backgroundColor: widget.isDark ? AppColors.darkBg : AppColors.lightBg,
       appBar: AppBar(
         title: Text(
-          '👑 بوابة إدارة المنصة (Admin Console)',
-          style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+          '👑 إدارة المنصة (Admin Console)',
+          style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w900),
         ),
-        backgroundColor: widget.isDark ? AppColors.cardSurfaceDark : AppColors.honeyYellow,
-        foregroundColor: AppColors.inkBlack,
-        elevation: 0,
+        backgroundColor: widget.isDark ? AppColors.cardSurfaceDark : Colors.white,
+        foregroundColor: widget.isDark ? Colors.white : AppColors.inkBlack,
+        elevation: 0.5,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
+            tooltip: 'تحديث البيانات',
             onPressed: _loadAdminData,
+          ),
+          IconButton(
+            icon: const Icon(Icons.dashboard_rounded),
+            tooltip: 'التبديل لواجهة المستخدم',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+            tooltip: 'تسجيل الخروج',
+            onPressed: _confirmLogout,
           ),
         ],
       ),

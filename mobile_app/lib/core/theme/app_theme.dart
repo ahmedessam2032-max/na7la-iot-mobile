@@ -2,24 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  // Sunny Honey (Light Palette)
-  static const Color honeyYellow = Color(0xFFF9E04B);
-  static const Color honeyAmber = Color(0xFFF59B1B);
-  static const Color outerYellow = Color(0xFFE2C835);
-  static const Color cardSurfaceLight = Color(0xFFFFFBEB);
-  static const Color cardMutedLight = Color(0xFFFEF08A);
-  static const Color inkBlack = Color(0xFF18181B);
-  static const Color routerCyan = Color(0xFF22D3EE);
-  static const Color routerBgLight = Color(0xFFE0F2FE);
+  // Sunny Honey (Modern Light Palette)
+  static const Color honeyYellow = Color(0xFFFACC15);
+  static const Color honeyAmber = Color(0xFFF59E0B);
+  static const Color lightBg = Color(0xFFF8FAFC);
+  static const Color outerYellow = Color(0xFFF8FAFC); // Modern clean background
+  static const Color cardSurfaceLight = Color(0xFFFFFFFF);
+  static const Color cardMutedLight = Color(0xFFFEF3C7);
+  static const Color inkBlack = Color(0xFF0F172A);
+  static const Color routerCyan = Color(0xFF0EA5E9);
+  static const Color routerBgLight = Color(0xFFF0F9FF);
 
   // Midnight Hive (Dark Palette)
-  static const Color darkBg = Color(0xFF0F1117);
-  static const Color darkOuter = Color(0xFF07080B);
-  static const Color cardSurfaceDark = Color(0xFF181B24);
-  static const Color cardMutedDark = Color(0xFF13161E);
-  static const Color cardActiveDark = Color(0xFF271E14);
-  static const Color routerBgDark = Color(0xFF10232B);
-  static const Color darkBorder = Color(0xFF32384A);
+  static const Color darkBg = Color(0xFF0F172A);
+  static const Color darkOuter = Color(0xFF0B0F19);
+  static const Color cardSurfaceDark = Color(0xFF1E293B);
+  static const Color cardMutedDark = Color(0xFF131B2A);
+  static const Color cardActiveDark = Color(0xFF332A15);
+  static const Color routerBgDark = Color(0xFF0C243B);
+  static const Color darkBorder = Color(0xFF334155);
 }
 
 class AppTheme {
@@ -34,14 +35,14 @@ class AppTheme {
       color: surfaceColor ?? (isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight),
       borderRadius: BorderRadius.circular(radius),
       border: Border.all(
-        color: borderColor ?? (isDark ? AppColors.darkBorder : AppColors.inkBlack),
-        width: 2.5,
+        color: borderColor ?? (isDark ? AppColors.darkBorder : const Color(0xFFE2E8F0)),
+        width: 1.5,
       ),
       boxShadow: [
         BoxShadow(
-          color: isDark ? const Color(0xFF060709) : AppColors.inkBlack,
+          color: isDark ? const Color(0x60000000) : const Color(0x10000000),
           offset: Offset(shadowOffset, shadowOffset),
-          blurRadius: 0,
+          blurRadius: shadowOffset * 2,
         ),
       ],
     );
@@ -52,7 +53,7 @@ class AppTheme {
     return ThemeData(
       brightness: Brightness.light,
       primaryColor: AppColors.honeyYellow,
-      scaffoldBackgroundColor: AppColors.outerYellow,
+      scaffoldBackgroundColor: AppColors.lightBg,
       textTheme: baseText.apply(
         bodyColor: AppColors.inkBlack,
         displayColor: AppColors.inkBlack,

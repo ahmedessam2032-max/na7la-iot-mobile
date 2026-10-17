@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/strip_repository.dart';
 import '../home/home_dashboard_screen.dart';
+import '../admin/admin_console_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,255 +14,390 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _repo = StripRepository();
-  final _emailController = TextEditingController(text: 'ahmedessam2032@gmail.com');
-  final _passwordController = TextEditingController();
-  final _inviteController = TextEditingController();
 
-  bool _isGuestMode = false;
+  int _authMode = 0; // 0: Login, 1: Register, 2: Family Invite
   bool _isLoading = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   String? _errorMessage;
 
-  Future<void> _submitLogin() async {
+  // Controllers
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _fullNameController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  final _inviteController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    _fullNameController.dispose();
+    _confirmPasswordController.dispose();
+    _inviteController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submitAuth() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
-    if (_isGuestMode) {
-      final res = await _repo.loginInvite(_inviteController.text.trim());
-      setState(() => _isLoading = false);
-      if (res['success'] == true && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
-        );
+    try {
+      if (_authMode == 0) {
+        // --- Sign In ---
+        final email = _emailController.text.trim();
+        final password = _passwordController.text;
+
+        if (email.isEmpty || password.isEmpty) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'يرجى إدخال البريد الإلكتروني وكلمة المرور';
+          });
+          return;
+        }
+
+        final res = await _repo.login(email, password);
+        setState(() => _isLoading = false);
+
+        if (res['success'] == true && mounted) {
+          final user = res['user'];
+          if (user?.isAdmin == true) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const AdminConsoleScreen(isDark: false)),
+            );
+          } else {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
+            );
+          }
+        } else {
+          setState(() => _errorMessage = res['message']);
+        }
+      } else if (_authMode == 1) {
+        // --- Create Account (Sign Up) ---
+        final fullName = _fullNameController.text.trim();
+        final email = _emailController.text.trim();
+        final password = _passwordController.text;
+        final confirmPassword = _confirmPasswordController.text;
+
+        if (fullName.isEmpty || email.isEmpty || password.isEmpty) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'يرجى ملء جميع الحقول المطلوبة';
+          });
+          return;
+        }
+
+        if (password.length < 6) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'كلمة المرور يجب ألا تقل عن 6 خانات';
+          });
+          return;
+        }
+
+        if (password != confirmPassword) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'كلمة المرور وتأكيدها غير متطابقين';
+          });
+          return;
+        }
+
+        final res = await _repo.register(email, password, fullName);
+        setState(() => _isLoading = false);
+
+        if (res['success'] == true && mounted) {
+          final user = res['user'];
+          if (user?.isAdmin == true) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const AdminConsoleScreen(isDark: false)),
+            );
+          } else {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
+            );
+          }
+        } else {
+          setState(() => _errorMessage = res['message']);
+        }
       } else {
-        setState(() => _errorMessage = res['message']);
+        // --- Family Invite Code ---
+        final invite = _inviteController.text.trim();
+        if (invite.isEmpty) {
+          setState(() {
+            _isLoading = false;
+            _errorMessage = 'يرجى إدخال كود الدعوة المكون من 6 أرقام';
+          });
+          return;
+        }
+
+        final res = await _repo.loginInvite(invite);
+        setState(() => _isLoading = false);
+
+        if (res['success'] == true && mounted) {
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
+          );
+        } else {
+          setState(() => _errorMessage = res['message']);
+        }
       }
-    } else {
-      final res = await _repo.login(
-        _emailController.text.trim(),
-        _passwordController.text.trim(),
-      );
-      setState(() => _isLoading = false);
-      if (res['success'] == true && mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
-        );
-      } else {
-        setState(() => _errorMessage = res['message']);
-      }
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'حدث خطأ غير متوقع: $e';
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.outerYellow,
+      backgroundColor: AppColors.lightBg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 20),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Bee Mascot & Header
-                Image.asset(
-                  'assets/icons/app_icon.png',
-                  width: 100,
-                  height: 100,
+                // Bee Mascot & Clean Brand Header
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 16,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Image.asset(
+                    'assets/icons/app_icon.png',
+                    width: 70,
+                    height: 70,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Text(
                   'نحلة IoT',
                   style: GoogleFonts.cairo(
-                    fontSize: 28,
+                    fontSize: 26,
                     fontWeight: FontWeight.w900,
                     color: AppColors.inkBlack,
                   ),
                 ),
                 Text(
-                  'المشترك الذكي والتحكم المتقدم بالطاقة',
+                  'منظومة التحكم الذكي بالطاقة وحماية الأجهزة',
                   style: GoogleFonts.cairo(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.inkBlack.withOpacity(0.75),
+                    color: Colors.black54,
                   ),
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 22),
 
-                // Main Auth Card
+                // Main Auth Card Container
                 Container(
-                  padding: const EdgeInsets.all(22),
-                  decoration: AppTheme.inkCardDecoration(
-                    isDark: false,
-                    radius: 28,
-                    shadowOffset: 6,
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 20,
+                        offset: const Offset(0, 8),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Mode Selector (Account vs Guest Code)
-                      Row(
-                        children: [
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _isGuestMode = false),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: !_isGuestMode ? AppColors.honeyYellow : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: !_isGuestMode ? AppColors.inkBlack : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Text(
-                                  'تسجيل الدخول',
-                                  style: GoogleFonts.cairo(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: GestureDetector(
-                              onTap: () => setState(() => _isGuestMode = true),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
-                                alignment: Alignment.center,
-                                decoration: BoxDecoration(
-                                  color: _isGuestMode ? AppColors.honeyYellow : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: _isGuestMode ? AppColors.inkBlack : Colors.transparent,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Text(
-                                  'كود دعوة عائلي 🔑',
-                                  style: GoogleFonts.cairo(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w900,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 18),
-
-                      if (!_isGuestMode) ...[
-                        // Email Field
-                        Text(
-                          'البريد الإلكتروني:',
-                          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
+                      // Mode Selector (3 Tabs: Login | Sign Up | Invite)
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(14),
                         ),
-                        const SizedBox(height: 4),
-                        TextField(
+                        child: Row(
+                          children: [
+                            _buildModeTab('دخول', 0),
+                            _buildModeTab('حساب جديد', 1),
+                            _buildModeTab('كود عائلي 🔑', 2),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Error Banner
+                      if (_errorMessage != null) ...[
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.redAccent.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMessage!,
+                                  style: GoogleFonts.cairo(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                    color: Colors.red.shade900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+
+                      // Form Fields Based on Mode
+                      if (_authMode == 0) ...[
+                        // --- Sign In Fields ---
+                        _buildInputField(
+                          label: 'البريد الإلكتروني',
+                          hint: 'user@example.com',
                           controller: _emailController,
                           keyboardType: TextInputType.emailAddress,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppColors.inkBlack, width: 2),
+                          prefixIcon: Icons.email_outlined,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInputField(
+                          label: 'كلمة المرور',
+                          hint: '••••••••',
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          prefixIcon: Icons.lock_outline_rounded,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              size: 20,
+                              color: Colors.black45,
                             ),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          ),
+                        ),
+                      ] else if (_authMode == 1) ...[
+                        // --- Sign Up Fields ---
+                        _buildInputField(
+                          label: 'الاسم بالكامل',
+                          hint: 'مثال: أحمد عصام',
+                          controller: _fullNameController,
+                          prefixIcon: Icons.person_outline_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInputField(
+                          label: 'البريد الإلكتروني',
+                          hint: 'user@example.com',
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          prefixIcon: Icons.email_outlined,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInputField(
+                          label: 'كلمة المرور (6 خانات على الأقل)',
+                          hint: '••••••••',
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          prefixIcon: Icons.lock_outline_rounded,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              size: 20,
+                              color: Colors.black45,
+                            ),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           ),
                         ),
                         const SizedBox(height: 12),
-
-                        // Password Field
-                        Text(
-                          'كلمة المرور:',
-                          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
-                        ),
-                        const SizedBox(height: 4),
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppColors.inkBlack, width: 2),
+                        _buildInputField(
+                          label: 'تأكيد كلمة المرور',
+                          hint: '••••••••',
+                          controller: _confirmPasswordController,
+                          obscureText: _obscureConfirmPassword,
+                          prefixIcon: Icons.lock_reset_rounded,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              size: 20,
+                              color: Colors.black45,
                             ),
+                            onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                           ),
                         ),
                       ] else ...[
-                        // Guest Code Field
+                        // --- Invite Code Mode ---
                         Text(
-                          'أدخل كود الدعوة (6 أرقام):',
-                          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
+                          'أدخل كود الدعوة العائلي المكون من 6 أرقام:',
+                          style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800),
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 8),
                         TextField(
                           controller: _inviteController,
                           textAlign: TextAlign.center,
                           style: GoogleFonts.jetBrainsMono(
-                            fontSize: 22,
+                            fontSize: 24,
                             fontWeight: FontWeight.w900,
                             letterSpacing: 4,
                           ),
                           decoration: InputDecoration(
                             hintText: '849-201',
                             filled: true,
-                            fillColor: Colors.white,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            fillColor: const Color(0xFFF8FAFC),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: const BorderSide(color: AppColors.inkBlack, width: 2),
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(color: Color(0xFFCBD5E1), width: 1.5),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: const BorderSide(color: AppColors.honeyAmber, width: 2),
                             ),
                           ),
                         ),
                       ],
 
-                      if (_errorMessage != null) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          _errorMessage!,
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.cairo(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            color: Colors.red.shade900,
-                          ),
-                        ),
-                      ],
+                      const SizedBox(height: 22),
 
-                      const SizedBox(height: 20),
-
-                      // Submit Button
+                      // Submit CTA Button
                       ElevatedButton(
-                        onPressed: _isLoading ? null : _submitLogin,
+                        onPressed: _isLoading ? null : _submitAuth,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.honeyAmber,
+                          backgroundColor: AppColors.honeyYellow,
                           foregroundColor: AppColors.inkBlack,
                           elevation: 0,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
-                            side: const BorderSide(color: AppColors.inkBlack, width: 2),
                           ),
                         ),
                         child: _isLoading
                             ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.inkBlack),
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.inkBlack),
                               )
                             : Text(
-                                _isGuestMode ? 'دخول فوري للمشترك 🚀' : 'تسجيل الدخول',
-                                style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w900),
+                                _authMode == 0
+                                    ? 'تسجيل الدخول'
+                                    : (_authMode == 1 ? 'إنشاء الحساب وبدء الاستخدام 🚀' : 'دخول فوري للمشترك 🚀'),
+                                style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w900),
                               ),
                       ),
                     ],
@@ -272,6 +408,90 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildModeTab(String title, int mode) {
+    final isSel = _authMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _authMode = mode;
+            _errorMessage = null;
+          });
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 9),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSel ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(11),
+            boxShadow: isSel
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.06),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Text(
+            title,
+            style: GoogleFonts.cairo(
+              fontSize: 11,
+              fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
+              color: isSel ? AppColors.inkBlack : Colors.black45,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInputField({
+    required String label,
+    required String hint,
+    required TextEditingController controller,
+    TextInputType keyboardType = TextInputType.text,
+    bool obscureText = false,
+    IconData? prefixIcon,
+    Widget? suffixIcon,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.inkBlack),
+        ),
+        const SizedBox(height: 5),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          obscureText: obscureText,
+          style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700),
+          decoration: InputDecoration(
+            hintText: hint,
+            hintStyle: GoogleFonts.cairo(fontSize: 11, color: Colors.black26),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 18, color: Colors.black45) : null,
+            suffixIcon: suffixIcon,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.honeyAmber, width: 1.8),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
