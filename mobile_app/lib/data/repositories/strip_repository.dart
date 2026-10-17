@@ -89,7 +89,7 @@ class StripRepository {
         headers: headers,
       );
     } catch (_) {}
-    await SecureStorageService.deleteToken();
+    await SecureStorageService.clearSession();
   }
 
   Future<UserModel?> getAuthStatus() async {
