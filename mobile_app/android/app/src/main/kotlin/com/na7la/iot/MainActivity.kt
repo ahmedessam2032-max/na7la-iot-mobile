@@ -176,16 +176,17 @@ class MainActivity: FlutterActivity() {
 
                         for (ip in candidateIps) {
                             try {
-                                socket = if (currentStripNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                                val s = if (currentStripNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                                     currentStripNetwork!!.socketFactory.createSocket()
                                 } else {
                                     Socket()
                                 }
-                                socket.soTimeout = 6000
-                                socket.connect(InetSocketAddress(ip, port), 4000)
+                                socket = s
+                                s.soTimeout = 6000
+                                s.connect(InetSocketAddress(ip, port), 4000)
 
-                                val out: OutputStream = socket.getOutputStream()
-                                val inStream: InputStream = socket.getInputStream()
+                                val out: OutputStream = s.getOutputStream()
+                                val inStream: InputStream = s.getInputStream()
                                 val buf = ByteArray(512)
 
                                 // Step 1: Set Cloud Destination IP (up:ip:<serverIp>\r\n)
