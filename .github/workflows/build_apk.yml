@@ -62,15 +62,15 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.0
-          name: "Na7la IoT v1.3.0 — Official Android APK"
+          tag_name: v1.3.1
+          name: "Na7la IoT v1.3.1 — Official Android APK"
           body: |
-            ## 🐝 تطبيق نحلة إنترنت الأشياء Na7la IoT v1.3.0 (Official Release)
+            ## 🐝 تطبيق نحلة إنترنت الأشياء Na7la IoT v1.3.1 (Official Pure Flutter Release)
             
             ### 📱 محتويات التحديث:
-            - **الإعداد التلقائي بالواي فاي (Native Provisioning):** يدعم الربط المباشر مع شبكة المشترك `TONLY_TAP_...` وإرسال أوامر التهيئة المصنعية (`up:ip:` و `up:connect:`).
-            - **المحاكاة الفيزيائية الحية (Hardware Digital Twin):** مزامنة لحظية لحالة الفيشات الأربعة (أخضر يعمل / أحمر مطفأ).
-            - **حماية الراوتر الذكية:** منع انقطاع الإنترنت عن المنزل بطلب رمز PIN عند التحكم في مخرج الراوتر.
+            - **التوأم الرقمي الأصلي (MTTL-W01 Digital Twin):** واجهة Pure Flutter داكنة وتفاعلية بالكامل مع لمبات LED نيون خضراء وحمراء على صورة المشترك الحقيقي.
+            - **محرك الربط المصنعي المتكامل (Native Provisioning Engine):** تسلسل الأوامر الثلاثي (up:ip و up:connect و up:reboot:0) مع تجاوز باقة الموبايل 4G وحظر الرمز (:) وتنبيهات شبكات 2.4 GHz والربط اليدوي البديل.
+            - **تأمين مخرج الراوتر بالـ PIN:** حماية الإنترنت المنزلي من الانقطاع العرضي.
             - **الربط السحابي مع AWS:** مراقبة الواط والجهد والتحكم الفوري من أي مكان.
           files: |
             mobile_app/build/app/outputs/flutter-apk/app-release.apk

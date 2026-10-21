@@ -62,16 +62,9 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _isLoading = false);
 
         if (res['success'] == true && mounted) {
-          final user = res['user'];
-          if (user?.isAdmin == true) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const AdminConsoleScreen(isDark: false)),
-            );
-          } else {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
-            );
-          }
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
+          );
         } else {
           setState(() => _errorMessage = res['message']);
         }
@@ -110,16 +103,9 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() => _isLoading = false);
 
         if (res['success'] == true && mounted) {
-          final user = res['user'];
-          if (user?.isAdmin == true) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const AdminConsoleScreen(isDark: false)),
-            );
-          } else {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
-            );
-          }
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => const HomeDashboardScreen()),
+          );
         } else {
           setState(() => _errorMessage = res['message']);
         }

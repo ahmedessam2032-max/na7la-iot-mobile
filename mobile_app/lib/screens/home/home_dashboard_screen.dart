@@ -18,6 +18,7 @@ import '../admin/admin_console_screen.dart';
 import '../onboarding/wizard_screen.dart';
 import '../auth/login_screen.dart';
 import 'widgets/socket_deep_dive_sheet.dart';
+import 'widgets/digital_twin_card.dart';
 
 class HomeDashboardScreen extends StatefulWidget {
   const HomeDashboardScreen({super.key});
@@ -31,7 +32,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   final _wsManager = WebSocketManager();
 
   int _selectedTabIndex = 0;
-  bool _isDark = false;
+  bool _isDark = true;
   bool _isLoading = true;
   UserModel? _currentUser;
   List<StripModel> _strips = [];
@@ -885,6 +886,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 ],
               ),
             ),
+          const SizedBox(height: 16),
+
+          // Real Hardware Digital Twin (MTTL-W01)
+          DigitalTwinCard(
+            strip: _selectedStrip!,
+            isDark: _isDark,
+            onToggleSocket: _onToggleSocket,
+            onToggleAll: _smartAllOff,
+          ),
           const SizedBox(height: 16),
 
           // Outlets Section Header

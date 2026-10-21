@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/services/softap_service.dart';
@@ -22,6 +23,7 @@ class _WizardScreenState extends State<WizardScreen> {
   bool _isScanning = false;
   bool _isPasswordVisible = false;
   bool _showManualMacInput = false;
+  bool _showManualConnectMode = false;
 
   // Controllers
   final _ssidController = TextEditingController();
@@ -30,7 +32,7 @@ class _WizardScreenState extends State<WizardScreen> {
   final _stripNameController = TextEditingController(text: 'مشترك الصالة الذكي');
 
   // Discovered networks & strips
-  List<String> _scannedNetworks = [];
+  List<WifiNetworkInfo> _scannedDetailedNetworks = [];
   List<String> _detectedStrips = [];
   String _selectedStripSsid = '';
   String _resolvedMac = '';
@@ -77,12 +79,16 @@ class _WizardScreenState extends State<WizardScreen> {
 
   Future<void> _scanWifi() async {
     setState(() => _isScanning = true);
-    final networks = await SoftApService.scanNearbyWifi();
+    final networks = await SoftApService.scanNearbyWifiDetailed();
     if (!mounted) return;
 
-    final strips = networks.where((n) => n.toUpperCase().startsWith('TONLY_TAP_')).toList();
+    final strips = networks
+        .map((n) => n.ssid)
+        .where((s) => s.toUpperCase().startsWith('TONLY_TAP_'))
+        .toList();
+
     setState(() {
-      _scannedNetworks = networks;
+      _scannedDetailedNetworks = networks;
       _detectedStrips = strips;
       _isScanning = false;
       if (_detectedStrips.isNotEmpty && _selectedStripSsid.isEmpty) {
@@ -93,7 +99,7 @@ class _WizardScreenState extends State<WizardScreen> {
 
   // --- Step 2: Real Pairing Execution ---
 
-  Future<void> _startPairing() async {
+  Future<void> _startPairing({bool isManualSocketDirect = false}) async {
     final ssid = _ssidController.text.trim();
     final pass = _passwordController.text.trim();
 
@@ -113,11 +119,31 @@ class _WizardScreenState extends State<WizardScreen> {
       return;
     }
 
-    if (ssid.isEmpty) {
+    // Strict Validation: Colons and empty strings
+    final validationError = SoftApService.validateWifiCredentials(ssid, pass);
+    if (validationError != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ يرجى تحديد اسم شبكة واي فاي المنزل')),
+        SnackBar(
+          content: Text('⚠️ $validationError'),
+          backgroundColor: Colors.red.shade800,
+        ),
       );
       return;
+    }
+
+    // 2.4 GHz Warning Check
+    final selectedNetInfo = _scannedDetailedNetworks.firstWhere(
+      (n) => n.ssid == ssid,
+      orElse: () => WifiNetworkInfo(ssid: ssid, frequency: 2412, is24GHz: true, level: -50),
+    );
+    if (!selectedNetInfo.is24GHz && selectedNetInfo.frequency > 4900) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('⚠️ تنبيه: شبكة الواي فاي المختارة تعمل بتردد 5 GHz! المشترك الذكي يدعم فقط 2.4 GHz.'),
+          backgroundColor: Colors.amber.shade900,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     }
 
     if (_selectedStripSsid.isEmpty) {
@@ -131,26 +157,29 @@ class _WizardScreenState extends State<WizardScreen> {
       _currentStep = 2;
       _pairingStage = 1;
       _pairingErrorMessage = null;
-      _pairingStatusMessage = 'جاري الاتصال بشبكة المشترك (${_selectedStripSsid})...';
+      _pairingStatusMessage = isManualSocketDirect
+          ? 'الموبايل متصل بنقطة المشترك.. جاري إرسال الإعدادات...'
+          : 'جاري الاتصال بنقطة وصول المشترك (${_selectedStripSsid})...';
     });
 
     _resolvedMac = SoftApService.extractMacFromSsid(_selectedStripSsid);
     final softApPass = SoftApService.calculateSoftApPassword(_selectedStripSsid);
 
     try {
-      // Stage 1: Connect to strip temporary SoftAP via Android Native Channel
-      final connected = await SoftApService.connectToStripAp(_selectedStripSsid, softApPass);
-      if (!connected) {
-        // If native specifier rejected or unavailable, proceed to socket or alert
-        setState(() {
-          _pairingStatusMessage = 'يرجى التأكد من الموافقة على الاتصال بشبكة المشترك في رسالة أندرويد...';
-        });
+      if (!isManualSocketDirect) {
+        // Stage 1: Connect to strip temporary SoftAP via Android Native Channel
+        final connected = await SoftApService.connectToStripAp(_selectedStripSsid, softApPass);
+        if (!connected) {
+          setState(() {
+            _pairingStatusMessage = 'يرجى الموافقة على الاتصال بشبكة المشترك في رسالة أندرويد...';
+          });
+        }
       }
 
-      // Stage 2: Send raw TCP credentials to 192.168.1.1:30300
+      // Stage 2: Send 3-command protocol (up:ip: -> up:connect: -> up:reboot:0)
       setState(() {
         _pairingStage = 2;
-        _pairingStatusMessage = 'جاري إرسال إعدادات الواي فاي للمشترك عبر بورت 30300...';
+        _pairingStatusMessage = 'جاري تهيئة المشترك وإرسال أوامر السيرفر والواي فاي وإعادة التشغيل (Reboot)...';
       });
 
       await SoftApService.sendWifiCredentialsToStrip(
@@ -161,7 +190,7 @@ class _WizardScreenState extends State<WizardScreen> {
       // Stage 3: Release SoftAP so phone reconnects to internet
       setState(() {
         _pairingStage = 3;
-        _pairingStatusMessage = 'المشترك يقوم بإعادة التشغيل... جاري فحص اتصاله بسيرفر نحلة على AWS...';
+        _pairingStatusMessage = 'المشترك يقوم بإعادة التشغيل الآن.. جاري فحص اتصاله بسيرفر نحلة على AWS...';
       });
       await SoftApService.releaseStripAp();
 
@@ -185,7 +214,7 @@ class _WizardScreenState extends State<WizardScreen> {
         });
       } else {
         setState(() {
-          _pairingErrorMessage = 'تعذر رصد المشترك على السيرفر. تأكد من صحة باسورد الراوتر وقرب المشترك من الإشارة.';
+          _pairingErrorMessage = 'تعذر رصد المشترك على السيرفر. تأكد من إيقاف باقة الهاتف (Mobile Data)، وصحة باسورد راوتر 2.4 GHz وقرب المشترك من الإشارة.';
         });
       }
     } catch (e) {
@@ -244,7 +273,7 @@ class _WizardScreenState extends State<WizardScreen> {
           style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
         ),
         backgroundColor: widget.isDark ? AppColors.cardSurfaceDark : AppColors.honeyYellow,
-        foregroundColor: AppColors.inkBlack,
+        foregroundColor: widget.isDark ? Colors.white : AppColors.inkBlack,
         elevation: 0,
         actions: [
           IconButton(
@@ -283,15 +312,19 @@ class _WizardScreenState extends State<WizardScreen> {
   // --- Step 1: Wi-Fi Credentials & Auto-Discovery ---
 
   Widget _buildStep1View() {
+    final calculatedPass = _selectedStripSsid.isNotEmpty
+        ? SoftApService.calculateSoftApPassword(_selectedStripSsid)
+        : '';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Header Badge
+        // Header Step Badge
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
                 color: AppColors.honeyAmber,
                 borderRadius: BorderRadius.circular(8),
@@ -299,18 +332,53 @@ class _WizardScreenState extends State<WizardScreen> {
               ),
               child: Text(
                 'الخطوة 1 من 3: اكتشاف المشترك والواي فاي',
-                style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900),
+                style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w900, color: AppColors.inkBlack),
               ),
             ),
             if (_isScanning)
               const SizedBox(
                 width: 16,
                 height: 16,
-                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.inkBlack),
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.honeyAmber),
               ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 14),
+
+        // ⚠️ Pre-flight Checklist Card (Critical User Instructions)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: widget.isDark ? const Color(0xFF1E293B) : const Color(0xFFFEF3C7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.honeyAmber, width: 1.5),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: AppColors.honeyAmber, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'تنبيهات إجبارية لنجاح الربط لأول مرة:',
+                    style: GoogleFonts.cairo(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                      color: widget.isDark ? Colors.amber.shade300 : const Color(0xFF92400E),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              _buildBulletItem('1. أوقف بيانات الهاتف (Mobile Data):', 'تجنباً لتحويل أندرويد الاتصال عن كارت الواي فاي.'),
+              _buildBulletItem('2. شبكة 2.4 GHz فقط:', 'المشترك لا يعمل على شبكات 5 GHz. اختر شبكة 2.4 GHz.'),
+              _buildBulletItem('3. فعّل الموقع (GPS):', 'يلزم تفعيل الموقع لكشف شبكات الواي فاي في أندرويد.'),
+              _buildBulletItem('4. ممنوع الرمز (:) في الواي فاي:', 'بروتوكول المشترك لا يقبل النقطتين في الاسم أو الباسورد.'),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
 
         // Auto-discovered Strip Section
         if (!_showManualMacInput) ...[
@@ -332,15 +400,15 @@ class _WizardScreenState extends State<WizardScreen> {
                   const Icon(Icons.wifi_tethering_error_rounded, size: 28, color: Colors.orange),
                   const SizedBox(height: 6),
                   Text(
-                    'لم يتم رصد شبكة المشترك (TONLY_TAP_...) بعد.\nاضغط مطولاً على زر المشترك 5 ثوانٍ حتى يومض الليد بسرعة.',
+                    'لم يتم رصد شبكة المشترك (TONLY_TAP_...) بعد.\nاضغط مطولاً على زر المشترك 10 ثوانٍ حتى تومض لمبة الواي فاي بسرعة.',
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w700),
+                    style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w700),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: _scanWifi,
                     icon: const Icon(Icons.refresh_rounded, size: 16),
-                    label: Text('إعادة البحث عن المشترك', style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w800)),
+                    label: Text('إعادة البحث عن المشترك', style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w800)),
                   ),
                 ],
               ),
@@ -360,7 +428,7 @@ class _WizardScreenState extends State<WizardScreen> {
                         : (widget.isDark ? Colors.white10 : Colors.white),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: isSelected ? AppColors.inkBlack : Colors.black26,
+                      color: isSelected ? AppColors.honeyAmber : Colors.black26,
                       width: isSelected ? 2 : 1,
                     ),
                   ),
@@ -377,20 +445,23 @@ class _WizardScreenState extends State<WizardScreen> {
                               style: GoogleFonts.jetBrainsMono(fontSize: 12, fontWeight: FontWeight.w900),
                             ),
                             Text(
-                              'كود الجهاز: $derivedMac',
-                              style: GoogleFonts.jetBrainsMono(fontSize: 9.5, color: Colors.black54),
+                              'كود الماك المحسوب: $derivedMac',
+                              style: GoogleFonts.jetBrainsMono(
+                                fontSize: 9.5,
+                                color: widget.isDark ? Colors.white60 : Colors.black54,
+                              ),
                             ),
                           ],
                         ),
                       ),
                       if (isSelected)
-                        const Icon(Icons.check_circle_rounded, color: AppColors.inkBlack, size: 20),
+                        const Icon(Icons.check_circle_rounded, color: AppColors.honeyAmber, size: 20),
                     ],
                   ),
                 ),
               );
             }),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
         ],
 
         // Home Wi-Fi Input Fields
@@ -414,7 +485,7 @@ class _WizardScreenState extends State<WizardScreen> {
           controller: _passwordController,
           obscureText: !_isPasswordVisible,
           decoration: InputDecoration(
-            hintText: 'كلمة مرور واي فاي الراوتر',
+            hintText: 'كلمة مرور واي فاي الراوتر (خالية من النقطتين :)',
             prefixIcon: const Icon(Icons.lock_outline_rounded),
             suffixIcon: IconButton(
               icon: Icon(_isPasswordVisible ? Icons.visibility_off : Icons.visibility),
@@ -426,6 +497,79 @@ class _WizardScreenState extends State<WizardScreen> {
           style: GoogleFonts.jetBrainsMono(fontSize: 12, fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 14),
+
+        // Fail-Safe Manual Connect Mode Toggle
+        if (_selectedStripSsid.isNotEmpty && !_showManualMacInput) ...[
+          GestureDetector(
+            onTap: () => setState(() => _showManualConnectMode = !_showManualConnectMode),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: widget.isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.honeyAmber.withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.build_circle_outlined, size: 18, color: AppColors.honeyAmber),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _showManualConnectMode
+                          ? 'إخفاء خيار الربط اليدوي'
+                          : 'صعوبة في الربط التلقائي؟ اضغط هنا للربط اليدوي 🛠️',
+                      style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.honeyAmber),
+                    ),
+                  ),
+                  Icon(
+                    _showManualConnectMode ? Icons.keyboard_arrow_up : Icons.keyboard_arrow_down,
+                    color: AppColors.honeyAmber,
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (_showManualConnectMode) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: widget.isDark ? const Color(0xFF0F172A) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.amber.shade600),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('خطوات الربط اليدوي المباشر:', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                  const SizedBox(height: 4),
+                  Text('1. افتح إعدادات الواي فاي في الموبايل.', style: GoogleFonts.cairo(fontSize: 10)),
+                  Text('2. اتصل بشبكة المشترك التالية واكتب باسوردها:', style: GoogleFonts.cairo(fontSize: 10)),
+                  const SizedBox(height: 6),
+                  _buildCopyField('اسم الشبكة:', _selectedStripSsid),
+                  const SizedBox(height: 4),
+                  _buildCopyField('الباسورد:', calculatedPass),
+                  const SizedBox(height: 6),
+                  Text('3. إذا سألك الهاتف "الشبكة لا تحتوي على إنترنت"، اختر "البقاء متصلاً".', style: GoogleFonts.cairo(fontSize: 10)),
+                  Text('4. عد هنا واضغط الزر أدناه لإرسال الإعدادات فوراً.', style: GoogleFonts.cairo(fontSize: 10)),
+                  const SizedBox(height: 10),
+                  ElevatedButton.icon(
+                    onPressed: () => _startPairing(isManualSocketDirect: true),
+                    icon: const Icon(Icons.send_rounded, size: 16),
+                    label: Text('إرسال الإعدادات للمشترك الآن 🚀', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.amber.shade700,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 10),
+        ],
 
         // Fallback Manual MAC Input Toggle
         GestureDetector(
@@ -439,7 +583,7 @@ class _WizardScreenState extends State<WizardScreen> {
               ),
               const SizedBox(width: 4),
               Text(
-                _showManualMacInput ? 'إخفاء الإدخال اليدوي' : 'أو أدخل عنوان الماك يدوياً ✍️',
+                _showManualMacInput ? 'إخفاء إدخال الماك' : 'أو تسجيل المشترك بالماك يدوياً ✍️',
                 style: GoogleFonts.cairo(
                   fontSize: 11,
                   fontWeight: FontWeight.w800,
@@ -467,7 +611,7 @@ class _WizardScreenState extends State<WizardScreen> {
 
         // Submit Button
         ElevatedButton(
-          onPressed: _startPairing,
+          onPressed: () => _startPairing(isManualSocketDirect: false),
           style: ElevatedButton.styleFrom(
             backgroundColor: AppColors.honeyYellow,
             foregroundColor: AppColors.inkBlack,
@@ -476,9 +620,54 @@ class _WizardScreenState extends State<WizardScreen> {
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
           child: Text(
-            _showManualMacInput ? 'متابعة بكود الماك 🚀' : 'بدء الاقتران والربط 🚀',
+            _showManualMacInput ? 'متابعة بكود الماك 🚀' : 'بدء الاقتران والربط التلقائي 🚀',
             style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBulletItem(String title, String desc) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('• ', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, color: AppColors.honeyAmber)),
+          Expanded(
+            child: RichText(
+              text: TextSpan(
+                style: GoogleFonts.cairo(fontSize: 10.5, color: widget.isDark ? Colors.white70 : Colors.black87),
+                children: [
+                  TextSpan(text: '$title ', style: const TextStyle(fontWeight: FontWeight.w900)),
+                  TextSpan(text: desc),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCopyField(String label, String value) {
+    return Row(
+      children: [
+        Text(label, style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w800)),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(value, style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.honeyAmber)),
+        ),
+        IconButton(
+          icon: const Icon(Icons.copy_rounded, size: 16),
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: value));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('تم نسخ $value'), duration: const Duration(seconds: 1)),
+            );
+          },
+          tooltip: 'نسخ',
         ),
       ],
     );
@@ -491,7 +680,7 @@ class _WizardScreenState extends State<WizardScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: AppColors.honeyAmber,
             borderRadius: BorderRadius.circular(8),
@@ -499,7 +688,7 @@ class _WizardScreenState extends State<WizardScreen> {
           ),
           child: Text(
             'الخطوة 2 من 3: ربط الجهاز والتحقق السحابي',
-            style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900),
+            style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w900, color: AppColors.inkBlack),
           ),
         ),
         const SizedBox(height: 24),
@@ -549,35 +738,34 @@ class _WizardScreenState extends State<WizardScreen> {
           const SizedBox(height: 14),
           OutlinedButton(
             onPressed: () => setState(() => _currentStep = 1),
-            child: Text('العودة للمحاولة مجدداً', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+            child: Text('العودة للخطوة السابقة وإعادة المحاولة', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
           ),
         ],
       ],
     );
   }
 
-  // --- Step 3: Router Safeguard & Strip Naming ---
+  // --- Step 3: Safeguard & Customization ---
 
   Widget _buildStep3View() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
-            color: const Color(0xFF10B981),
+            color: AppColors.honeyAmber,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: AppColors.inkBlack, width: 1.5),
           ),
           child: Text(
-            'الخطوة 3 من 3: حماية الراوتر وتخصيص المشترك 🛡️',
-            style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.black),
+            'الخطوة 3 من 3: تخصيص المشترك وحماية الراوتر',
+            style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w900, color: AppColors.inkBlack),
           ),
         ),
         const SizedBox(height: 16),
 
-        // Strip Name
-        Text('اسم المشترك:', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
+        Text('اسم المشترك الجديد:', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900)),
         const SizedBox(height: 4),
         TextField(
           controller: _stripNameController,
@@ -589,87 +777,69 @@ class _WizardScreenState extends State<WizardScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Room Selection
-        Text('مكان المشترك / الغرفة:', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
-        const SizedBox(height: 6),
-        Row(
-          children: [
-            _buildRoomChip('صالة 🛋️', 'living'),
-            const SizedBox(width: 6),
-            _buildRoomChip('مكتب 💻', 'office'),
-            const SizedBox(width: 6),
-            _buildRoomChip('نوم 🛏️', 'bedroom'),
-            const SizedBox(width: 6),
-            _buildRoomChip('مطبخ 🍳', 'kitchen'),
+        Text('مكان المشترك في المنزل:', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900)),
+        const SizedBox(height: 4),
+        DropdownButtonFormField<String>(
+          value: _selectedRoom,
+          items: const [
+            DropdownMenuItem(value: 'living', child: Text('صالة المعيشة 🛋️')),
+            DropdownMenuItem(value: 'office', child: Text('غرفة المكتب 💻')),
+            DropdownMenuItem(value: 'bedroom', child: Text('غرفة النوم 🛏️')),
+            DropdownMenuItem(value: 'kitchen', child: Text('المطبخ 🍳')),
           ],
+          onChanged: (val) {
+            if (val != null) setState(() => _selectedRoom = val);
+          },
+          decoration: InputDecoration(
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
 
-        // Router Safeguard Dropdown (The Key Feature Requested by User!)
+        // Router Safeguard Selector
         Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: widget.isDark ? AppColors.routerBgDark : AppColors.routerBgLight,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.routerCyan, width: 2),
+            color: widget.isDark ? const Color(0xFF0F172A) : const Color(0xFFF0FDF4),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.green.shade600, width: 1.5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Icon(Icons.shield_rounded, color: AppColors.routerCyan, size: 20),
-                  const SizedBox(width: 6),
+                  const Icon(Icons.shield_rounded, color: Colors.green, size: 20),
+                  const SizedBox(width: 8),
                   Text(
-                    'درع حماية راوتر الإنترنت:',
-                    style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
+                    '🛡️ درع حماية الراوتر من الانقطاع:',
+                    style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w900, color: Colors.green),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
               Text(
-                'اختر المخرج المتصل به الراوتر لحمايته تلقائياً من الفصل بالخطأ:',
-                style: GoogleFonts.cairo(fontSize: 10, color: Colors.black87),
+                'حدد أي فيشة موصول بها راوتر الإنترنت لحمايتها بطلب رمز PIN ومنع إطفائها بالخطأ عند إطفاء الكل:',
+                style: GoogleFonts.cairo(fontSize: 10.5, height: 1.4),
               ),
               const SizedBox(height: 8),
-
-              // The Dropdown for all 4 sockets or none
               DropdownButtonFormField<int>(
                 value: _routerSocketIndex,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: AppColors.inkBlack, width: 1.5),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                ),
                 items: const [
-                  DropdownMenuItem(
-                    value: 0,
-                    child: Text('❌ لا يوجد راوتر على هذا المشترك (المشترك في غرفة أخرى)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
-                  DropdownMenuItem(
-                    value: 1,
-                    child: Text('🌐 مخرج رقم 1 (فيشة #1)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
-                  DropdownMenuItem(
-                    value: 2,
-                    child: Text('🌐 مخرج رقم 2 (فيشة #2)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
-                  DropdownMenuItem(
-                    value: 3,
-                    child: Text('🌐 مخرج رقم 3 (فيشة #3)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
-                  DropdownMenuItem(
-                    value: 4,
-                    child: Text('🌐 مخرج رقم 4 (فيشة #4)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
-                  ),
+                  DropdownMenuItem(value: 0, child: Text('لا يوجد راوتر متصل بهذا المشترك')),
+                  DropdownMenuItem(value: 1, child: Text('🔒 الفيشة رقم 1 (الراوتر)')),
+                  DropdownMenuItem(value: 2, child: Text('🔒 الفيشة رقم 2 (الراوتر)')),
+                  DropdownMenuItem(value: 3, child: Text('🔒 الفيشة رقم 3 (الراوتر)')),
+                  DropdownMenuItem(value: 4, child: Text('🔒 الفيشة رقم 4 (الراوتر)')),
                 ],
                 onChanged: (val) {
                   if (val != null) setState(() => _routerSocketIndex = val);
                 },
+                decoration: InputDecoration(
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                ),
               ),
             ],
           ),
@@ -687,37 +857,9 @@ class _WizardScreenState extends State<WizardScreen> {
           ),
           child: _isLoading
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.inkBlack))
-              : Text('إتمام الإعداد وحفظ الحماية 🚀', style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900)),
+              : Text('حفظ وبدء الاستخدام 🎉', style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900)),
         ),
       ],
-    );
-  }
-
-  Widget _buildRoomChip(String title, String val) {
-    final isSel = _selectedRoom == val;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () => setState(() => _selectedRoom = val),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSel ? AppColors.honeyYellow : (widget.isDark ? Colors.white10 : Colors.white),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: isSel ? AppColors.inkBlack : Colors.black26,
-              width: isSel ? 2 : 1,
-            ),
-          ),
-          child: Text(
-            title,
-            style: GoogleFonts.cairo(
-              fontSize: 10,
-              fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

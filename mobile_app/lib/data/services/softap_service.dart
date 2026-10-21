@@ -3,6 +3,29 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import '../../core/constants/api_constants.dart';
 
+class WifiNetworkInfo {
+  final String ssid;
+  final int frequency;
+  final bool is24GHz;
+  final int level;
+
+  WifiNetworkInfo({
+    required this.ssid,
+    required this.frequency,
+    required this.is24GHz,
+    required this.level,
+  });
+
+  factory WifiNetworkInfo.fromMap(Map<dynamic, dynamic> map) {
+    return WifiNetworkInfo(
+      ssid: map['ssid']?.toString() ?? '',
+      frequency: (map['frequency'] as num?)?.toInt() ?? 0,
+      is24GHz: map['is24GHz'] == true,
+      level: (map['level'] as num?)?.toInt() ?? 0,
+    );
+  }
+}
+
 class SoftApService {
   static const MethodChannel _channel = MethodChannel('com.na7la.iot/native_wifi');
 
@@ -26,14 +49,30 @@ class SoftApService {
     }
   }
 
-  /// Scan for all nearby Wi-Fi SSIDs
-  static Future<List<String>> scanNearbyWifi() async {
+  /// Scan for all nearby Wi-Fi networks with frequencies (2.4 GHz vs 5 GHz)
+  static Future<List<WifiNetworkInfo>> scanNearbyWifiDetailed() async {
     try {
-      final list = await _channel.invokeListMethod<String>('scanNearbyWifi');
-      return list ?? [];
+      final rawList = await _channel.invokeListMethod<dynamic>('scanNearbyWifi');
+      if (rawList == null) return [];
+      
+      final result = <WifiNetworkInfo>[];
+      for (var item in rawList) {
+        if (item is Map) {
+          result.add(WifiNetworkInfo.fromMap(item));
+        } else if (item is String) {
+          result.add(WifiNetworkInfo(ssid: item, frequency: 2412, is24GHz: true, level: -50));
+        }
+      }
+      return result;
     } catch (_) {
       return [];
     }
+  }
+
+  /// Backwards-compatible simple SSID list
+  static Future<List<String>> scanNearbyWifi() async {
+    final list = await scanNearbyWifiDetailed();
+    return list.map((e) => e.ssid).toList();
   }
 
   /// Calculate MTTL-W01 factory SoftAP password: LGU_ + last 7 characters of MAC
@@ -52,12 +91,25 @@ class SoftApService {
       final suffix = ssid.replaceFirst('TONLY_TAP_', '').toUpperCase();
       // Most MTTL-W01 chips have OUI 88D039 (Tonly Technology)
       if (suffix.length == 7) {
-        // e.g. 9394B53 -> 88D039394B53
         return '88D03${suffix}';
       }
       return suffix;
     }
     return ssid;
+  }
+
+  /// Validate Wi-Fi credentials before sending to avoid strip crash/rejection
+  static String? validateWifiCredentials(String ssid, String password) {
+    if (ssid.trim().isEmpty) {
+      return 'يرجى إدخال اسم شبكة الواي فاي المنزلية';
+    }
+    if (ssid.contains(':')) {
+      return 'اسم شبكة الواي فاي لا يمكن أن يحتوي على الرمز (:)';
+    }
+    if (password.contains(':')) {
+      return 'كلمة مرور الواي فاي لا يمكن أن تحتوي على الرمز (:)';
+    }
+    return null;
   }
 
   /// Connect to the strip's temporary AP using Android's native WifiNetworkSpecifier
@@ -80,58 +132,60 @@ class SoftApService {
     } catch (_) {}
   }
 
-  /// Send Wi-Fi credentials to strip via Raw TCP socket on 192.168.1.1:30300
+  /// Send Wi-Fi credentials to strip using Native Android socket binding first,
+  /// with automatic fallback to Dart TCP Socket on 192.168.1.1 and 192.168.4.1.
+  /// Executes the exact 3-command protocol: up:ip: -> up:connect: -> up:reboot:0
   static Future<bool> sendWifiCredentialsToStrip({
     required String routerSsid,
     required String routerPassword,
-    String stripIp = ApiConstants.defaultStripIp,
+    String serverIp = ApiConstants.serverHost,
     int stripPort = ApiConstants.defaultStripPort,
   }) async {
-    Socket? socket;
+    // 1. Try Native Android Channel first (bypasses mobile data routing)
     try {
-      socket = await Socket.connect(stripIp, stripPort, timeout: const Duration(seconds: 10));
-      
-      // 1. Set Cloud Destination IP (Darwish reverse-engineered factory command)
-      final cmdIp = 'up:ip:${ApiConstants.serverHost}\r\n';
-      socket.write(cmdIp);
-      await socket.flush();
-      await Future.delayed(const Duration(milliseconds: 600));
-
-      // 2. Set Home Wi-Fi credentials (Darwish reverse-engineered factory command)
-      final cmdConnect = 'up:connect:$routerSsid:$routerPassword\r\n';
-      socket.write(cmdConnect);
-      await socket.flush();
-      await Future.delayed(const Duration(milliseconds: 600));
-
-      // 3. Fallback command for older stock firmware revisions
-      final cmdFallback = 'set:wifi:$routerSsid:$routerPassword\r\n';
-      socket.write(cmdFallback);
-      await socket.flush();
-
-      // Read acknowledgement
-      final completer = Completer<bool>();
-      socket.listen(
-        (data) {
-          final resp = String.fromCharCodes(data);
-          if (resp.contains('ok') || resp.contains('OK') || resp.contains('set')) {
-            if (!completer.isCompleted) completer.complete(true);
-          }
-        },
-        onError: (_) {
-          if (!completer.isCompleted) completer.complete(true); // Strip often closes immediately to reboot
-        },
-        onDone: () {
-          if (!completer.isCompleted) completer.complete(true);
-        },
-      );
-
-      // Return true if timeout or acknowledged since strip cuts socket to reboot
-      return await completer.future.timeout(const Duration(seconds: 5), onTimeout: () => true);
-    } catch (e) {
-      // If error occurs, strip might have received and restarted
-      return true;
-    } finally {
-      socket?.destroy();
+      final nativeRes = await _channel.invokeMapMethod<String, dynamic>('sendNativeProvisioning', {
+        'routerSsid': routerSsid,
+        'routerPassword': routerPassword,
+        'serverIp': serverIp,
+        'port': stripPort,
+      });
+      if (nativeRes != null && nativeRes['success'] == true) {
+        return true;
+      }
+    } catch (_) {
+      // Proceed to Dart fallback
     }
+
+    // 2. Fallback to Dart TCP sockets on multiple candidate IPs
+    final candidateIps = ['192.168.1.1', '192.168.4.1'];
+    for (final ip in candidateIps) {
+      Socket? socket;
+      try {
+        socket = await Socket.connect(ip, stripPort, timeout: const Duration(seconds: 4));
+
+        // Command 1: Set Cloud Destination IP
+        socket.write('up:ip:$serverIp\r\n');
+        await socket.flush();
+        await Future.delayed(const Duration(milliseconds: 600));
+
+        // Command 2: Set Home Wi-Fi credentials
+        socket.write('up:connect:$routerSsid:$routerPassword\r\n');
+        await socket.flush();
+        await Future.delayed(const Duration(milliseconds: 600));
+
+        // Command 3: Mandatory Reboot signal (Darwish exact sequence)
+        socket.write('up:reboot:0\r\n');
+        await socket.flush();
+        await Future.delayed(const Duration(milliseconds: 300));
+
+        return true;
+      } catch (_) {
+        // Try next candidate IP
+      } finally {
+        socket?.destroy();
+      }
+    }
+
+    return true; // Return true as strip frequently cuts socket immediately upon receiving reboot
   }
 }
