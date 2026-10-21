@@ -18,6 +18,7 @@ class UserModel {
   });
 
   bool get isAdmin => role.toUpperCase() == 'ADMIN';
+  int get stripQuota => maxStrips;
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
@@ -25,7 +26,7 @@ class UserModel {
       email: json['email'] ?? '',
       fullName: json['full_name'],
       role: json['role'] ?? 'USER',
-      maxStrips: json['max_strips'] ?? 1,
+      maxStrips: json['strip_quota'] ?? json['max_strips'] ?? 1,
       hasPin: json['has_pin'] ?? false,
       electricityRateEgp: (json['electricity_rate_egp'] as num?)?.toDouble() ?? 1.45,
     );
