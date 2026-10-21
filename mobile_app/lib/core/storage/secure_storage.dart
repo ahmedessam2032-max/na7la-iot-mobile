@@ -70,7 +70,7 @@ class SecureStorageService {
 
   static Future<bool> isDarkMode() async {
     final val = await _storage.read(key: keyDarkMode);
-    return val == 'true';
+    return val != 'false'; // Defaults to TRUE (Dark Titanium)
   }
 
   static Future<void> clearSession() async {

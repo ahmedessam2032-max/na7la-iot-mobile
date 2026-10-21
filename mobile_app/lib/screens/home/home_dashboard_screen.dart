@@ -934,39 +934,81 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 16,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Image.asset('assets/icons/app_icon.png', width: 70, height: 70),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Column(
+        children: [
+          // Hardware Digital Twin Preview Card
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF14130F),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.honeyAmber.withOpacity(0.4), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 20,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            const SizedBox(height: 18),
-            Text(
-              'أهلاً بك في عالم نحلة الذكي! 🐝',
-              style: GoogleFonts.cairo(fontSize: 18, fontWeight: FontWeight.w900),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.hub_outlined, color: AppColors.honeyAmber, size: 16),
+                        const SizedBox(width: 6),
+                        Text(
+                          'معاينة التوأم الرقمي (MTTL-W01)',
+                          style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade900.withOpacity(0.3),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'في انتظار الاقتران ⏳',
+                        style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: AppColors.honeyAmber),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                AspectRatio(
+                  aspectRatio: 1024 / 256,
+                  child: Image.asset('assets/images/strip_body_transparent.png', fit: BoxFit.contain),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'المشترك الكوري الذكي رباعي المخارج مع قياس استهلاك الطاقة وحماية الراوتر.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cairo(fontSize: 10.5, color: Colors.white60),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
-            Text(
-              'لم يتم ربط أي مشترك بحسابك حتى الآن.\nاضغط على الزر أدناه لبدء ربط أول مشترك بخطوات سريعة.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.cairo(fontSize: 12, color: Colors.black54, height: 1.4),
-            ),
-            const SizedBox(height: 22),
+          ),
+          const SizedBox(height: 20),
+
+          Text(
+            'أهلاً بك في عالم نحلة الذكي! 🐝',
+            style: GoogleFonts.cairo(fontSize: 18, fontWeight: FontWeight.w900, color: _isDark ? Colors.white : AppColors.inkBlack),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'لم يتم ربط أي مشترك بحسابك حتى الآن.\nاضغط على الزر أدناه لبدء ربط أول مشترك بخطوات سريعة.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.cairo(fontSize: 12, color: _isDark ? Colors.white70 : Colors.black54, height: 1.4),
+          ),
+          const SizedBox(height: 18),
             ElevatedButton.icon(
               onPressed: () async {
                 final added = await Navigator.of(context).push<bool>(
@@ -1032,8 +1074,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ],
           ],
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildBottomNav() {

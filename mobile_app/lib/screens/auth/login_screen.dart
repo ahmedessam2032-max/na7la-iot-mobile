@@ -142,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.lightBg,
+      backgroundColor: AppColors.darkBg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -154,12 +154,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.cardSurfaceDark,
                     shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.honeyAmber, width: 2),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 16,
+                        color: AppColors.honeyAmber.withOpacity(0.2),
+                        blurRadius: 20,
                         offset: const Offset(0, 4),
                       ),
                     ],
@@ -176,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: GoogleFonts.cairo(
                     fontSize: 26,
                     fontWeight: FontWeight.w900,
-                    color: AppColors.inkBlack,
+                    color: Colors.white,
                   ),
                 ),
                 Text(
@@ -184,7 +185,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: GoogleFonts.cairo(
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
-                    color: Colors.black54,
+                    color: Colors.white70,
                   ),
                 ),
                 const SizedBox(height: 22),
@@ -193,13 +194,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: AppColors.cardSurfaceDark,
                     borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+                    border: Border.all(color: AppColors.darkBorder, width: 1.5),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 20,
+                        color: Colors.black.withOpacity(0.4),
+                        blurRadius: 24,
                         offset: const Offset(0, 8),
                       ),
                     ],
@@ -211,7 +212,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
+                          color: const Color(0xFF0F172A),
                           borderRadius: BorderRadius.circular(14),
                         ),
                         child: Row(
@@ -274,7 +275,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icon(
                               _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                               size: 20,
-                              color: Colors.black45,
+                              color: AppColors.honeyAmber,
                             ),
                             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           ),
@@ -306,7 +307,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icon(
                               _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                               size: 20,
-                              color: Colors.black45,
+                              color: AppColors.honeyAmber,
                             ),
                             onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                           ),
@@ -322,7 +323,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             icon: Icon(
                               _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                               size: 20,
-                              color: Colors.black45,
+                              color: AppColors.honeyAmber,
                             ),
                             onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                           ),
@@ -345,7 +346,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: InputDecoration(
                             hintText: '849-201',
                             filled: true,
-                            fillColor: const Color(0xFFF8FAFC),
+                            fillColor: const Color(0xFF0F172A),
                             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(14),
@@ -377,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? const SizedBox(
                                 height: 22,
                                 width: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.inkBlack),
+                                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white),
                               )
                             : Text(
                                 _authMode == 0
@@ -412,24 +413,15 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.symmetric(vertical: 9),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: isSel ? Colors.white : Colors.transparent,
+            color: isSel ? AppColors.honeyYellow : Colors.transparent,
             borderRadius: BorderRadius.circular(11),
-            boxShadow: isSel
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
           ),
           child: Text(
             title,
             style: GoogleFonts.cairo(
               fontSize: 11,
               fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
-              color: isSel ? AppColors.inkBlack : Colors.black45,
+              color: isSel ? AppColors.inkBlack : Colors.white60,
             ),
           ),
         ),
@@ -451,25 +443,25 @@ class _LoginScreenState extends State<LoginScreen> {
       children: [
         Text(
           label,
-          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.inkBlack),
+          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
         ),
         const SizedBox(height: 5),
         TextField(
           controller: controller,
           keyboardType: keyboardType,
           obscureText: obscureText,
-          style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700),
+          style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.cairo(fontSize: 11, color: Colors.black26),
+            hintStyle: GoogleFonts.cairo(fontSize: 11, color: Colors.white30),
             filled: true,
-            fillColor: const Color(0xFFF8FAFC),
-            prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 18, color: Colors.black45) : null,
+            fillColor: const Color(0xFF0F172A),
+            prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 18, color: AppColors.honeyAmber) : null,
             suffixIcon: suffixIcon,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+              borderSide: const BorderSide(color: Color(0xFF334155), width: 1.2),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),

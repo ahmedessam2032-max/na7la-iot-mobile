@@ -62,8 +62,8 @@ jobs:
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.3.1
-          name: "Na7la IoT v1.3.1 — Official Android APK"
+          tag_name: v1.3.2
+          name: "Na7la IoT v1.3.2 — Official Android APK"
           body: |
             ## 🐝 تطبيق نحلة إنترنت الأشياء Na7la IoT v1.3.1 (Official Pure Flutter Release)
             
