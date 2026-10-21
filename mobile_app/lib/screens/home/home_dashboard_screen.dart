@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/storage/secure_storage.dart';
+import '../../core/localization/app_locale.dart';
 import '../../data/models/strip_model.dart';
 import '../../data/models/socket_model.dart';
 import '../../data/models/user_model.dart';
@@ -38,6 +40,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   List<StripModel> _strips = [];
   StripModel? _selectedStrip;
   StreamSubscription? _wsSubscription;
+
+  String _tr(String key) => AppLocaleController.instance.tr(key);
+
+  Future<void> _launchExternalUrl(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {}
+  }
 
   @override
   void initState() {
@@ -372,26 +383,34 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       );
     }
 
-    return Scaffold(
-      backgroundColor: _isDark ? AppColors.darkBg : AppColors.outerYellow,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top Header
-            _buildHeader(),
+    return AnimatedBuilder(
+      animation: AppLocaleController.instance,
+      builder: (context, _) {
+        return Directionality(
+          textDirection: AppLocaleController.instance.textDirection,
+          child: Scaffold(
+            backgroundColor: _isDark ? AppColors.darkBg : AppColors.outerYellow,
+            body: SafeArea(
+              child: Column(
+                children: [
+                  // Top Header
+                  _buildHeader(),
 
-            // Active Tab Viewport
-            Expanded(
-              child: _selectedStrip == null
-                  ? _buildEmptyState()
-                  : _buildActiveTabContent(),
+                  // Active Tab Viewport
+                  Expanded(
+                    child: _selectedStrip == null
+                        ? _buildEmptyState()
+                        : _buildActiveTabContent(),
+                  ),
+
+                  // Bottom Navigation Bar
+                  _buildBottomNav(),
+                ],
+              ),
             ),
-
-            // Bottom Navigation Bar
-            _buildBottomNav(),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -520,6 +539,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               // Prominent Add Strip Button
               GestureDetector(
                 onTap: () async {
+                  final quota = _currentUser?.stripQuota ?? 1;
+                  final isAdmin = _currentUser?.isAdmin ?? false;
+                  if (!isAdmin && _strips.length >= quota) {
+                    _showQuotaUpgradeDialog(quota);
+                    return;
+                  }
                   final added = await Navigator.of(context).push<bool>(
                     MaterialPageRoute(builder: (_) => WizardScreen(isDark: _isDark)),
                   );
@@ -539,7 +564,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       Icon(Icons.add_rounded, size: 16, color: _isDark ? Colors.white : AppColors.inkBlack),
                       const SizedBox(width: 2),
                       Text(
-                        'إضافة',
+                        _tr('add_strip'),
                         style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900, color: _isDark ? Colors.white : AppColors.inkBlack),
                       ),
                     ],
@@ -593,10 +618,201 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
+  void _showQuotaUpgradeDialog(int quota) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: AppColors.honeyAmber, width: 2),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.workspace_premium_rounded, color: AppColors.honeyAmber, size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                _tr('quota_reached_title'),
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 14),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          _tr('quota_reached_desc'),
+          style: GoogleFonts.cairo(fontSize: 12, height: 1.6),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(_tr('btn_close'), style: GoogleFonts.cairo(fontWeight: FontWeight.w700)),
+          ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              final msg = Uri.encodeComponent('مرحباً، أود ترقية حسابي في Na7la IoT إلى خطة برو الاحترافية (15 مشترك)');
+              _launchExternalUrl('https://wa.me/201152843472?text=$msg');
+            },
+            icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16, color: Colors.black),
+            label: Text(_tr('btn_upgrade_whatsapp'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, color: Colors.black)),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.honeyYellow),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showPricingDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text(_tr('pricing_plans'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _isDark ? const Color(0xFF0F172A) : Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('الخطة المجانية (Free Tier)', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.honeyYellow)),
+                  const SizedBox(height: 4),
+                  Text('• ربط مشترك واحد فقط (1 Strip)\n• مراقبة حية للواط والفولت والحرارة\n• التحكم بالفيش من أي مكان مجاناً', style: GoogleFonts.cairo(fontSize: 11, height: 1.5)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: _isDark ? const Color(0xFF0F172A) : Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.honeyAmber, width: 1.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('خطة برو (Pro Tier) ⭐', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.honeyAmber)),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: AppColors.honeyAmber, borderRadius: BorderRadius.circular(6)),
+                        child: Text('الأكثر طلباً', style: GoogleFonts.cairo(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.black)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text('• ربط حتى 15 مشتركاً ذكياً\n• درع حماية الكمبروسر والتأخير التلقائي\n• تحليلات الفاتورة والتصدير وتقارير الطاقة\n• أولوية قصوى للدعم الفني والضمان', style: GoogleFonts.cairo(fontSize: 11, height: 1.5)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(_tr('btn_close'))),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              final msg = Uri.encodeComponent('مرحباً، أود ترقية حسابي في Na7la IoT إلى خطة برو الاحترافية (15 مشترك)');
+              _launchExternalUrl('https://wa.me/201152843472?text=$msg');
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.honeyYellow, foregroundColor: Colors.black),
+            child: Text(_tr('btn_upgrade_whatsapp'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSupportDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Text(_tr('tech_support'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.chat_bubble_outline_rounded, color: Color(0xFF10B981)),
+              title: Text('واتساب الدعم الفني', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+              subtitle: Text('+20 115 284 3472', style: GoogleFonts.jetBrainsMono(fontSize: 11)),
+              trailing: const Icon(Icons.open_in_new_rounded, size: 16),
+              onTap: () {
+                final msg = Uri.encodeComponent('مرحباً، أحتاج إلى دعم فني بخصوص تطبيق Na7la IoT');
+                _launchExternalUrl('https://wa.me/201152843472?text=$msg');
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.work_outline_rounded, color: Color(0xFF0A66C2)),
+              title: Text('لينكد إن المطور', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+              subtitle: Text('Ahmed Essam', style: GoogleFonts.cairo(fontSize: 11)),
+              trailing: const Icon(Icons.open_in_new_rounded, size: 16),
+              onTap: () {
+                _launchExternalUrl('https://www.linkedin.com/in/ahmed-essam32');
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(_tr('btn_close'))),
+        ],
+      ),
+    );
+  }
+
+  void _showAboutDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        title: Row(
+          children: [
+            Image.asset('assets/icons/app_icon.png', width: 28, height: 28),
+            const SizedBox(width: 8),
+            Text(_tr('app_title'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_tr('app_version'), style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.honeyYellow)),
+            const SizedBox(height: 6),
+            Text(_tr('developer_credit'), style: GoogleFonts.cairo(fontWeight: FontWeight.w700, fontSize: 12)),
+            const SizedBox(height: 10),
+            Text(_tr('brand_sub'), style: GoogleFonts.cairo(fontSize: 11.5, color: Colors.white70)),
+            const SizedBox(height: 8),
+            Text('منظومة مصرية ذكية بالكامل تدعم المشتركات الكورية Tonly Tap و MTTL-W01 مع خوادم سحابية فائقة السرعة.', style: GoogleFonts.cairo(fontSize: 10.5, color: Colors.white54)),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: Text(_tr('btn_close'))),
+        ],
+      ),
+    );
+  }
+
   void _openProfileSheet() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (ctx) => Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
@@ -604,102 +820,192 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
           border: Border.all(color: _isDark ? AppColors.darkBorder : const Color(0xFFE2E8F0)),
         ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
               ),
-            ),
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 26,
-                  backgroundColor: AppColors.honeyYellow,
-                  child: Text(
-                    (_currentUser?.fullName?.isNotEmpty == true ? _currentUser!.fullName![0] : (_currentUser?.email.isNotEmpty == true ? _currentUser!.email[0] : 'U')).toUpperCase(),
-                    style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.inkBlack),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 26,
+                    backgroundColor: AppColors.honeyYellow,
+                    child: Text(
+                      (_currentUser?.fullName?.isNotEmpty == true ? _currentUser!.fullName![0] : (_currentUser?.email.isNotEmpty == true ? _currentUser!.email[0] : 'U')).toUpperCase(),
+                      style: GoogleFonts.cairo(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.inkBlack),
+                    ),
                   ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _currentUser?.fullName ?? 'مستخدم نحلة IoT',
+                          style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+                        ),
+                        Text(
+                          _currentUser?.email ?? '',
+                          style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: (_currentUser?.isAdmin ?? false) ? AppColors.honeyAmber : Colors.blue.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      (_currentUser?.isAdmin ?? false) ? '👑 مدير المنظومة' : '👤 مستخدم',
+                      style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ),
+
+              // Account Quota Banner
+              Container(
+                margin: const EdgeInsets.only(top: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: _isDark ? const Color(0xFF0F172A) : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.honeyAmber.withOpacity(0.3)),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _currentUser?.fullName ?? 'مستخدم نحلة IoT',
-                        style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(_tr('quota_status'), style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: AppColors.honeyAmber.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                      Text(
-                        _currentUser?.email ?? '',
-                        style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey),
+                      child: Text(
+                        '${_strips.length} / ${_currentUser?.stripQuota ?? 1}',
+                        style: GoogleFonts.jetBrainsMono(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.honeyYellow),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: (_currentUser?.isAdmin ?? false) ? AppColors.honeyAmber : Colors.blue.shade100,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    (_currentUser?.isAdmin ?? false) ? '👑 مدير المنظومة' : '👤 مستخدم',
-                    style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: Colors.black87),
-                  ),
+              ),
+
+              const SizedBox(height: 14),
+              const Divider(),
+
+              if (_currentUser?.isAdmin ?? false) ...[
+                ListTile(
+                  leading: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.honeyAmber),
+                  title: Text('لوحة إدارة المنظومة والأسطول', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+                  trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => AdminConsoleScreen(isDark: _isDark)));
+                  },
                 ),
               ],
-            ),
-            const SizedBox(height: 20),
-            const Divider(),
-            if (_currentUser?.isAdmin ?? false) ...[
+
+              // Language Toggle Tile
               ListTile(
-                leading: const Icon(Icons.admin_panel_settings_rounded, color: AppColors.honeyAmber),
-                title: Text('لوحة إدارة المنظومة والأسطول', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+                leading: const Icon(Icons.language_rounded, color: AppColors.honeyAmber),
+                title: Text(_tr('app_lang'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.honeyYellow,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    AppLocaleController.instance.isArabic ? 'English 🇺🇸' : 'العربية 🇸🇦',
+                    style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.black),
+                  ),
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  AppLocaleController.instance.toggleLanguage();
+                },
+              ),
+
+              // Pricing Tile
+              ListTile(
+                leading: const Icon(Icons.workspace_premium_rounded, color: AppColors.honeyAmber),
+                title: Text(_tr('pricing_plans'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
                 trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  Navigator.of(context).push(MaterialPageRoute(builder: (_) => AdminConsoleScreen(isDark: _isDark)));
+                  _showPricingDialog();
                 },
               ),
-            ],
-            ListTile(
-              leading: Icon(_isDark ? Icons.wb_sunny_rounded : Icons.nightlight_round, color: AppColors.honeyYellow),
-              title: Text(_isDark ? 'الوضع النهاري' : 'الوضع الليلي', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
-              trailing: Switch(
-                value: _isDark,
-                activeColor: AppColors.honeyYellow,
-                onChanged: (val) {
+
+              // Tech Support Tile
+              ListTile(
+                leading: const Icon(Icons.support_agent_rounded, color: AppColors.honeyAmber),
+                title: Text(_tr('tech_support'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                onTap: () {
                   Navigator.of(ctx).pop();
-                  _toggleTheme();
+                  _showSupportDialog();
                 },
               ),
-            ),
-            const Divider(),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                _confirmLogout();
-              },
-              icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
-              label: Text('تسجيل الخروج', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, color: Colors.white)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+
+              // About App Tile
+              ListTile(
+                leading: const Icon(Icons.info_outline_rounded, color: AppColors.honeyAmber),
+                title: Text(_tr('about_app'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+                trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _showAboutDialog();
+                },
               ),
-            ),
-            const SizedBox(height: 10),
-          ],
+
+              // Dark Theme Toggle
+              ListTile(
+                leading: Icon(_isDark ? Icons.wb_sunny_rounded : Icons.nightlight_round, color: AppColors.honeyYellow),
+                title: Text(_isDark ? _tr('light_mode') : _tr('dark_mode'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 13)),
+                trailing: Switch(
+                  value: _isDark,
+                  activeColor: AppColors.honeyYellow,
+                  onChanged: (val) {
+                    Navigator.of(ctx).pop();
+                    _toggleTheme();
+                  },
+                ),
+              ),
+
+              const Divider(),
+              const SizedBox(height: 8),
+
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  _confirmLogout();
+                },
+                icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
+                label: Text(_tr('logout'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, color: Colors.white)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
         ),
       ),
     );
@@ -831,7 +1137,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       child: ElevatedButton.icon(
                         onPressed: _turnAllOn,
                         icon: const Icon(Icons.bolt_rounded, size: 16),
-                        label: Text('تشغيل الكل', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                        label: Text(_tr('turn_all_on'), style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.honeyYellow,
                           foregroundColor: AppColors.inkBlack,
@@ -845,7 +1151,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       child: ElevatedButton.icon(
                         onPressed: _smartAllOff,
                         icon: const Icon(Icons.shield_rounded, size: 16, color: AppColors.routerCyan),
-                        label: Text('إطفاء ذكي آمن', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                        label: Text(_tr('smart_all_off'), style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.inkBlack,
                           foregroundColor: Colors.white,
@@ -1089,10 +1395,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem(0, 'الخلية', Icons.home_rounded),
-          _buildNavItem(1, 'الفاتورة', Icons.analytics_outlined),
-          _buildNavItem(2, 'الحماية', Icons.shield_outlined),
-          _buildNavItem(3, 'العائلة', Icons.people_outline_rounded),
+          _buildNavItem(0, _tr('tab_home'), Icons.home_rounded),
+          _buildNavItem(1, _tr('tab_billing'), Icons.analytics_outlined),
+          _buildNavItem(2, _tr('tab_protection'), Icons.shield_outlined),
+          _buildNavItem(3, _tr('tab_family'), Icons.people_outline_rounded),
         ],
       ),
     );

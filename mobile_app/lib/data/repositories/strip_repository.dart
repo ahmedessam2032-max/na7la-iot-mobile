@@ -92,6 +92,86 @@ class StripRepository {
     await SecureStorageService.clearSession();
   }
 
+  // --- Password Reset & Language Sync ---
+
+  Future<Map<String, dynamic>> requestForgotPassword(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/auth/forgot-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email.trim().toLowerCase()}),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['ok'] == true) {
+        return {'success': true, 'message': data['message'] ?? 'تم إرسال كود التحقق بنجاح'};
+      }
+      return {'success': false, 'message': data['detail'] ?? 'تعذر إرسال كود التحقق'};
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال بالسيرفر: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> verifyOtp(String email, String otp) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/auth/verify-otp'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email.trim().toLowerCase(),
+          'otp': otp.trim(),
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['ok'] == true) {
+        return {'success': true, 'message': data['message'] ?? 'تم التحقق بنجاح'};
+      }
+      return {'success': false, 'message': data['detail'] ?? 'كود التحقق غير صحيح أو انتهت صلاحيته'};
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال بالسيرفر: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> resetPassword({
+    required String email,
+    required String otp,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/auth/reset-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'email': email.trim().toLowerCase(),
+          'otp': otp.trim(),
+          'new_password': newPassword.trim(),
+          'confirm_password': confirmPassword.trim(),
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['ok'] == true) {
+        return {'success': true, 'message': data['message'] ?? 'تم إعادة تعيين كلمة المرور بنجاح'};
+      }
+      return {'success': false, 'message': data['detail'] ?? 'تعذر إعادة تعيين كلمة المرور'};
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال بالسيرفر: $e'};
+    }
+  }
+
+  Future<bool> updateLanguage(String lang) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.patch(
+        Uri.parse('${ApiConstants.baseUrl}/auth/language'),
+        headers: headers,
+        body: jsonEncode({'language': lang}),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<UserModel?> getAuthStatus() async {
     final headers = await _getHeaders();
     final response = await http.get(

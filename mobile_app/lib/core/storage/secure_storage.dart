@@ -10,6 +10,7 @@ class SecureStorageService {
   static const String keyPinCode = 'na7la_pin_code';
   static const String keyBiometricEnabled = 'na7la_biometric_enabled';
   static const String keyDarkMode = 'na7la_dark_mode';
+  static const String keyLanguage = 'na7la_language';
 
   static Future<void> saveToken(String token) async {
     await _storage.write(key: keyToken, value: token);
@@ -71,6 +72,14 @@ class SecureStorageService {
   static Future<bool> isDarkMode() async {
     final val = await _storage.read(key: keyDarkMode);
     return val != 'false'; // Defaults to TRUE (Dark Titanium)
+  }
+
+  static Future<void> setLanguage(String lang) async {
+    await _storage.write(key: keyLanguage, value: lang);
+  }
+
+  static Future<String?> getLanguage() async {
+    return await _storage.read(key: keyLanguage);
   }
 
   static Future<void> clearSession() async {

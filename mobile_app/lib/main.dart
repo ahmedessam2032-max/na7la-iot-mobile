@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
 import 'core/storage/secure_storage.dart';
+import 'core/localization/app_locale.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_dashboard_screen.dart';
 
@@ -18,6 +19,7 @@ void main() async {
     ),
   );
 
+  await AppLocaleController.instance.init();
   final token = await SecureStorageService.getToken();
   final isDark = await SecureStorageService.isDarkMode();
 
@@ -43,23 +45,29 @@ class Na7laApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'نحلة IoT',
-      debugShowCheckedModeBanner: false,
-      locale: const Locale('ar', 'EG'),
-      supportedLocales: const [
-        Locale('ar', 'EG'),
-        Locale('en', 'US'),
-      ],
-      localizationsDelegates: const [
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      theme: AppTheme.lightTheme(),
-      darkTheme: AppTheme.darkTheme(),
-      themeMode: initialDarkMode ? ThemeMode.dark : ThemeMode.light,
-      home: initialHasToken ? const HomeDashboardScreen() : const LoginScreen(),
+    return AnimatedBuilder(
+      animation: AppLocaleController.instance,
+      builder: (context, _) {
+        final localeCtrl = AppLocaleController.instance;
+        return MaterialApp(
+          title: localeCtrl.tr('app_title'),
+          debugShowCheckedModeBanner: false,
+          locale: localeCtrl.locale,
+          supportedLocales: const [
+            Locale('ar', 'EG'),
+            Locale('en', 'US'),
+          ],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          theme: AppTheme.lightTheme(),
+          darkTheme: AppTheme.darkTheme(),
+          themeMode: initialDarkMode ? ThemeMode.dark : ThemeMode.light,
+          home: initialHasToken ? const HomeDashboardScreen() : const LoginScreen(),
+        );
+      },
     );
   }
 }
