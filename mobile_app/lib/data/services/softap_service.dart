@@ -91,9 +91,21 @@ class SoftApService {
     try {
       socket = await Socket.connect(stripIp, stripPort, timeout: const Duration(seconds: 10));
       
-      // Factory firmware command: set:wifi:<ssid>:<pass>\r\n
-      final cmd = 'set:wifi:$routerSsid:$routerPassword\r\n';
-      socket.write(cmd);
+      // 1. Set Cloud Destination IP (Darwish reverse-engineered factory command)
+      final cmdIp = 'up:ip:${ApiConstants.serverHost}\r\n';
+      socket.write(cmdIp);
+      await socket.flush();
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      // 2. Set Home Wi-Fi credentials (Darwish reverse-engineered factory command)
+      final cmdConnect = 'up:connect:$routerSsid:$routerPassword\r\n';
+      socket.write(cmdConnect);
+      await socket.flush();
+      await Future.delayed(const Duration(milliseconds: 600));
+
+      // 3. Fallback command for older stock firmware revisions
+      final cmdFallback = 'set:wifi:$routerSsid:$routerPassword\r\n';
+      socket.write(cmdFallback);
       await socket.flush();
 
       // Read acknowledgement

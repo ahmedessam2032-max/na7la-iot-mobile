@@ -5,6 +5,9 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-apk:
     name: Build Release APK
@@ -55,3 +58,21 @@ jobs:
           path: mobile_app/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.3.0
+          name: "Na7la IoT v1.3.0 — Official Android APK"
+          body: |
+            ## 🐝 تطبيق نحلة إنترنت الأشياء Na7la IoT v1.3.0 (Official Release)
+            
+            ### 📱 محتويات التحديث:
+            - **الإعداد التلقائي بالواي فاي (Native Provisioning):** يدعم الربط المباشر مع شبكة المشترك `TONLY_TAP_...` وإرسال أوامر التهيئة المصنعية (`up:ip:` و `up:connect:`).
+            - **المحاكاة الفيزيائية الحية (Hardware Digital Twin):** مزامنة لحظية لحالة الفيشات الأربعة (أخضر يعمل / أحمر مطفأ).
+            - **حماية الراوتر الذكية:** منع انقطاع الإنترنت عن المنزل بطلب رمز PIN عند التحكم في مخرج الراوتر.
+            - **الربط السحابي مع AWS:** مراقبة الواط والجهد والتحكم الفوري من أي مكان.
+          files: |
+            mobile_app/build/app/outputs/flutter-apk/app-release.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
