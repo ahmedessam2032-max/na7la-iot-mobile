@@ -13,7 +13,6 @@ import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
 import android.provider.Settings
 import androidx.annotation.NonNull
-import androidx.core.location.LocationManagerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -54,7 +53,12 @@ class MainActivity: FlutterActivity() {
                     try {
                         val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
                         val isEnabled = if (lm != null) {
-                            LocationManagerCompat.isLocationEnabled(lm)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                lm.isLocationEnabled
+                            } else {
+                                lm.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                                lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+                            }
                         } else {
                             true
                         }

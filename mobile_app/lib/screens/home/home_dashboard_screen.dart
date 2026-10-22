@@ -1096,7 +1096,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     return RefreshIndicator(
       onRefresh: _loadStrips,
       color: AppColors.honeyAmber,
-      backgroundColor: widget.isDark ? AppColors.cardSurfaceDark : Colors.white,
+      backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
