@@ -26,8 +26,7 @@ dependencies:
   # External Links & Support
   url_launcher: ^6.3.0
 
-  # Wi-Fi Discovery & Android Integration
-  wifi_scan: ^0.4.0
+  # Home Widget Sync
   home_widget: ^0.6.0
 
   # Charts & UI Aesthetics

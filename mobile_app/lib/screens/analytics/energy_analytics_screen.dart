@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import '../../core/services/file_downloader_service.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/storage/secure_storage.dart';
@@ -46,14 +45,15 @@ class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
       );
 
       if (res.statusCode == 200) {
-        final dir = await getExternalStorageDirectory() ?? await getApplicationDocumentsDirectory();
-        final file = File('${dir.path}/Na7la_Energy_${widget.strip.macAddress}.xlsx');
-        await file.writeAsBytes(res.bodyBytes);
+        final savedPath = await FileDownloaderService.saveBytes(
+          res.bodyBytes,
+          'Na7la_Energy_${widget.strip.macAddress}.xlsx',
+        );
 
-        if (mounted) {
+        if (mounted && savedPath != null) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('تم تنزيل ملف الإكسيل بنجاح في: ${file.path}'),
+              content: Text('تم تنزيل ملف الإكسيل بنجاح في: $savedPath'),
               backgroundColor: Colors.green.shade800,
             ),
           );

@@ -59,6 +59,23 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Build Flutter Web Sandbox
+        run: |
+          cd mobile_app
+          flutter config --enable-web
+          flutter create --platforms web .
+          flutter build web --release --base-href "/"
+          cd build/web
+          zip -r ../../../na7la-web-build.zip .
+
+      - name: Upload Web Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Na7la-IoT-Web-Build
+          path: mobile_app/build/web
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -90,5 +107,6 @@ jobs:
                - رفع رسائل التنبيهات (SnackBars) لتطفو فوق شريط التنقل السفلي دون حجبه.
           files: |
             mobile_app/build/app/outputs/flutter-apk/app-release.apk
+            na7la-web-build.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
