@@ -3,9 +3,11 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
 import '../data/models/socket_model.dart';
 
+/// 1. SocketCard: العرض المدمج 2x2 المتطابق 100% مع واجهة HTML المعتمدة (WattQ / Na7la 2x2)
 class SocketCard extends StatelessWidget {
   final SocketModel socket;
   final bool isDark;
+  final double voltage;
   final VoidCallback onToggle;
   final VoidCallback onOpenDeepDive;
 
@@ -13,250 +15,449 @@ class SocketCard extends StatelessWidget {
     super.key,
     required this.socket,
     required this.isDark,
+    this.voltage = 225.0,
     required this.onToggle,
     required this.onOpenDeepDive,
   });
 
-  IconData _resolveIcon(String iconName) {
-    switch (iconName.toLowerCase()) {
-      case 'router':
-      case 'wifi':
-        return Icons.router_rounded;
-      case 'fridge':
-      case 'snowflake':
-        return Icons.ac_unit_rounded;
-      case 'ac':
-      case 'air_conditioner':
-      case 'wind':
-        return Icons.air_rounded;
-      case 'phone':
-      case 'smartphone':
-      case 'charger':
-        return Icons.battery_charging_full_rounded;
-      case 'tv':
-      case 'screen':
-        return Icons.tv_rounded;
-      case 'heater':
-      case 'fire':
-        return Icons.local_fire_department_rounded;
-      default:
-        return Icons.power_rounded;
-    }
-  }
-
-  String _resolveTag() {
-    if (socket.isLocked) return '🔒 مقفول بـ PIN';
-    if (socket.isRouter) return '🛡️ محمي ضد الفصل';
-    if (socket.compressorProtect) return '❄️ حماية كمبريسور';
-    if (socket.minWattCutoff != null) return '🔋 فصل شاحن ذكي';
-    return socket.state ? '⚡ يعمل حالياً' : '🛑 متوقف';
-  }
-
   @override
   Widget build(BuildContext context) {
-    Color cardBg;
-    if (socket.state) {
-      if (socket.isRouter) {
-        cardBg = isDark ? AppColors.routerBgDark : AppColors.routerBgLight;
-      } else {
-        cardBg = isDark ? AppColors.cardActiveDark : AppColors.honeyAmber;
-      }
-    } else {
-      cardBg = isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight;
-    }
+    final bool isOn = socket.state;
 
-    return Container(
-      height: 154,
-      padding: const EdgeInsets.all(12),
-      decoration: AppTheme.inkCardDecoration(
-        isDark: isDark,
-        surfaceColor: cardBg,
-        radius: 20,
-        shadowOffset: 3.5,
-        borderColor: socket.state && socket.isRouter
-            ? AppColors.routerCyan
-            : (socket.state ? AppColors.honeyAmber : null),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Top Row: Socket Icon & Settings Button
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: socket.state
-                      ? (socket.isRouter ? AppColors.routerCyan : AppColors.inkBlack)
-                      : (isDark ? AppColors.cardSurfaceDark : Colors.black12),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: isDark ? AppColors.darkBorder : AppColors.inkBlack,
-                    width: 2,
-                  ),
-                ),
-                child: Icon(
-                  _resolveIcon(socket.icon),
-                  size: 18,
-                  color: socket.state
-                      ? (socket.isRouter ? Colors.black : AppColors.honeyYellow)
-                      : (isDark ? Colors.white70 : AppColors.inkBlack),
-                ),
-              ),
-              Row(
-                children: [
-                  if (socket.isLocked)
-                    Container(
-                      margin: const EdgeInsets.only(left: 4),
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.red.shade900,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Icon(Icons.lock_rounded, size: 12, color: Colors.white),
-                    ),
-                  GestureDetector(
-                    onTap: onOpenDeepDive,
-                    child: Container(
-                      width: 30,
-                      height: 30,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white10 : Colors.black.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.settings_outlined,
-                        size: 16,
-                        color: isDark ? Colors.white70 : AppColors.inkBlack,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-
-          // Middle: Socket Name & Tag
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      socket.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.cairo(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w900,
-                        color: isDark ? Colors.white : AppColors.inkBlack,
-                      ),
-                    ),
-                  ),
-                  Text(
-                    '#${socket.socketIndex}',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white54 : Colors.black45,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 2),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                decoration: BoxDecoration(
-                  color: AppColors.inkBlack,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  _resolveTag(),
-                  style: GoogleFonts.cairo(
-                    fontSize: 8.5,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.honeyYellow,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          // Bottom Row: Live Watts & Power Switch
-          Container(
-            padding: const EdgeInsets.only(top: 6),
-            decoration: BoxDecoration(
-              border: Border(
-                top: BorderSide(
-                  color: isDark ? Colors.white12 : Colors.black12,
-                  width: 1,
-                ),
-              ),
+    // Styling matching HTML .outlet-box.on and .outlet-box.off
+    final BoxDecoration cardDeco = isOn
+        ? BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFFF7E84A), Color(0xFFF5A31A)],
             ),
-            child: Row(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFF181818), width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color.fromRGBO(245, 163, 26, 0.38),
+                blurRadius: 16,
+                offset: Offset(0, 5),
+              ),
+            ],
+          )
+        : BoxDecoration(
+            color: isDark ? const Color(0xFF29261E) : const Color(0xFFEFE4B0),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? const Color(0xFF443F33) : Colors.black12,
+              width: 1.5,
+            ),
+          );
+
+    final Color textColor = isOn ? const Color(0xFF161510) : (isDark ? const Color(0xFFDDD3BA) : Colors.black87);
+    final Color subTextColor = isOn ? const Color(0xFF2C2818) : (isDark ? const Color(0xFF9E967D) : Colors.black54);
+
+    return GestureDetector(
+      onTap: onToggle,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+        decoration: cardDeco,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Top Row: 3-Dots Menu & Voltage Tag
+            Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                RichText(
-                  text: TextSpan(
-                    text: socket.state ? socket.currentWatt.toStringAsFixed(0) : '0',
-                    style: GoogleFonts.jetBrainsMono(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      color: isDark ? Colors.white : AppColors.inkBlack,
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onOpenDeepDive,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: isOn ? Colors.black.withOpacity(0.08) : (isDark ? Colors.white10 : Colors.black.withOpacity(0.05)),
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    children: [
-                      TextSpan(
-                        text: ' W',
-                        style: GoogleFonts.jetBrainsMono(
-                          fontSize: 9,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.honeyAmber,
-                        ),
-                      ),
-                    ],
+                    child: Icon(
+                      Icons.more_vert_rounded,
+                      size: 16,
+                      color: textColor,
+                    ),
                   ),
                 ),
-                GestureDetector(
-                  onTap: onToggle,
-                  child: Container(
-                    width: 44,
-                    height: 24,
-                    padding: const EdgeInsets.all(2),
-                    decoration: BoxDecoration(
-                      color: socket.state
-                          ? AppColors.inkBlack
-                          : (isDark ? Colors.white24 : Colors.black26),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isDark ? AppColors.darkBorder : AppColors.inkBlack,
-                        width: 1.5,
-                      ),
-                    ),
-                    child: AnimatedAlign(
-                      duration: const Duration(milliseconds: 200),
-                      alignment: socket.state ? Alignment.centerRight : Alignment.centerLeft,
-                      child: Container(
-                        width: 18,
-                        height: 18,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: socket.state
-                              ? (socket.isRouter ? AppColors.routerCyan : AppColors.honeyYellow)
-                              : Colors.white,
-                        ),
-                      ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                  decoration: BoxDecoration(
+                    color: isOn ? Colors.black.withOpacity(0.12) : (isDark ? Colors.black26 : Colors.black.withOpacity(0.06)),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    isOn ? '${voltage.toStringAsFixed(0)}V' : '0V',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: textColor,
                     ),
                   ),
                 ),
               ],
             ),
+
+            // Center Row: Lock icon + Socket Name
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (socket.isLocked) ...[
+                    Icon(Icons.lock_rounded, size: 13, color: textColor),
+                    const SizedBox(width: 4),
+                  ] else if (socket.isRouter) ...[
+                    Icon(Icons.router_rounded, size: 13, color: textColor),
+                    const SizedBox(width: 4),
+                  ],
+                  Flexible(
+                    child: Text(
+                      socket.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.cairo(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Bottom Row: Live Watts + Bolt Icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      isOn ? socket.currentWatt.toStringAsFixed(1) : '0.0',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        color: textColor,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      Icons.bolt_rounded,
+                      size: 14,
+                      color: isOn ? const Color(0xFF161510) : AppColors.honeyAmber,
+                    ),
+                  ],
+                ),
+                Text(
+                  '#${socket.socketIndex}',
+                  style: GoogleFonts.jetBrainsMono(
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.w700,
+                    color: subTextColor,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 2. ProSocketCard: كرت المقبس في العرض التفصيلي الكامل (Full Detailed View)
+class ProSocketCard extends StatelessWidget {
+  final SocketModel socket;
+  final bool isDark;
+  final double voltage;
+  final VoidCallback onToggle;
+  final VoidCallback onToggleLock;
+  final VoidCallback onOpenDeepDive;
+
+  const ProSocketCard({
+    super.key,
+    required this.socket,
+    required this.isDark,
+    this.voltage = 225.0,
+    required this.onToggle,
+    required this.onToggleLock,
+    required this.onOpenDeepDive,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isOn = socket.state;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF181714) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isOn
+              ? const Color(0xFF2ECC71).withOpacity(0.4)
+              : (isDark ? const Color(0xFF2C2A22) : Colors.black12),
+          width: 1.5,
+        ),
+        boxShadow: isOn
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF2ECC71).withOpacity(0.12),
+                  blurRadius: 18,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header Row: Lock Button + Title Wrap + Number Badge
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: onToggleLock,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: socket.isLocked
+                            ? Colors.red.shade900.withOpacity(0.3)
+                            : (isDark ? Colors.white10 : Colors.black.withOpacity(0.06)),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: socket.isLocked ? Colors.red.shade400 : Colors.transparent,
+                          width: 1,
+                        ),
+                      ),
+                      child: Icon(
+                        socket.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                        size: 14,
+                        color: socket.isLocked ? Colors.red.shade300 : (isDark ? Colors.white70 : Colors.black54),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: onOpenDeepDive,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white10 : Colors.black.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        Icons.settings_outlined,
+                        size: 14,
+                        color: isDark ? Colors.white70 : Colors.black54,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  if (socket.isRouter) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.routerCyan.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.shield_outlined, size: 10, color: AppColors.routerCyan),
+                          const SizedBox(width: 4),
+                          Text(
+                            'راوتر محمي',
+                            style: GoogleFonts.cairo(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.routerCyan,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Text(
+                    socket.name,
+                    style: GoogleFonts.cairo(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                      color: isDark ? Colors.white : AppColors.inkBlack,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white12 : Colors.black.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'مخرج #${socket.socketIndex}',
+                      style: GoogleFonts.cairo(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white60 : Colors.black54,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Prominent Power Pill Button
+          GestureDetector(
+            onTap: onToggle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                gradient: isOn
+                    ? const LinearGradient(
+                        colors: [Color(0xFFF5A31A), Color(0xFFF7E84A)],
+                      )
+                    : null,
+                color: isOn ? null : (isDark ? const Color(0xFF1F1E19) : const Color(0xFFE5E7EB)),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isOn
+                      ? const Color(0xFFFFF394)
+                      : (isDark ? const Color(0xFF38352A) : Colors.black12),
+                  width: 1.5,
+                ),
+                boxShadow: isOn
+                    ? [
+                        const BoxShadow(
+                          color: Color.fromRGBO(245, 163, 26, 0.45),
+                          blurRadius: 18,
+                          offset: Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.power_settings_new_rounded,
+                        size: 18,
+                        color: isOn ? const Color(0xFF14130E) : (isDark ? const Color(0xFF9E967D) : Colors.black54),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        isOn ? '🟢 شغال (اضغط للإطفاء)' : '🔴 مطفأ (اضغط للتشغيل)',
+                        style: GoogleFonts.cairo(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w900,
+                          color: isOn ? const Color(0xFF14130E) : (isDark ? const Color(0xFF9E967D) : Colors.black54),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Text(
+                    isOn ? '${voltage.toStringAsFixed(0)}V' : '0V',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                      color: isOn ? const Color(0xFF14130E) : (isDark ? const Color(0xFF9E967D) : Colors.black54),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Quad Telemetry Matrix (Power, Current, Energy, Temp)
+          Row(
+            children: [
+              _buildTelemetryTile(
+                title: '⚡ القدرة',
+                value: isOn ? '${socket.currentWatt.toStringAsFixed(1)} W' : '0.0 W',
+                isDark: isDark,
+              ),
+              const SizedBox(width: 6),
+              _buildTelemetryTile(
+                title: '🔌 التيار',
+                value: isOn ? '${socket.currentAmp.toStringAsFixed(2)} A' : '0.00 A',
+                isDark: isDark,
+              ),
+              const SizedBox(width: 6),
+              _buildTelemetryTile(
+                title: '📊 الطاقة',
+                value: '${socket.totalKwh.toStringAsFixed(2)} kWh',
+                isDark: isDark,
+              ),
+              const SizedBox(width: 6),
+              _buildTelemetryTile(
+                title: '🌡️ الحرارة',
+                value: '${socket.currentTempC} °C',
+                isDark: isDark,
+              ),
+            ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTelemetryTile({
+    required String title,
+    required String value,
+    required bool isDark,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1F1D17) : const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2E2B21) : Colors.black12,
+            width: 1,
+          ),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w900,
+                color: isDark ? Colors.white : AppColors.inkBlack,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              title,
+              style: GoogleFonts.cairo(
+                fontSize: 8.5,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white54 : Colors.black45,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

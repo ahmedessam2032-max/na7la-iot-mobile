@@ -33,11 +33,17 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
 
   Future<void> _loadShares() async {
     setState(() => _isLoading = true);
-    final list = await _repo.getShares(widget.strip.macAddress);
-    setState(() {
-      _shares = list;
-      _isLoading = false;
-    });
+    try {
+      final list = await _repo.getShares(widget.strip.macAddress);
+      if (mounted) {
+        setState(() {
+          _shares = list;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   void _generateNewCode() {
@@ -57,7 +63,7 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Invite Code Generator Card
+          // 1. Invite Code Generator Card
           Container(
             padding: const EdgeInsets.all(18),
             decoration: AppTheme.inkCardDecoration(isDark: widget.isDark),
@@ -130,58 +136,93 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Family Members List
+          // 2. Family Members List Container
           Container(
             padding: const EdgeInsets.all(18),
             decoration: AppTheme.inkCardDecoration(isDark: widget.isDark),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '👨‍👩‍👧 أعضاء البيت الحاليين والصلاحيات',
-                  style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '👨‍👩‍👧 أعضاء البيت والصلاحيات',
+                      style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900),
+                    ),
+                    if (_isLoading)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.honeyYellow),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 12),
 
-                // Owner Row
+                // Owner Row (Dynamic Master Account)
                 _buildMemberCard(
-                  name: 'أحمد (أنت - المالك)',
+                  name: 'أنت (المالك الرئيسي)',
                   roleLabel: 'تحكم كامل 👑',
                   roleColor: AppColors.honeyYellow,
-                  subtitle: 'كل الصلاحيات + تغيير الـ PIN',
+                  subtitle: 'كافة الصلاحيات + إدارة المشترك وتغيير الـ PIN',
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
 
-                // Partial Member Row
-                _buildMemberCard(
-                  name: 'محمد (أخوك)',
-                  roleLabel: 'تحكم جزئي 🎛️',
-                  roleColor: AppColors.routerCyan,
-                  subtitle: 'مسموح له بفيشتين فقط (#3, #4)',
-                  extraWidgets: [
-                    const SizedBox(height: 6),
-                    Row(
+                // Dynamic Shared Members List
+                if (_shares.isNotEmpty) ...[
+                  ..._shares.map((share) {
+                    final name = share['member_name'] ?? share['user_email'] ?? 'فرد عائلة';
+                    final perm = (share['permission_level'] ?? 'CONTROL').toString().toUpperCase();
+                    final isControl = perm == 'CONTROL' || perm == 'FULL';
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _buildMemberCard(
+                        name: name,
+                        roleLabel: isControl ? 'تحكم جزئي 🎛️' : 'مشاهدة فقط 👀',
+                        roleColor: isControl ? AppColors.routerCyan : Colors.blueGrey.shade300,
+                        subtitle: isControl ? 'مسموح له بالتحكم في المخارج المحددة' : 'مراقبة الاستهلاك فقط',
+                      ),
+                    );
+                  }),
+                ] else ...[
+                  // Clean Empty State matching Web Dashboard & Reference
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
+                    decoration: BoxDecoration(
+                      color: widget.isDark ? Colors.white.withOpacity(0.02) : Colors.black.withOpacity(0.02),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: widget.isDark ? Colors.white10 : Colors.black12,
+                        style: BorderStyle.solid,
+                      ),
+                    ),
+                    child: Column(
                       children: [
-                        _buildPermBadge('❄️ ممنوع', false),
-                        const SizedBox(width: 4),
-                        _buildPermBadge('🌐 ممنوع', false),
-                        const SizedBox(width: 4),
-                        _buildPermBadge('🌀 مسموح ✓', true),
-                        const SizedBox(width: 4),
-                        _buildPermBadge('📱 مسموح ✓', true),
+                        const Icon(Icons.people_outline_rounded, size: 28, color: AppColors.honeyAmber),
+                        const SizedBox(height: 8),
+                        Text(
+                          'لا يوجد أفراد عائلة أو ضيوف مضافون بعد',
+                          style: GoogleFonts.cairo(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: widget.isDark ? Colors.white70 : AppColors.inkBlack,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'استخدم كود الدعوة الفوري بالأعلى لمشاركة التحكم مع عائلتك بأمان.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.cairo(
+                            fontSize: 10,
+                            color: widget.isDark ? Colors.white38 : Colors.black45,
+                          ),
+                        ),
                       ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-
-                // Guest Row
-                _buildMemberCard(
-                  name: 'عاصم (ضيف)',
-                  roleLabel: 'مشاهدة بس 👀',
-                  roleColor: Colors.blueGrey.shade300,
-                  subtitle: 'مراقبة الاستهلاك بدون إطفاء أو تشغيل',
-                ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -232,27 +273,6 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
           Text(subtitle, style: GoogleFonts.cairo(fontSize: 10, color: widget.isDark ? Colors.white60 : Colors.black54)),
           if (extraWidgets != null) ...extraWidgets,
         ],
-      ),
-    );
-  }
-
-  Widget _buildPermBadge(String label, bool isAllowed) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isAllowed ? const Color(0xFF10B981).withOpacity(0.2) : Colors.red.withOpacity(0.15),
-          borderRadius: BorderRadius.circular(4),
-          border: Border.all(
-            color: isAllowed ? const Color(0xFF10B981) : Colors.red.withOpacity(0.3),
-            width: 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.cairo(fontSize: 8.5, fontWeight: FontWeight.w800),
-        ),
       ),
     );
   }

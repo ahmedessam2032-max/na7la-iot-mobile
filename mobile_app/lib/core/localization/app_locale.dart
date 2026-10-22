@@ -87,12 +87,21 @@ class AppTranslations {
       
       // Dashboard & Tabs
       'tab_home': 'الخلية',
+      'tab_my_strips': 'مشتركاتي',
+      'tab_schedules': 'الجدولة',
+      'tab_favorites': 'المفضلة',
+      'tab_settings': 'الإعدادات',
+      'tab_account': 'حسابي',
+      'mode_compact': 'العرض المدمج 2x2',
+      'mode_detailed': 'العرض التفصيلي الكامل',
+      'current_consumption': 'الحمل الحالي',
+      'load_distribution': 'توزيع الأحمال اللحظي',
       'tab_billing': 'الفاتورة',
       'tab_protection': 'الحماية',
       'tab_family': 'العائلة',
       'online': 'متصل',
       'offline': 'أوفلاين',
-      'add_strip': 'إضافة',
+      'add_strip': 'إضافة مشترك',
       'admin_badge': 'الأدمن 👑',
       'smart_all_off': 'إيقاف الكل الذكي',
       'turn_all_on': 'تشغيل الكل',
@@ -123,7 +132,7 @@ class AppTranslations {
       
       // About & Credits
       'developer_credit': 'المطور: أحمد عصام (Ahmed Essam)',
-      'app_version': 'Na7la IoT v1.3.3',
+      'app_version': 'Na7la IoT v1.3.6',
     },
     'en': {
       'app_title': 'Na7la IoT',
@@ -163,12 +172,21 @@ class AppTranslations {
       
       // Dashboard & Tabs
       'tab_home': 'Strip',
+      'tab_my_strips': 'My Strips',
+      'tab_schedules': 'Schedules',
+      'tab_favorites': 'Favorites',
+      'tab_settings': 'Settings',
+      'tab_account': 'Account',
+      'mode_compact': '2x2 Compact View',
+      'mode_detailed': 'Full Detailed View',
+      'current_consumption': 'Current Load',
+      'load_distribution': 'Real-time Load Distribution',
       'tab_billing': 'Billing',
       'tab_protection': 'Guard',
       'tab_family': 'Family',
       'online': 'Online',
       'offline': 'Offline',
-      'add_strip': 'Add',
+      'add_strip': 'Add Strip',
       'admin_badge': 'Admin 👑',
       'smart_all_off': 'Smart All OFF',
       'turn_all_on': 'Turn All ON',
@@ -199,7 +217,7 @@ class AppTranslations {
       
       // About & Credits
       'developer_credit': 'Developer: Ahmed Essam',
-      'app_version': 'Na7la IoT v1.3.3',
+      'app_version': 'Na7la IoT v1.3.6',
     }
   };
 

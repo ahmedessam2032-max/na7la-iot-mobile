@@ -19,6 +19,10 @@ import '../family/family_sharing_screen.dart';
 import '../admin/admin_console_screen.dart';
 import '../onboarding/wizard_screen.dart';
 import '../auth/login_screen.dart';
+import '../schedules/schedules_tab.dart';
+import '../favorites/favorites_tab.dart';
+import '../settings/settings_tab.dart';
+import '../account/account_tab.dart';
 import 'widgets/socket_deep_dive_sheet.dart';
 import 'widgets/digital_twin_card.dart';
 
@@ -34,6 +38,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   final _wsManager = WebSocketManager();
 
   int _selectedTabIndex = 0;
+  String _outletsViewMode = 'compact';
   bool _isDark = true;
   bool _isLoading = true;
   UserModel? _currentUser;
@@ -470,6 +475,27 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           textDirection: AppLocaleController.instance.textDirection,
           child: Scaffold(
             backgroundColor: _isDark ? AppColors.darkBg : AppColors.outerYellow,
+            floatingActionButton: _selectedTabIndex == 0
+                ? FloatingActionButton.extended(
+                    backgroundColor: AppColors.honeyYellow,
+                    foregroundColor: AppColors.inkBlack,
+                    onPressed: () async {
+                      if (_currentUser != null && _currentUser!.role != 'admin' && _strips.length >= _currentUser!.maxStripsAllowed) {
+                        _showQuotaUpgradeModal();
+                        return;
+                      }
+                      final added = await Navigator.of(context).push<bool>(
+                        MaterialPageRoute(builder: (_) => WizardScreen(isDark: _isDark)),
+                      );
+                      if (added == true) _loadStrips();
+                    },
+                    icon: const Icon(Icons.add_rounded, size: 20),
+                    label: Text(
+                      _tr('add_strip'),
+                      style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
+                    ),
+                  )
+                : null,
             body: SafeArea(
               child: Column(
                 children: [
@@ -579,7 +605,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 title: 'إحصائيات الطاقة والتحليلات',
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  setState(() => _selectedTabIndex = 1);
+                  _openEnergyAnalytics();
                 },
               ),
 
@@ -657,7 +683,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 title: 'مشاركة المشترك مع العائلة والضيوف',
                 onTap: () {
                   Navigator.of(ctx).pop();
-                  setState(() => _selectedTabIndex = 3);
+                  _openFamilyScreen();
                 },
               ),
 
@@ -1915,16 +1941,81 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     }
   }
 
+  void _openEnergyAnalytics() {
+    if (_selectedStrip == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => EnergyAnalyticsScreen(strip: _selectedStrip!, isDark: _isDark)),
+    );
+  }
+
+  void _openProtectionScreen() {
+    if (_selectedStrip == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ProtectionScreen(strip: _selectedStrip!, isDark: _isDark)),
+    );
+  }
+
+  void _openFamilyScreen() {
+    if (_selectedStrip == null) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => FamilySharingScreen(strip: _selectedStrip!, isDark: _isDark)),
+    );
+  }
+
+  void _openAdminConsole() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => AdminConsoleScreen(isDark: _isDark)),
+    );
+  }
+
+  void _onToggleSocketLock(SocketModel socket) async {
+    if (_selectedStrip == null) return;
+    final nextLock = !socket.isLocked;
+    setState(() => socket.isLocked = nextLock);
+    final ok = await _repo.lockSocket(_selectedStrip!.macAddress, socket.socketIndex, nextLock);
+    if (!ok && mounted) {
+      setState(() => socket.isLocked = !nextLock);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر تعديل قفل المقبس')),
+      );
+    }
+  }
+
   Widget _buildActiveTabContent() {
     switch (_selectedTabIndex) {
       case 0:
         return _buildHomeTab();
       case 1:
-        return EnergyAnalyticsScreen(strip: _selectedStrip!, isDark: _isDark);
+        return SchedulesTab(
+          strip: _selectedStrip!,
+          isDark: _isDark,
+          onOpenScheduleSheet: _openDeepDive,
+        );
       case 2:
-        return ProtectionScreen(strip: _selectedStrip!, isDark: _isDark);
+        return FavoritesTab(
+          strip: _selectedStrip!,
+          isDark: _isDark,
+          onToggleSocket: _onToggleSocket,
+          onOpenDeepDive: _openDeepDive,
+          onGoToDashboard: () => setState(() => _selectedTabIndex = 0),
+        );
       case 3:
-        return FamilySharingScreen(strip: _selectedStrip!, isDark: _isDark);
+        return SettingsTab(
+          strip: _selectedStrip!,
+          isDark: _isDark,
+          onToggleTheme: () => setState(() => _isDark = !_isDark),
+          onOpenProtection: _openProtectionScreen,
+          onOpenFamily: _openFamilyScreen,
+          onOpenAdminConsole: _openAdminConsole,
+        );
+      case 4:
+        return AccountTab(
+          user: _currentUser,
+          isDark: _isDark,
+          stripsCount: _strips.length,
+          onUpgradeQuota: _showQuotaUpgradeModal,
+          onLogout: _logout,
+        );
       default:
         return const SizedBox();
     }
@@ -2091,37 +2182,78 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Outlets Section Header
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('🔌 المخارج الأربعة المستقلة', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900)),
-              Text('اضغط ⚙️ للإعدادات', style: GoogleFonts.cairo(fontSize: 10, color: _isDark ? Colors.white60 : Colors.black54)),
-            ],
-          ),
+          // Mode Switcher (Compact 2x2 vs Full Detailed View)
+          _buildModeSwitcher(),
           const SizedBox(height: 8),
 
-          // 2x2 Grid of the 4 Sockets
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _selectedStrip!.sockets.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1.05,
+          // Overload Emergency Banner (> 2500W)
+          if (totalWatts > 2500)
+            Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444).withOpacity(0.18),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFEF4444)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'تحذير تيار زائد طارئ: المشترك تجاوز 2500 واط!',
+                      style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFFFCA5A5)),
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(6)),
+                    child: Text('خطر', style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: Colors.white)),
+                  ),
+                ],
+              ),
             ),
-            itemBuilder: (context, index) {
-              final socket = _selectedStrip!.sockets[index];
-              return SocketCard(
+
+          if (_outletsViewMode == 'compact') ...[
+            // View A: 2x2 Compact View (HTML Parity)
+            _buildCurrentConsumptionBar(totalWatts, _selectedStrip!.currentVoltage ?? 225.0),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _selectedStrip!.sockets.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: 1.1,
+              ),
+              itemBuilder: (context, index) {
+                final socket = _selectedStrip!.sockets[index];
+                return SocketCard(
+                  socket: socket,
+                  isDark: _isDark,
+                  voltage: _selectedStrip!.currentVoltage ?? 225.0,
+                  onToggle: () => _onToggleSocket(socket),
+                  onOpenDeepDive: () => _openDeepDive(socket),
+                );
+              },
+            ),
+            _buildTurnAllButton(),
+          ] else ...[
+            // View B: Full Detailed Pro View (HTML Parity)
+            _buildLoadDistributionCard(totalWatts),
+            ..._selectedStrip!.sockets.map((socket) {
+              return ProSocketCard(
                 socket: socket,
                 isDark: _isDark,
+                voltage: _selectedStrip!.currentVoltage ?? 225.0,
                 onToggle: () => _onToggleSocket(socket),
+                onToggleLock: () => _onToggleSocketLock(socket),
                 onOpenDeepDive: () => _openDeepDive(socket),
               );
-            },
-          ),
+            }),
+          ],
         ],
       ),
     ),
@@ -2272,6 +2404,306 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       );
   }
 
+  Widget _buildModeSwitcher() {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: _isDark ? const Color(0xFF1B1A16) : Colors.black12,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _isDark ? const Color(0xFF2C2A22) : Colors.black26),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildModePill(
+              mode: 'compact',
+              label: _tr('mode_compact'),
+              icon: Icons.grid_view_rounded,
+            ),
+          ),
+          Expanded(
+            child: _buildModePill(
+              mode: 'detailed',
+              label: _tr('mode_detailed'),
+              icon: Icons.pie_chart_outline_rounded,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildModePill({required String mode, required String label, required IconData icon}) {
+    final isSel = _outletsViewMode == mode;
+    return GestureDetector(
+      onTap: () => setState(() => _outletsViewMode = mode),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: isSel ? AppColors.honeyYellow : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: isSel
+              ? [
+                  BoxShadow(
+                    color: AppColors.honeyYellow.withOpacity(0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 15,
+              color: isSel ? AppColors.inkBlack : (_isDark ? Colors.white60 : Colors.black54),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: GoogleFonts.cairo(
+                fontSize: 11,
+                fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
+                color: isSel ? AppColors.inkBlack : (_isDark ? Colors.white70 : Colors.black54),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCurrentConsumptionBar(double totalWatts, double voltage) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: _isDark ? const Color(0xFF181714) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: _isDark ? const Color(0xFF2E2B21) : Colors.black12,
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.honeyYellow.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.bolt_rounded, size: 14, color: AppColors.honeyYellow),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${totalWatts.toStringAsFixed(1)} W',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.honeyYellow,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.routerCyan.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.shield_outlined, size: 12, color: AppColors.routerCyan),
+                    const SizedBox(width: 3),
+                    Text(
+                      '${voltage.toStringAsFixed(0)}V',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.routerCyan,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Text(
+                _tr('current_consumption'),
+                style: GoogleFonts.cairo(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: _isDark ? Colors.white70 : Colors.black54,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Icon(Icons.bolt_rounded, size: 14, color: AppColors.honeyAmber),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTurnAllButton() {
+    final anyOn = _selectedStrip!.sockets.any((s) => s.state);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 12),
+      child: ElevatedButton.icon(
+        onPressed: anyOn ? _smartAllOff : _turnAllOn,
+        icon: const Icon(Icons.power_settings_new_rounded, size: 18),
+        label: Text(
+          anyOn ? _tr('smart_all_off') : _tr('turn_all_on'),
+          style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: anyOn ? const Color(0xFF1E1E1C) : AppColors.honeyYellow,
+          foregroundColor: anyOn ? AppColors.honeyYellow : AppColors.inkBlack,
+          side: BorderSide(
+            color: anyOn ? AppColors.honeyAmber.withOpacity(0.5) : AppColors.inkBlack,
+            width: 1.5,
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          elevation: anyOn ? 0 : 3,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadDistributionCard(double totalWatts) {
+    final colors = [
+      const Color(0xFF10B981),
+      const Color(0xFF3B82F6),
+      const Color(0xFFF5A31A),
+      const Color(0xFF8B5CF6),
+    ];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _isDark ? const Color(0xFF181714) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _isDark ? const Color(0xFF2E2B21) : Colors.black12,
+          width: 1.5,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.bar_chart_rounded, size: 16, color: AppColors.honeyYellow),
+                  const SizedBox(width: 6),
+                  Text(
+                    _tr('load_distribution'),
+                    style: GoogleFonts.cairo(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.honeyYellow,
+                    ),
+                  ),
+                ],
+              ),
+              Text(
+                '${totalWatts.toStringAsFixed(1)} واط (100%)',
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: _isDark ? Colors.white : AppColors.inkBlack,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // Stacked Progress Bar Track
+          ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              height: 10,
+              color: _isDark ? Colors.white10 : Colors.black12,
+              child: totalWatts > 0
+                  ? Row(
+                      children: _selectedStrip!.sockets.asMap().entries.map((entry) {
+                        final idx = entry.key;
+                        final socket = entry.value;
+                        final flex = socket.state && socket.currentWatt > 0
+                            ? (socket.currentWatt * 100).toInt()
+                            : 0;
+                        if (flex <= 0) return const SizedBox();
+                        return Expanded(
+                          flex: flex,
+                          child: Container(color: colors[idx % colors.length]),
+                        );
+                      }).toList(),
+                    )
+                  : const SizedBox(),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Legend Items
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            children: _selectedStrip!.sockets.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final socket = entry.value;
+              final color = colors[idx % colors.length];
+              final pct = totalWatts > 0 && socket.state
+                  ? ((socket.currentWatt / totalWatts) * 100).toStringAsFixed(0)
+                  : '0';
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${socket.name}: ',
+                    style: GoogleFonts.cairo(fontSize: 10, color: _isDark ? Colors.white70 : Colors.black54),
+                  ),
+                  Text(
+                    '${socket.state ? socket.currentWatt.toStringAsFixed(1) : 0}W ($pct%)',
+                    style: GoogleFonts.jetBrainsMono(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: _isDark ? Colors.white : AppColors.inkBlack,
+                    ),
+                  ),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildBottomNav() {
     return Container(
       margin: const EdgeInsets.all(12),
@@ -2284,10 +2716,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem(0, _tr('tab_home'), Icons.home_rounded),
-          _buildNavItem(1, _tr('tab_billing'), Icons.analytics_outlined),
-          _buildNavItem(2, _tr('tab_protection'), Icons.shield_outlined),
-          _buildNavItem(3, _tr('tab_family'), Icons.people_outline_rounded),
+          _buildNavItem(0, _tr('tab_my_strips'), Icons.power_rounded),
+          _buildNavItem(1, _tr('tab_schedules'), Icons.access_time_rounded),
+          _buildNavItem(2, _tr('tab_favorites'), Icons.star_border_rounded),
+          _buildNavItem(3, _tr('tab_settings'), Icons.settings_outlined),
+          _buildNavItem(4, _tr('tab_account'), Icons.person_outline_rounded),
         ],
       ),
     );
