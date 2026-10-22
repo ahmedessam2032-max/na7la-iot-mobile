@@ -64,11 +64,11 @@ class FavoritesTab extends StatelessWidget {
               margin: const EdgeInsets.only(top: 40),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
               decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1E1E1C) : Colors.white,
+                color: isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isDark ? const Color(0xFF33312B) : Colors.black12,
-                  width: 1.5,
+                  color: isDark ? AppColors.borderDark : AppColors.borderLight,
+                  width: 1.2,
                 ),
               ),
               child: Column(

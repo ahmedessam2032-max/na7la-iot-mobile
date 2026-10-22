@@ -11,6 +11,19 @@ class SecureStorageService {
   static const String keyBiometricEnabled = 'na7la_biometric_enabled';
   static const String keyDarkMode = 'na7la_dark_mode';
   static const String keyLanguage = 'na7la_language';
+  static const String keyTariffPrice = 'na7la_tariff_price';
+
+  static Future<void> saveTariffPrice(double price) async {
+    await _storage.write(key: keyTariffPrice, value: price.toString());
+  }
+
+  static Future<double> getTariffPrice() async {
+    final val = await _storage.read(key: keyTariffPrice);
+    if (val != null) {
+      return double.tryParse(val) ?? 1.45;
+    }
+    return 1.45;
+  }
 
   static Future<void> saveToken(String token) async {
     await _storage.write(key: keyToken, value: token);

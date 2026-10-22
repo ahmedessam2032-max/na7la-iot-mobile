@@ -299,6 +299,36 @@ class StripRepository {
     return [];
   }
 
+  Future<bool> createSchedule({
+    required String mac,
+    required int socketIndex,
+    required String scheduleType, // TIMER / CYCLE / CRON / AUTO_OFF
+    bool targetState = true,
+    int? timerDurationSec,
+    int? cycleOnSec,
+    int? cycleOffSec,
+    String? cronExpression,
+    int? autoOffDelaySec,
+  }) async {
+    final headers = await _getHeaders();
+    final Map<String, dynamic> body = {
+      'schedule_type': scheduleType,
+      'target_state': targetState,
+    };
+    if (timerDurationSec != null) body['timer_duration_sec'] = timerDurationSec;
+    if (cycleOnSec != null) body['cycle_on_sec'] = cycleOnSec;
+    if (cycleOffSec != null) body['cycle_off_sec'] = cycleOffSec;
+    if (cronExpression != null) body['cron_expression'] = cronExpression;
+    if (autoOffDelaySec != null) body['auto_off_delay_sec'] = autoOffDelaySec;
+
+    final response = await http.post(
+      Uri.parse('${ApiConstants.baseUrl}/strips/$mac/sockets/$socketIndex/schedules'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    return response.statusCode == 200;
+  }
+
   Future<bool> createCycleSchedule({
     required String mac,
     required int socketIndex,

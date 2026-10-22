@@ -25,6 +25,15 @@ class EnergyAnalyticsScreen extends StatefulWidget {
 
 class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
   bool _isDownloading = false;
+  double _tariffPrice = 1.45;
+
+  @override
+  void initState() {
+    super.initState();
+    SecureStorageService.getTariffPrice().then((p) {
+      if (mounted) setState(() => _tariffPrice = p);
+    });
+  }
 
   Future<void> _downloadExcel() async {
     setState(() => _isDownloading = true);
@@ -70,7 +79,7 @@ class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
   @override
   Widget build(BuildContext context) {
     final double totalKwh = widget.strip.totalKwh;
-    final double estimatedCost = totalKwh * 1.45;
+    final double estimatedCost = totalKwh * _tariffPrice;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -236,7 +245,7 @@ class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             Text(s.name, style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
-                            Text('${(pct * 100).toStringAsFixed(0)}% (${(s.rawEnergyKwh * 1.45).toStringAsFixed(1)} ج.م)',
+                            Text('${(pct * 100).toStringAsFixed(0)}% (${(s.rawEnergyKwh * _tariffPrice).toStringAsFixed(1)} ج.م)',
                                 style: GoogleFonts.jetBrainsMono(fontSize: 10, fontWeight: FontWeight.w800)),
                           ],
                         ),

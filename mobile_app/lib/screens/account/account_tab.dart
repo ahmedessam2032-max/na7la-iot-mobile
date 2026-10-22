@@ -22,27 +22,28 @@ class AccountTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final maxAllowed = user?.maxStripsAllowed ?? 1;
+    final cardBg = isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;
+    final borderColor = isDark ? AppColors.borderDark : AppColors.borderLight;
+    final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 3 KPI Matrix (Plan, Max Strips, Current Used) matching HTML #tab-account
+          // 3 KPI Matrix (Plan, Max Strips, Current Used)
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E1C) : Colors.white,
+              color: cardBg,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isDark ? const Color(0xFF33312B) : Colors.black12,
-                width: 1.5,
-              ),
+              border: Border.all(color: borderColor, width: 1.2),
             ),
             child: Row(
               children: [
                 _buildKpiItem(
-                  icon: Icons.label_important_outline_rounded,
+                  icon: Icons.verified_user_outlined,
                   value: maxAllowed > 1 ? 'خطة برو' : 'الخطة المجانية',
                   label: 'الخطة',
                   color: AppColors.honeyYellow,
@@ -68,12 +69,9 @@ class AccountTab extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E1E1C) : Colors.white,
+              color: cardBg,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isDark ? const Color(0xFF33312B) : Colors.black12,
-                width: 1.5,
-              ),
+              border: Border.all(color: borderColor, width: 1.2),
             ),
             child: Column(
               children: [
@@ -83,26 +81,30 @@ class AccountTab extends StatelessWidget {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(
-                      colors: [Color(0xFFF5A31A), Color(0xFFF7E84A)],
+                      colors: [AppColors.honeyYellow, AppColors.honeyAmber],
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: const Color(0xFFF5A31A).withOpacity(0.3),
+                        color: AppColors.honeyYellow.withOpacity(0.3),
                         blurRadius: 16,
                         offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: const Center(
-                    child: Text('🐝', style: TextStyle(fontSize: 30)),
+                    child: Icon(Icons.person_rounded, size: 34, color: Colors.black),
                   ),
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  user?.email ?? 'user@na7la-iot.com',
-                  style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+                  user?.fullName ?? user?.email.split('@').first ?? 'مستخدم نحلة',
+                  style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.w900, color: textPrimary),
                 ),
-                const SizedBox(height: 4),
+                Text(
+                  user?.email ?? 'user@na7la-iot.com',
+                  style: GoogleFonts.cairo(fontSize: 12, color: textSecondary),
+                ),
+                const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                   decoration: BoxDecoration(
@@ -111,7 +113,7 @@ class AccountTab extends StatelessWidget {
                     border: Border.all(color: AppColors.honeyYellow, width: 1),
                   ),
                   child: Text(
-                    user?.role == 'admin' ? 'المالك الرئيسي للنظام 👑' : 'مستخدم موثق ✅',
+                    user?.isAdmin ?? false ? 'المالك الرئيسي للنظام 👑' : 'مستخدم موثق ✅',
                     style: GoogleFonts.cairo(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w800,
@@ -135,7 +137,7 @@ class AccountTab extends StatelessWidget {
                 ],
               ),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.honeyYellow, width: 1.5),
+              border: Border.all(color: AppColors.honeyYellow, width: 1.2),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -145,11 +147,11 @@ class AccountTab extends StatelessWidget {
                   children: [
                     Text(
                       'ترقية الحساب إلى خطة برو 🚀',
-                      style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w900),
+                      style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w900, color: textPrimary),
                     ),
                     Text(
                       'سعة حتى 15 مشتركاً وجدولة ذكية غير محدودة',
-                      style: GoogleFonts.cairo(fontSize: 9.5, color: isDark ? Colors.white60 : Colors.black54),
+                      style: GoogleFonts.cairo(fontSize: 9.5, color: textSecondary),
                     ),
                   ],
                 ),
@@ -157,7 +159,7 @@ class AccountTab extends StatelessWidget {
                   onPressed: onUpgradeQuota,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.honeyYellow,
-                    foregroundColor: AppColors.inkBlack,
+                    foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -178,7 +180,7 @@ class AccountTab extends StatelessWidget {
               style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.redAccent),
             ),
             style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: Colors.redAccent, width: 1.5),
+              side: const BorderSide(color: Colors.redAccent, width: 1.2),
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
@@ -194,6 +196,9 @@ class AccountTab extends StatelessWidget {
     required String label,
     required Color color,
   }) {
+    final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+
     return Expanded(
       child: Column(
         children: [
@@ -203,11 +208,11 @@ class AccountTab extends StatelessWidget {
             value,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w900),
+            style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w900, color: textPrimary),
           ),
           Text(
             label,
-            style: GoogleFonts.cairo(fontSize: 9.5, color: isDark ? Colors.white60 : Colors.black54),
+            style: GoogleFonts.cairo(fontSize: 9.5, color: textSecondary),
           ),
         ],
       ),

@@ -15,6 +15,8 @@ class SocketModel {
   int compressorDelaySec;
   double? minWattCutoff;
   int cutoffDelaySec;
+  double? maxWattLimit;
+  int? autoOffDelaySec;
   String powerOnBehavior; // ON / OFF / LAST
   bool hwOverloadFlag;
   bool hwOverheatFlag;
@@ -36,6 +38,8 @@ class SocketModel {
     this.compressorDelaySec = 180,
     this.minWattCutoff,
     this.cutoffDelaySec = 600,
+    this.maxWattLimit,
+    this.autoOffDelaySec,
     this.powerOnBehavior = 'LAST',
     this.hwOverloadFlag = false,
     this.hwOverheatFlag = false,
@@ -62,6 +66,8 @@ class SocketModel {
       compressorDelaySec: json['compressor_delay_sec'] ?? 180,
       minWattCutoff: (json['min_watt_cutoff'] as num?)?.toDouble(),
       cutoffDelaySec: json['cutoff_delay_sec'] ?? 600,
+      maxWattLimit: (json['max_watt_limit'] as num?)?.toDouble(),
+      autoOffDelaySec: json['auto_off_delay_sec'] as int?,
       powerOnBehavior: json['power_on_behavior'] ?? 'LAST',
       hwOverloadFlag: json['hw_overload_flag'] ?? false,
       hwOverheatFlag: json['hw_overheat_flag'] ?? false,
@@ -84,6 +90,8 @@ class SocketModel {
       'compressor_delay_sec': compressorDelaySec,
       'min_watt_cutoff': minWattCutoff,
       'cutoff_delay_sec': cutoffDelaySec,
+      'max_watt_limit': maxWattLimit,
+      'auto_off_delay_sec': autoOffDelaySec,
       'power_on_behavior': powerOnBehavior,
     };
   }

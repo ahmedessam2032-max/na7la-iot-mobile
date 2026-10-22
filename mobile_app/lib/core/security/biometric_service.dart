@@ -34,13 +34,23 @@ class BiometricService {
     }
   }
 
-  /// Check master PIN fallback
+  /// Check if master PIN is set
+  static Future<bool> hasPin() async {
+    final savedPin = await SecureStorageService.getPin();
+    return savedPin != null && savedPin.trim().isNotEmpty;
+  }
+
+  /// Check master PIN
   static Future<bool> verifyPin(String enteredPin) async {
     final savedPin = await SecureStorageService.getPin();
     if (savedPin == null || savedPin.isEmpty) {
-      // Default pin if none set
-      return enteredPin == '1234' || enteredPin == '2026';
+      return false;
     }
     return enteredPin == savedPin;
+  }
+
+  /// Save new Master PIN locally
+  static Future<void> saveMasterPin(String newPin) async {
+    await SecureStorageService.savePin(newPin);
   }
 }

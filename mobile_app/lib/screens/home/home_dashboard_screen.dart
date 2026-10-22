@@ -42,6 +42,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   int _selectedTabIndex = 0;
   String _outletsViewMode = 'compact';
   bool _isDark = true;
+  double _tariffPrice = 1.45;
   bool _isLoading = true;
   UserModel? _currentUser;
   List<StripModel> _strips = [];
@@ -97,6 +98,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Future<void> _initApp() async {
     _isDark = await SecureStorageService.isDarkMode();
+    _tariffPrice = await SecureStorageService.getTariffPrice();
     _currentUser = await _repo.getAuthStatus();
     await _loadStrips();
   }
@@ -481,27 +483,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           textDirection: AppLocaleController.instance.textDirection,
           child: Scaffold(
             backgroundColor: _isDark ? AppColors.darkBg : AppColors.outerYellow,
-            floatingActionButton: _selectedTabIndex == 0
-                ? FloatingActionButton.extended(
-                    backgroundColor: AppColors.honeyYellow,
-                    foregroundColor: AppColors.inkBlack,
-                    onPressed: () async {
-                      if (_currentUser != null && _currentUser!.role != 'admin' && _strips.length >= _currentUser!.maxStripsAllowed) {
-                        _showQuotaUpgradeDialog(_currentUser?.stripQuota ?? 1);
-                        return;
-                      }
-                      final added = await Navigator.of(context).push<bool>(
-                        MaterialPageRoute(builder: (_) => WizardScreen(isDark: _isDark)),
-                      );
-                      if (added == true) _loadStrips();
-                    },
-                    icon: const Icon(Icons.add_rounded, size: 20),
-                    label: Text(
-                      _tr('add_strip'),
-                      style: GoogleFonts.cairo(fontWeight: FontWeight.w900),
-                    ),
-                  )
-                : null,
+            floatingActionButton: null,
             body: SafeArea(
               child: Column(
                 children: [
@@ -2026,6 +2008,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         return SettingsTab(
           strip: _selectedStrip!,
           isDark: _isDark,
+          isAdmin: _currentUser?.isAdmin ?? false,
           onToggleTheme: () => setState(() => _isDark = !_isDark),
           onOpenProtection: _openProtectionScreen,
           onOpenFamily: _openFamilyScreen,
@@ -2048,199 +2031,139 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final double totalWatts = _selectedStrip!.totalWatt;
     final double totalAmps = _selectedStrip!.totalAmp;
     final double totalKwh = _selectedStrip!.totalKwh;
-    final double todayCost = totalKwh * 1.45;
+    final double todayCost = totalKwh * _tariffPrice;
+    final double voltage = _selectedStrip!.currentVoltage ?? 228.0;
+    final int avgTemp = _selectedStrip!.sockets.isNotEmpty
+        ? (_selectedStrip!.sockets.map((s) => s.currentTempC).reduce((a, b) => a > b ? a : b))
+        : 28;
+    final int displayTemp = avgTemp > 0 ? avgTemp : 28;
+    final bool isOnline = _selectedStrip!.isOnline;
+
+    final cardBg = _isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;
+    final borderColor = _isDark ? AppColors.borderDark : AppColors.borderLight;
+    final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = _isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
 
     return RefreshIndicator(
       onRefresh: _loadStrips,
       color: AppColors.honeyAmber,
-      backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+      backgroundColor: cardBg,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Column(
-        children: [
-          // 1. Summary KPI Grid & Quota Banner
-          _buildSummaryGridAndQuota(totalWatts),
-          const SizedBox(height: 12),
-
-          // 2. Strip Card Header (3-Dots, Status, Child Lock Badge, Name, Serial)
-          _buildStripCardHeader(),
-          const SizedBox(height: 6),
-
-          // Honey Jar Main Card
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: AppTheme.inkCardDecoration(isDark: _isDark),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('🐝 إجمالي سحب الخلية الآن', style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w800)),
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                            textBaseline: TextBaseline.alphabetic,
-                            children: [
-                              Text(
-                                totalWatts.toStringAsFixed(0),
-                                style: GoogleFonts.jetBrainsMono(fontSize: 32, fontWeight: FontWeight.w900),
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                'WATTS',
-                                style: GoogleFonts.jetBrainsMono(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w900,
-                                  color: AppColors.honeyAmber,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: AppColors.honeyYellow,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AppColors.inkBlack, width: 1.5),
-                            ),
-                            child: Text(
-                              '📐 تكلفة اليوم: ${todayCost.toStringAsFixed(2)} ج.م',
-                              style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900, color: AppColors.inkBlack),
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.inkBlack,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              '⚡ ${_selectedStrip!.currentVoltage?.toStringAsFixed(0) ?? 224}V  |  ${totalAmps.toStringAsFixed(2)}A  |  ${totalKwh.toStringAsFixed(1)}kWh',
-                              style: GoogleFonts.jetBrainsMono(fontSize: 9.5, color: AppColors.honeyYellow, fontWeight: FontWeight.w800),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    HoneyJarGauge(currentWatts: totalWatts, isDark: _isDark),
-                  ],
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. Offline Alert (if disconnected)
+            if (!isOnline) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.amber.shade900.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.shade700, width: 1),
                 ),
-                const SizedBox(height: 12),
-                // Master Action Buttons
-                Row(
+                child: Row(
                   children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _turnAllOn,
-                        icon: const Icon(Icons.bolt_rounded, size: 16),
-                        label: Text(_tr('turn_all_on'), style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.honeyYellow,
-                          foregroundColor: AppColors.inkBlack,
-                          side: const BorderSide(color: AppColors.inkBlack, width: 2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                      ),
-                    ),
+                    const Icon(Icons.cloud_off_rounded, color: Colors.amber, size: 18),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _smartAllOff,
-                        icon: const Icon(Icons.shield_rounded, size: 16, color: AppColors.routerCyan),
-                        label: Text(_tr('smart_all_off'), style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.inkBlack,
-                          foregroundColor: Colors.white,
-                          side: const BorderSide(color: AppColors.honeyAmber, width: 2),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
+                      child: Text(
+                        'المشترك غير متصل بالكهرباء أو الواي فاي (أوفلاين) - القراءات متوقفة.',
+                        style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w700, color: textPrimary),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
-          ),
-          if (!(_selectedStrip?.isOnline ?? false))
-            Container(
-              margin: const EdgeInsets.only(top: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.amber.shade900.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.amber.shade700, width: 1.5),
               ),
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_off_rounded, color: Colors.amber, size: 22),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '⚠️ المشترك غير متصل بالكهرباء أو الواي فاي (أوفلاين) - القراءات متوقفة لحين عودة الاتصال بالسيرفر.',
-                      style: GoogleFonts.cairo(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: _isDark ? Colors.white : AppColors.inkBlack,
-                        height: 1.3,
+            ],
+
+            // 2. Overload Emergency Banner (if > 2500W)
+            if (totalWatts > 2500) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEF4444).withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFEF4444)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'تحذير تيار زائد طارئ: المشترك تجاوز 2500 واط!',
+                        style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w900, color: Colors.redAccent),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+            ],
+
+            // 3. Compact Digital Twin Card
+            DigitalTwinCard(
+              strip: _selectedStrip!,
+              isDark: _isDark,
+              onToggleSocket: _onToggleSocket,
+              onToggleAll: _smartAllOff,
             ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
-          // Real Hardware Digital Twin (MTTL-W01)
-          DigitalTwinCard(
-            strip: _selectedStrip!,
-            isDark: _isDark,
-            onToggleSocket: _onToggleSocket,
-            onToggleAll: _smartAllOff,
-          ),
-          const SizedBox(height: 16),
-
-          // Mode Switcher (Compact 2x2 vs Full Detailed View)
-          _buildModeSwitcher(),
-          const SizedBox(height: 8),
-
-          // Overload Emergency Banner (> 2500W)
-          if (totalWatts > 2500)
+            // 4. Live Telemetry Matrix (Single sleek capsule row)
             Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFEF4444).withOpacity(0.18),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0xFFEF4444)),
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: borderColor, width: 1.2),
               ),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'تحذير تيار زائد طارئ: المشترك تجاوز 2500 واط!',
-                      style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900, color: const Color(0xFFFCA5A5)),
-                    ),
+                  _buildTelemetryItem(
+                    icon: Icons.bolt_rounded,
+                    value: '${totalWatts.toStringAsFixed(1)} W',
+                    label: 'القدرة',
+                    color: AppColors.honeyYellow,
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(color: const Color(0xFFEF4444), borderRadius: BorderRadius.circular(6)),
-                    child: Text('خطر', style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: Colors.white)),
+                  Container(width: 1, height: 24, color: borderColor),
+                  _buildTelemetryItem(
+                    icon: Icons.power_rounded,
+                    value: '${totalAmps.toStringAsFixed(2)} A',
+                    label: 'التيار',
+                    color: AppColors.routerCyan,
+                  ),
+                  Container(width: 1, height: 24, color: borderColor),
+                  _buildTelemetryItem(
+                    icon: Icons.shield_rounded,
+                    value: '${voltage.toStringAsFixed(0)} V',
+                    label: 'الجهد',
+                    color: const Color(0xFF10B981),
+                  ),
+                  Container(width: 1, height: 24, color: borderColor),
+                  _buildTelemetryItem(
+                    icon: Icons.thermostat_rounded,
+                    value: '$displayTemp °C',
+                    label: 'الحرارة',
+                    color: displayTemp > 45 ? Colors.redAccent : textSecondary,
+                  ),
+                  Container(width: 1, height: 24, color: borderColor),
+                  _buildTelemetryItem(
+                    icon: Icons.receipt_long_rounded,
+                    value: '${todayCost.toStringAsFixed(1)} ج.م',
+                    label: 'اليوم',
+                    color: AppColors.honeyAmber,
                   ),
                 ],
               ),
             ),
+            const SizedBox(height: 10),
 
-          if (_outletsViewMode == 'compact') ...[
-            // View A: 2x2 Compact View (HTML Parity)
-            _buildCurrentConsumptionBar(totalWatts, _selectedStrip!.currentVoltage ?? 225.0),
+            // 5. Symmetrical 2x2 Sockets Grid
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -2249,38 +2172,67 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 crossAxisCount: 2,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
-                childAspectRatio: 1.1,
+                childAspectRatio: 1.15,
               ),
               itemBuilder: (context, index) {
                 final socket = _selectedStrip!.sockets[index];
                 return SocketCard(
                   socket: socket,
                   isDark: _isDark,
-                  voltage: _selectedStrip!.currentVoltage ?? 225.0,
+                  voltage: voltage,
                   onToggle: () => _onToggleSocket(socket),
                   onOpenDeepDive: () => _openDeepDive(socket),
                 );
               },
             ),
+            const SizedBox(height: 10),
+
+            // 6. Master Action Button
             _buildTurnAllButton(),
-          ] else ...[
-            // View B: Full Detailed Pro View (HTML Parity)
-            _buildLoadDistributionCard(totalWatts),
-            ..._selectedStrip!.sockets.map((socket) {
-              return ProSocketCard(
-                socket: socket,
-                isDark: _isDark,
-                voltage: _selectedStrip!.currentVoltage ?? 225.0,
-                onToggle: () => _onToggleSocket(socket),
-                onToggleLock: () => _onToggleSocketLock(socket),
-                onOpenDeepDive: () => _openDeepDive(socket),
-              );
-            }),
           ],
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
+
+  Widget _buildTelemetryItem({
+    required IconData icon,
+    required String value,
+    required String label,
+    required Color color,
+  }) {
+    final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = _isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 13, color: color),
+            const SizedBox(width: 3),
+            Text(
+              value,
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 11.5,
+                fontWeight: FontWeight.w800,
+                color: textPrimary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: GoogleFonts.cairo(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            color: textSecondary,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildEmptyState() {
