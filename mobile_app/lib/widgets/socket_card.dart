@@ -150,7 +150,7 @@ class SocketCard extends StatelessWidget {
                       behavior: HitTestBehavior.opaque,
                       onTap: onOpenDeepDive,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
                         decoration: BoxDecoration(
                           color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
                           borderRadius: BorderRadius.circular(8),
@@ -162,13 +162,13 @@ class SocketCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 5),
-                    // Interactive Per-Socket Lock Toggle Button
+                    const SizedBox(width: 8),
+                    // Interactive Per-Socket Lock Toggle Button (Enlarged 38x38 hit target)
                     GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: onToggleLock,
                       child: Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 5),
                         decoration: BoxDecoration(
                           color: socket.isLocked
                               ? Colors.red.withOpacity(0.2)
@@ -180,7 +180,7 @@ class SocketCard extends StatelessWidget {
                         ),
                         child: Icon(
                           socket.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
-                          size: 14,
+                          size: 15,
                           color: socket.isLocked ? Colors.redAccent : textSecondary.withOpacity(0.6),
                         ),
                       ),
@@ -273,85 +273,94 @@ class SocketCard extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Live Wattage & Live Current (Ampere)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      isOn ? socket.currentWatt.toStringAsFixed(1) : '0.0',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: isOn ? accentColor : textSecondary,
+                // Live Wattage & Live Current (Ampere) - Fixed LTR order & typography
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isOn ? socket.currentWatt.toStringAsFixed(1) : '0.0',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: isOn ? accentColor : textSecondary,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'W',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 8.5,
-                        fontWeight: FontWeight.w700,
-                        color: textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      '•',
-                      style: TextStyle(fontSize: 8, color: textSecondary.withOpacity(0.4)),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      isOn ? displayAmp.toStringAsFixed(2) : '0.00',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w800,
-                        color: isOn ? (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)) : textSecondary,
-                      ),
-                    ),
-                    Text(
-                      'A',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 8.5,
-                        fontWeight: FontWeight.w700,
-                        color: textSecondary,
-                      ),
-                    ),
-                  ],
-                ),
-
-                // Temperature + Socket Index Badge
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.thermostat_rounded,
-                      size: 11,
-                      color: displayTemp > 45 ? Colors.redAccent : textSecondary,
-                    ),
-                    Text(
-                      '$displayTemp°',
-                      style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w600,
-                        color: displayTemp > 45 ? Colors.redAccent : textSecondary,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '#${socket.socketIndex}',
+                      const SizedBox(width: 1.5),
+                      Text(
+                        'W',
                         style: GoogleFonts.jetBrainsMono(
                           fontSize: 8.5,
-                          fontWeight: FontWeight.w800,
+                          fontWeight: FontWeight.w700,
                           color: textSecondary,
                         ),
                       ),
-                    ),
-                  ],
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Text(
+                          '•',
+                          style: TextStyle(fontSize: 9, color: textSecondary.withOpacity(0.4)),
+                        ),
+                      ),
+                      Text(
+                        isOn ? displayAmp.toStringAsFixed(2) : '0.00',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                          color: isOn ? (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)) : textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 1.5),
+                      Text(
+                        'A',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w700,
+                          color: textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Temperature + Socket Index Badge - LTR Protected
+                Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.thermostat_rounded,
+                        size: 12,
+                        color: displayTemp > 45 ? Colors.redAccent : textSecondary,
+                      ),
+                      Text(
+                        '$displayTemp°',
+                        style: GoogleFonts.jetBrainsMono(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                          color: displayTemp > 45 ? Colors.redAccent : textSecondary,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '#${socket.socketIndex}',
+                          style: GoogleFonts.jetBrainsMono(
+                            fontSize: 8.5,
+                            fontWeight: FontWeight.w800,
+                            color: textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

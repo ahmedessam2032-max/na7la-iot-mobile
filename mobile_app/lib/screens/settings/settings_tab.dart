@@ -5,6 +5,7 @@ import '../../core/storage/secure_storage.dart';
 import '../../core/security/biometric_service.dart';
 import '../../core/localization/app_locale.dart';
 import '../../data/models/strip_model.dart';
+import '../../data/repositories/strip_repository.dart';
 import '../../widgets/pin_biometric_dialog.dart';
 
 class SettingsTab extends StatefulWidget {
@@ -32,6 +33,7 @@ class SettingsTab extends StatefulWidget {
 }
 
 class _SettingsTabState extends State<SettingsTab> {
+  final StripRepository _repo = StripRepository();
   double _tariffPrice = 1.45;
   bool _hasPin = false;
   bool _appLockEnabled = false;
@@ -142,19 +144,149 @@ class _SettingsTabState extends State<SettingsTab> {
   }
 
   void _openPinSetupDialog() {
-    showDialog(
-      context: context,
-      builder: (_) => PinBiometricDialog(
-        title: _hasPin ? 'تغيير رمز PIN الماستر' : 'إعداد رمز PIN الماستر',
-        isDark: widget.isDark,
-        onSuccess: () {
-          _loadSettings();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تم تحديث رمز الحماية بنجاح 🛡️')),
+    if (!_hasPin) {
+      // First-time setup
+      showDialog(
+        context: context,
+        builder: (_) => PinBiometricDialog(
+          title: 'إعداد رمز PIN الماستر',
+          isDark: widget.isDark,
+          onSuccess: () {
+            _loadSettings();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('تم تفعيل رمز الحماية والبصمة بنجاح 🛡️'),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          },
+        ),
+      );
+    } else {
+      // Options sheet: Change PIN or Disable PIN
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) {
+          final cardBg = widget.isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;
+          final titleColor = widget.isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+          final subtitleColor = widget.isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+          final borderColor = widget.isDark ? AppColors.borderDark : AppColors.borderLight;
+
+          return Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              border: Border(top: BorderSide(color: borderColor, width: 1.5)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: widget.isDark ? Colors.white24 : Colors.black26,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'إدارة رمز PIN الماستر والحماية',
+                  style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.w900, color: titleColor),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'اختر الإجراء المطلوب لقفل وحماية الأفياش',
+                  style: GoogleFonts.cairo(fontSize: 11, color: subtitleColor),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.honeyYellow.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.lock_reset_rounded, color: AppColors.honeyYellow, size: 22),
+                  ),
+                  title: Text('تغيير رمز PIN الماستر', style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800, color: titleColor)),
+                  subtitle: Text('تعيين رمز حماية جديد مكون من 4 أرقام', style: GoogleFonts.cairo(fontSize: 10, color: subtitleColor)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    showDialog(
+                      context: context,
+                      builder: (_) => PinBiometricDialog(
+                        title: 'تغيير رمز PIN الماستر',
+                        isDark: widget.isDark,
+                        onSuccess: () {
+                          _loadSettings();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('تم تحديث رمز الحماية بنجاح 🛡️'),
+                              behavior: SnackBarBehavior.floating,
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
+                ),
+                Divider(height: 1, color: borderColor),
+                ListTile(
+                  leading: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.lock_open_rounded, color: Colors.redAccent, size: 22),
+                  ),
+                  title: Text('إلغاء قفل الفيش نهائياً', style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800, color: Colors.redAccent)),
+                  subtitle: Text('إيقاف الحماية وإلغاء قفل جميع المخارج', style: GoogleFonts.cairo(fontSize: 10, color: subtitleColor)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    // Require authentication to disable lock
+                    showDialog(
+                      context: context,
+                      builder: (_) => PinBiometricDialog(
+                        title: 'تأكيد الهوية لإلغاء القفل',
+                        isDark: widget.isDark,
+                        onSuccessWithPin: (pin) async {
+                          // Clear saved PIN
+                          await SecureStorageService.savePin('');
+                          // Unlock all locked sockets on this strip
+                          for (final s in widget.strip.sockets) {
+                            if (s.isLocked) {
+                              s.isLocked = false;
+                              try {
+                                await _repo.lockSocket(widget.strip.macAddress, s.socketIndex, false, pin: pin);
+                              } catch (_) {}
+                            }
+                          }
+                          await _loadSettings();
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('تم إلغاء قفل الفيش وإيقاف الرمز بنجاح 🔓'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        },
+                        onSuccess: () {},
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
           );
         },
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -196,7 +328,7 @@ class _SettingsTabState extends State<SettingsTab> {
               _buildRow(
                 icon: Icons.lock_outline_rounded,
                 title: 'رمز PIN الماستر',
-                valueBadge: _hasPin ? 'مفعّل 🔐' : 'تعيين الرمز ⚠️',
+                valueBadge: _hasPin ? 'مفعّل 🔐' : 'غير مفعّل 🔓',
                 onTap: _openPinSetupDialog,
               ),
               Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),

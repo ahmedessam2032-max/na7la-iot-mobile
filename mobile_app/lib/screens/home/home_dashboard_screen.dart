@@ -197,11 +197,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             if (!ok && mounted) {
               setState(() => socket.isLocked = true);
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('تعذر فك قفل المقبس على الخادم')),
+                const SnackBar(
+                  content: Text('تعذر فك قفل المقبس على الخادم'),
+                  behavior: SnackBarBehavior.floating,
+                  margin: EdgeInsets.only(bottom: 85, left: 16, right: 16),
+                ),
               );
             } else if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('تم فك قفل ${socket.name} بنجاح 🔓')),
+                SnackBar(
+                  content: Text('تم فك قفل ${socket.name} بنجاح 🔓'),
+                  behavior: SnackBarBehavior.floating,
+                  margin: const EdgeInsets.only(bottom: 85, left: 16, right: 16),
+                ),
               );
             }
           },
@@ -222,7 +230,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               await _repo.lockSocket(_selectedStrip!.macAddress, socket.socketIndex, true, pin: pin);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('تم قفل ${socket.name} برمز الحماية 🔒')),
+                  SnackBar(
+                    content: Text('تم قفل ${socket.name} برمز الحماية 🔒'),
+                    behavior: SnackBarBehavior.floating,
+                    margin: const EdgeInsets.only(bottom: 85, left: 16, right: 16),
+                  ),
                 );
               }
             },
@@ -236,11 +248,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         if (!ok && mounted) {
           setState(() => socket.isLocked = false);
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('تعذر قفل المقبس على الخادم')),
+            const SnackBar(
+              content: Text('تعذر قفل المقبس على الخادم'),
+              behavior: SnackBarBehavior.floating,
+              margin: EdgeInsets.only(bottom: 85, left: 16, right: 16),
+            ),
           );
         } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('تم قفل ${socket.name} برمز الحماية 🔒')),
+            SnackBar(
+              content: Text('تم قفل ${socket.name} برمز الحماية 🔒'),
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 85, left: 16, right: 16),
+            ),
           );
         }
       }
@@ -304,14 +324,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void _smartAllOff() {
     if (_selectedStrip == null) return;
     for (var s in _selectedStrip!.sockets) {
-      if (!s.isRouter) {
+      if (!s.isRouter && !s.isLocked) {
         s.state = false;
         _repo.switchSocket(_selectedStrip!.macAddress, s.socketIndex, false);
       }
     }
     setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('🛡️ تم إطفاء الكل مع حماية فيشة الراوتر من الفصل!')),
+      const SnackBar(
+        content: Text('🛡️ تم إطفاء الكل مع استثناء الراوتر والمخارج المقفولة!'),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(bottom: 85, left: 16, right: 16),
+      ),
     );
   }
 
@@ -325,7 +349,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     }
     setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('⚡ تم تشغيل جميع الفيش غير المقفولة')),
+      const SnackBar(
+        content: Text('⚡ تم تشغيل جميع الفيش غير المقفولة'),
+        behavior: SnackBarBehavior.floating,
+        margin: EdgeInsets.only(bottom: 85, left: 16, right: 16),
+      ),
     );
   }
 
@@ -2215,7 +2243,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   Container(width: 1, height: 24, color: borderColor),
                   _buildTelemetryItem(
                     icon: Icons.thermostat_rounded,
-                    value: '$displayTemp °C',
+                    value: '$displayTemp°C',
                     label: 'الحرارة',
                     color: displayTemp > 45 ? Colors.redAccent : textSecondary,
                   ),
@@ -2281,12 +2309,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           children: [
             Icon(icon, size: 13, color: color),
             const SizedBox(width: 3),
-            Text(
-              value,
-              style: GoogleFonts.jetBrainsMono(
-                fontSize: 11.5,
-                fontWeight: FontWeight.w800,
-                color: textPrimary,
+            Directionality(
+              textDirection: TextDirection.ltr,
+              child: Text(
+                value,
+                style: GoogleFonts.jetBrainsMono(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w800,
+                  color: textPrimary,
+                ),
               ),
             ),
           ],

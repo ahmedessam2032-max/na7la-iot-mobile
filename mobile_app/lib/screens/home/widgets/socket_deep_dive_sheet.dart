@@ -57,7 +57,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
       text: widget.socket.minWattCutoff != null ? widget.socket.minWattCutoff!.toStringAsFixed(1) : '2.5',
     );
     _cutoffDelayController = TextEditingController(
-      text: ((widget.socket.cutoffDelaySec > 0 ? widget.socket.cutoffDelaySec : 300) ~/ 60).toString(),
+      text: (widget.socket.cutoffDelaySec > 0 ? widget.socket.cutoffDelaySec : 30).toString(),
     );
 
     _enableOverloadGuard = widget.socket.maxWattLimit != null && widget.socket.maxWattLimit! > 0;
@@ -109,7 +109,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
         _isRouter = false;
         _enableLowWattCutoff = true;
         _minWattController.text = '2.5';
-        _cutoffDelayController.text = '5';
+        _cutoffDelayController.text = '30';
       } else if (type == 'heater') {
         widget.socket.icon = 'heater';
         _isRouter = false;
@@ -129,8 +129,8 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
 
     final double? minW = _enableLowWattCutoff ? double.tryParse(_minWattController.text.trim()) : null;
     final int cutoffSec = _enableLowWattCutoff
-        ? ((int.tryParse(_cutoffDelayController.text.trim()) ?? 5) * 60)
-        : 600;
+        ? (int.tryParse(_cutoffDelayController.text.trim()) ?? 30)
+        : 60;
 
     final double? maxW = _enableOverloadGuard ? double.tryParse(_maxWattController.text.trim()) : null;
     final int? autoOffSec = _enableAutoOff
@@ -152,13 +152,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
 
     await _repo.configSocket(widget.mac, widget.socket.socketIndex, payload);
 
-    if (_isLocked != widget.socket.isLocked) {
-      final pin = await BiometricService.getMasterPin();
-      await _repo.lockSocket(widget.mac, widget.socket.socketIndex, _isLocked, pin: pin);
-    }
-
     widget.socket.name = _nameController.text.trim();
-    widget.socket.isLocked = _isLocked;
     widget.socket.isRouter = _isRouter;
     widget.socket.compressorProtect = _compressorProtect;
     widget.socket.minWattCutoff = minW;
@@ -245,12 +239,15 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
           ),
         ),
         const SizedBox(height: 1),
-        Text(
-          value,
-          style: GoogleFonts.jetBrainsMono(
-            fontSize: 12,
-            fontWeight: FontWeight.w800,
-            color: valueColor,
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Text(
+            value,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: valueColor,
+            ),
           ),
         ),
       ],
@@ -422,7 +419,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
             ),
             const SizedBox(height: 8),
 
-            // 1. Smart Low-Watt Cutoff (فصل الشحن التلقائي)
+            // 1. Smart Cutoff (الفصل الذكي)
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -438,10 +435,10 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.battery_charging_full_rounded, size: 16, color: AppColors.honeyAmber),
+                          const Icon(Icons.bolt_rounded, size: 16, color: AppColors.honeyAmber),
                           const SizedBox(width: 6),
                           Text(
-                            'فصل الشحن الذكي (Low-Watt Cutoff)',
+                            'الفصل الذكي (Smart Cutoff)',
                             style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: textPrimary),
                           ),
                         ],
@@ -454,7 +451,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
                     ],
                   ),
                   Text(
-                    'يفصل المخرج تلقائياً أول ما يقل سحب الجهاز عن حد معين (حماية لبطارية الهاتف)',
+                    'يفصل المخرج تلقائياً أول ما يقل سحب الجهاز عن حد معين بعد مهلة بالثواني (حماية لبطارية الهاتف والأجهزة الحساسة)',
                     style: GoogleFonts.cairo(fontSize: 9.5, color: textSecondary),
                   ),
                   if (_enableLowWattCutoff) ...[
@@ -492,7 +489,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
                                 controller: _cutoffDelayController,
                                 keyboardType: TextInputType.number,
                                 decoration: InputDecoration(
-                                  suffixText: 'دقائق',
+                                  suffixText: 'ثانية',
                                   isDense: true,
                                   filled: true,
                                   fillColor: bg,
@@ -547,17 +544,23 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
                   ),
                   if (_enableOverloadGuard) ...[
                     const SizedBox(height: 8),
-                    TextField(
-                      controller: _maxWattController,
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        labelText: 'أقصى واط مسموح للمخرج',
-                        suffixText: 'واط (Max W)',
-                        isDense: true,
-                        filled: true,
-                        fillColor: bg,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('أقصى قدرة مسموحة للمخرج:', style: GoogleFonts.cairo(fontSize: 10, color: textSecondary)),
+                        const SizedBox(height: 3),
+                        TextField(
+                          controller: _maxWattController,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            suffixText: 'واط (W)',
+                            isDense: true,
+                            filled: true,
+                            fillColor: bg,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ],
@@ -620,7 +623,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
             ),
             const SizedBox(height: 12),
 
-            // 4. Compressor Protection & Router Options
+            // 4. Compressor Protection Option
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text('درع الكمبروسر للثلاجة (180 ثانية)', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w800)),
@@ -628,14 +631,6 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
               value: _compressorProtect,
               activeColor: AppColors.honeyYellow,
               onChanged: (val) => setState(() => _compressorProtect = val),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text('قفل المخرج برمز PIN والبصمة', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w800)),
-              subtitle: Text('حماية المخرج من العبث اليدوي أو التبديل غير المصرح به', style: GoogleFonts.cairo(fontSize: 9.5, color: textSecondary)),
-              value: _isLocked,
-              activeColor: AppColors.honeyYellow,
-              onChanged: (val) => setState(() => _isLocked = val),
             ),
             const SizedBox(height: 8),
 

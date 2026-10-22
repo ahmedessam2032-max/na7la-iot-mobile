@@ -213,21 +213,31 @@ class DigitalTwinCard extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    _buildLegendItem(const Color(0xFF00E676), 'أخضر = يعمل'),
-                    const SizedBox(width: 12),
-                    _buildLegendItem(const Color(0xFFFF1744), 'أحمر = مطفأ'),
-                    const SizedBox(width: 12),
-                    _buildLegendItem(const Color(0xFF00F0FF), 'سحابي متصل'),
-                  ],
+                Expanded(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildLegendItem(const Color(0xFF00E676), 'يعمل'),
+                      const SizedBox(width: 10),
+                      _buildLegendItem(const Color(0xFFFF1744), 'مطفأ'),
+                      const SizedBox(width: 10),
+                      _buildLegendItem(const Color(0xFF00F0FF), 'متصل'),
+                    ],
+                  ),
                 ),
-                Text(
-                  'انقر أي مخرج للتبديل',
-                  style: GoogleFonts.cairo(
-                    fontSize: 9.5,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white54 : Colors.black45,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '👆 انقر للتبديل',
+                    style: GoogleFonts.cairo(
+                      fontSize: 9.5,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white60 : Colors.black54,
+                    ),
                   ),
                 ),
               ],
