@@ -222,9 +222,16 @@ class StripRepository {
     final response = await http.post(
       Uri.parse('${ApiConstants.baseUrl}/strips/$mac/sockets/$socketIndex/switch'),
       headers: headers,
-      body: jsonEncode({'state': state}),
+      body: jsonEncode({
+        'action': state ? 'on' : 'off',
+        'state': state,
+      }),
     );
     return response.statusCode == 200;
+  }
+
+  Future<bool> updateChildLock(String mac, bool enabled) async {
+    return updateProtection(mac, {'child_lock': enabled});
   }
 
   Future<bool> lockSocket(String mac, int socketIndex, bool isLocked) async {

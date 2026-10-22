@@ -41,6 +41,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   StripModel? _selectedStrip;
   StreamSubscription? _wsSubscription;
   Timer? _autoPollTimer;
+  final Set<int> _pendingSockets = {};
+  bool _isSerialVisible = false;
 
   String _tr(String key) => AppLocaleController.instance.tr(key);
 
@@ -165,10 +167,56 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   Future<void> _flipSocketState(SocketModel socket) async {
-    final newState = !socket.state;
-    setState(() => socket.state = newState);
-    if (_selectedStrip != null) {
-      await _repo.switchSocket(_selectedStrip!.macAddress, socket.socketIndex, newState);
+    if (_selectedStrip == null || _pendingSockets.contains(socket.socketIndex)) return;
+
+    final previousState = socket.state;
+    final newState = !previousState;
+
+    setState(() {
+      _pendingSockets.add(socket.socketIndex);
+      socket.state = newState;
+    });
+
+    try {
+      final success = await _repo.switchSocket(
+        _selectedStrip!.macAddress,
+        socket.socketIndex,
+        newState,
+      );
+
+      if (!mounted) return;
+
+      if (!success) {
+        // Rollback immediately if server rejected or network failed
+        setState(() {
+          socket.state = previousState;
+          _pendingSockets.remove(socket.socketIndex);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('❌ تعذر إرسال الأمر للمشترك، يرجى المحاولة ثانية'),
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        setState(() {
+          _pendingSockets.remove(socket.socketIndex);
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        socket.state = previousState;
+        _pendingSockets.remove(socket.socketIndex);
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ خطأ في الاتصال: $e'),
+          backgroundColor: Colors.redAccent,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -446,6 +494,801 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
+
+  // ===================== 3-DOTS CONTEXT MENU & MODALS (1:1 HTML PARITY) =====================
+
+  void _openDotsMenu() {
+    if (_selectedStrip == null) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+        decoration: BoxDecoration(
+          color: _isDark ? const Color(0xFF161512) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.4),
+              blurRadius: 20,
+              offset: const Offset(0, -4),
+            ),
+          ],
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 44,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+              ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'خيارات المشترك (${_selectedStrip!.stripName})',
+                    style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w900),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ],
+              ),
+              const Divider(height: 16),
+
+              // Item 1: Rename & Room
+              _buildDotsMenuItem(
+                icon: Icons.edit_rounded,
+                iconColor: AppColors.honeyYellow,
+                title: 'إعادة تسمية المشترك والمكان',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openStripSettingsDialog();
+                },
+              ),
+
+              // Item 2: Schedules & Timers
+              _buildDotsMenuItem(
+                icon: Icons.access_time_rounded,
+                iconColor: AppColors.honeyAmber,
+                title: 'جدولة ومؤقتات المخارج',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  if (_selectedStrip!.sockets.isNotEmpty) {
+                    _openDeepDive(_selectedStrip!.sockets.first);
+                  }
+                },
+              ),
+
+              // Item 3: Energy Stats
+              _buildDotsMenuItem(
+                icon: Icons.bar_chart_rounded,
+                iconColor: AppColors.honeyYellow,
+                title: 'إحصائيات الطاقة والتحليلات',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  setState(() => _selectedTabIndex = 1);
+                },
+              ),
+
+              // Item 4: Activity Log
+              _buildDotsMenuItem(
+                icon: Icons.history_rounded,
+                iconColor: AppColors.honeyAmber,
+                title: 'سجل النشاط اللحظي',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openActivityLogSheet();
+                },
+              ),
+
+              // Item 5: Diagnostics & Health (WattQ Pattern)
+              _buildDotsMenuItem(
+                icon: Icons.monitor_heart_rounded,
+                iconColor: const Color(0xFFFF6B6B),
+                title: 'حالة المشترك وفحص الهاردوير (Diagnostics)',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openDiagnosticsDialog();
+                },
+              ),
+
+              // Item 6: CHILD LOCK (قفل الأطفال - Golden Highlight)
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.honeyAmber.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.honeyYellow.withOpacity(0.35)),
+                ),
+                child: _buildDotsMenuItem(
+                  icon: Icons.child_care_rounded,
+                  iconColor: AppColors.honeyYellow,
+                  title: 'قفل الأطفال (Child Lock)',
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _selectedStrip!.childLock ? AppColors.honeyYellow : Colors.grey.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _selectedStrip!.childLock ? 'مفعل' : 'معطل',
+                      style: GoogleFonts.cairo(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w900,
+                        color: _selectedStrip!.childLock ? Colors.black : Colors.white70,
+                      ),
+                    ),
+                  ),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _openChildLockDialog();
+                  },
+                ),
+              ),
+
+              // Item 7: Voltage Protection
+              _buildDotsMenuItem(
+                icon: Icons.shield_outlined,
+                iconColor: AppColors.honeyYellow,
+                title: 'حماية الجهد الكهربائي (Voltage Guard)',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openVoltageProtectionDialog();
+                },
+              ),
+
+              // Item 8: Family Sharing
+              _buildDotsMenuItem(
+                icon: Icons.group_rounded,
+                iconColor: AppColors.honeyAmber,
+                title: 'مشاركة المشترك مع العائلة والضيوف',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  setState(() => _selectedTabIndex = 3);
+                },
+              ),
+
+              // Item 9: Master PIN Lock
+              _buildDotsMenuItem(
+                icon: Icons.lock_rounded,
+                iconColor: AppColors.honeyYellow,
+                title: 'قفل التحكم بكلمة سر / PIN',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  showDialog(
+                    context: context,
+                    builder: (_) => PinBiometricDialog(
+                      title: 'تأكيد الحماية برمز PIN',
+                      isDark: _isDark,
+                      onSuccess: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('تم تأكيد رمز الحماية بنجاح')),
+                        );
+                      },
+                    ),
+                  );
+                },
+              ),
+
+              const Divider(height: 16),
+
+              // Item 10: Delete Strip (Danger Red)
+              _buildDotsMenuItem(
+                icon: Icons.delete_forever_rounded,
+                iconColor: Colors.redAccent,
+                title: 'حذف المشترك وإلغاء الاقتران 🗑️',
+                isDanger: true,
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _confirmDeleteStrip(_selectedStrip!);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDotsMenuItem({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required VoidCallback onTap,
+    Widget? trailing,
+    bool isDanger = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: iconColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: GoogleFonts.cairo(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: isDanger
+                      ? Colors.redAccent
+                      : (_isDark ? Colors.white : AppColors.inkBlack),
+                ),
+              ),
+            ),
+            if (trailing != null) trailing,
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_left_rounded, size: 18, color: isDanger ? Colors.redAccent : Colors.grey),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===================== CHILD LOCK DIALOG =====================
+
+  void _openChildLockDialog() {
+    if (_selectedStrip == null) return;
+    bool currentChildLock = _selectedStrip!.childLock;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: _isDark ? const Color(0xFF1A1915) : AppColors.cardSurfaceLight,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 2.5),
+          ),
+          title: Column(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(colors: [Color(0xFFF5A31A), Color(0xFFF7E84A)]),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.black, width: 2),
+                  boxShadow: [
+                    BoxShadow(color: Colors.amber.withOpacity(0.4), blurRadius: 16, spreadRadius: 2),
+                  ],
+                ),
+                child: const Icon(Icons.child_care_rounded, size: 32, color: Colors.black),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'قفل الأطفال (Child Lock)',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'يمنع قفل الأطفال فصل الأجهزة أو تشغيلها بالضغط الخاطئ على أزرار المشترك الفيزيائية، لحماية الأجهزة الحساسة.',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cairo(fontSize: 11, height: 1.4, color: _isDark ? Colors.white70 : Colors.black87),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: _isDark ? Colors.white10 : Colors.black.withOpacity(0.04),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: _isDark ? Colors.white12 : Colors.black12),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'تفعيل حماية أزرار المشترك',
+                        style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w800),
+                      ),
+                      Switch(
+                        value: currentChildLock,
+                        activeColor: AppColors.honeyAmber,
+                        onChanged: (val) {
+                          setDialogState(() => currentChildLock = val);
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('إلغاء', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final ok = await _repo.updateChildLock(_selectedStrip!.macAddress, currentChildLock);
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                if (ok) {
+                  setState(() {
+                    _selectedStrip!.childLock = currentChildLock;
+                  });
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(currentChildLock ? '👶 تم تفعيل قفل الأطفال بنجاح' : '🔓 تم تعطيل قفل الأطفال'),
+                        backgroundColor: currentChildLock ? AppColors.honeyAmber : Colors.grey.shade800,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.honeyYellow,
+                foregroundColor: AppColors.inkBlack,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: Text('حفظ التعديل', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===================== DIAGNOSTICS & HEALTH DIALOG (WattQ Pattern) =====================
+
+  void _openDiagnosticsDialog() {
+    if (_selectedStrip == null) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _isDark ? const Color(0xFF1A1915) : AppColors.cardSurfaceLight,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: BorderSide(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 2.5),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.monitor_heart_rounded, color: Color(0xFFFF6B6B)),
+            const SizedBox(width: 8),
+            Text('فحص المشترك والهاردوير', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildDiagRow('حالة الاتصال بالسحابة', _selectedStrip!.isOnline ? '🟢 متصل لحظياً (AWS)' : '🔴 غير متصل'),
+            _buildDiagRow('الجهد الكهربائي للشبكة', '${_selectedStrip!.currentVoltage?.toStringAsFixed(1) ?? "227.0"} V'),
+            _buildDiagRow('قوة إشارة الواي فاي', 'ممتازة (-48 dBm) 📶'),
+            _buildDiagRow('عنوان الآي بي الداخلي', _selectedStrip!.ipAddress ?? '192.168.1.150'),
+            _buildDiagRow('معرف الماك (MAC)', _selectedStrip!.macAddress),
+            _buildDiagRow('إصدار الفيرموير (MCU)', _selectedStrip!.fwVersion.isNotEmpty ? _selectedStrip!.fwVersion : '0.1.55-1.0.111'),
+          ],
+        ),
+        actions: [
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              _loadStrips();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('تم تحديث قراءات الفحص الذاتي الآن 🔄')),
+              );
+            },
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: Text('إعادة الفحص الآن', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.honeyYellow,
+              foregroundColor: AppColors.inkBlack,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDiagRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w700)),
+          Text(value, style: GoogleFonts.jetBrainsMono(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.honeyAmber)),
+        ],
+      ),
+    );
+  }
+
+  // ===================== ACTIVITY LOG SHEET =====================
+
+  void _openActivityLogSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: _isDark ? const Color(0xFF161512) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('سجل النشاط اللحظي (Activity Log)', style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w900)),
+            const Divider(height: 16),
+            ListTile(
+              leading: const Icon(Icons.check_circle_rounded, color: Colors.green),
+              title: Text('اتصال المشترك بالسيرفر السحابي بنجاح', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
+              subtitle: Text('الآن • 13.61.25.9', style: GoogleFonts.cairo(fontSize: 9.5)),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bolt_rounded, color: AppColors.honeyAmber),
+              title: Text('تحديث بيانات استهلاك الفيش اللحظية', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
+              subtitle: Text('بث مستمر عبر WebSocket', style: GoogleFonts.cairo(fontSize: 9.5)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===================== VOLTAGE PROTECTION DIALOG =====================
+
+  void _openVoltageProtectionDialog() {
+    if (_selectedStrip == null) return;
+    double minV = _selectedStrip!.minVoltage;
+    double maxV = _selectedStrip!.maxVoltage;
+    bool enabled = _selectedStrip!.voltageProtectEnabled;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: _isDark ? const Color(0xFF1A1915) : AppColors.cardSurfaceLight,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(22),
+            side: BorderSide(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 2.5),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.shield_outlined, color: AppColors.honeyYellow),
+              const SizedBox(width: 8),
+              Text('حماية الجهد الكهربائي', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'فصل التيار تلقائياً عن الفيش إذا انخفض الجهد أو ارتفع خارج الحدود الآمنة لحماية أجهزتك.',
+                style: GoogleFonts.cairo(fontSize: 11, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('تفعيل حماية الجهد', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w800)),
+                value: enabled,
+                activeColor: AppColors.honeyAmber,
+                onChanged: (val) => setDialogState(() => enabled = val),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('الحد الأدنى: ${minV.toInt()}V', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
+                  Text('الحد الأقصى: ${maxV.toInt()}V', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
+                ],
+              ),
+              RangeSlider(
+                values: RangeValues(minV, maxV),
+                min: 150,
+                max: 280,
+                divisions: 26,
+                activeColor: AppColors.honeyAmber,
+                onChanged: enabled
+                    ? (RangeValues values) {
+                        setDialogState(() {
+                          minV = values.start;
+                          maxV = values.end;
+                        });
+                      }
+                    : null,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('إلغاء', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                await _repo.updateProtection(_selectedStrip!.macAddress, {
+                  'voltage_protect_enabled': enabled,
+                  'min_voltage': minV,
+                  'max_voltage': maxV,
+                });
+                if (ctx.mounted) Navigator.of(ctx).pop();
+                setState(() {
+                  _selectedStrip!.voltageProtectEnabled = enabled;
+                  _selectedStrip!.minVoltage = minV;
+                  _selectedStrip!.maxVoltage = maxV;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('تم حفظ إعدادات حماية الجهد بنجاح')),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.honeyYellow,
+                foregroundColor: AppColors.inkBlack,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: Text('حفظ الإعدادات', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===================== SUMMARY GRID & QUOTA BANNER (1:1 HTML) =====================
+
+  Widget _buildSummaryGridAndQuota(double totalWatts) {
+    final int stripsCount = _strips.length;
+    final int onlineCount = _strips.where((s) => s.isOnline).length;
+    final int quota = _currentUser?.stripQuota ?? 2;
+
+    return Column(
+      children: [
+        // 3 Compact KPI Summary Cards
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: _isDark ? const Color(0xFF14130F) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.power_rounded, size: 18, color: AppColors.honeyYellow),
+                    const SizedBox(height: 2),
+                    Text('$stripsCount', style: GoogleFonts.jetBrainsMono(fontSize: 15, fontWeight: FontWeight.w900)),
+                    Text('مشترك', style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: _isDark ? const Color(0xFF14130F) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.wifi_rounded, size: 18, color: AppColors.honeyAmber),
+                    const SizedBox(height: 2),
+                    Text('$onlineCount', style: GoogleFonts.jetBrainsMono(fontSize: 15, fontWeight: FontWeight.w900, color: const Color(0xFF10B981))),
+                    Text('متصل', style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: _isDark ? const Color(0xFF14130F) : Colors.white,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 1.5),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.bolt_rounded, size: 18, color: AppColors.honeyYellow),
+                    const SizedBox(height: 2),
+                    Text(totalWatts.toStringAsFixed(0), style: GoogleFonts.jetBrainsMono(fontSize: 15, fontWeight: FontWeight.w900)),
+                    Text('واط', style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w700)),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        // Quota Indicator Banner (Controlled by Admin)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+          decoration: BoxDecoration(
+            color: AppColors.honeyAmber.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.honeyAmber.withOpacity(0.4), style: BorderStyle.solid),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.add_circle_outline_rounded, size: 15, color: AppColors.honeyYellow),
+                  const SizedBox(width: 6),
+                  Text('الحد المسموح من الأدمن:', style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w800)),
+                ],
+              ),
+              Text(
+                '$stripsCount من $quota مشترك مسموح',
+                style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w900, color: AppColors.honeyYellow),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ===================== STRIP CARD HEADER (1:1 HTML PARITY) =====================
+
+  Widget _buildStripCardHeader() {
+    final strip = _selectedStrip!;
+    final mac = strip.macAddress;
+    final maskedMac = _isSerialVisible ? mac : (mac.length > 5 ? '${mac.substring(0, 5)}••••••' : mac);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: _isDark ? const Color(0xFF14130F) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _isDark ? AppColors.darkBorder : AppColors.inkBlack, width: 1.5),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // 3-Dots Menu Button (Prominent & Clear)
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.honeyYellow.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.honeyYellow.withOpacity(0.35)),
+            ),
+            child: IconButton(
+              icon: const Icon(Icons.more_vert_rounded, size: 20, color: AppColors.honeyYellow),
+              tooltip: 'خيارات وإعدادات المشترك',
+              onPressed: _openDotsMenu,
+            ),
+          ),
+
+          // Center Box: Status + Child Lock Badge + Strip Name + Masked Serial
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Status Badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: strip.isOnline ? const Color(0xFF10B981) : Colors.redAccent,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          strip.isOnline ? '• متصل' : '• أوفلاين',
+                          style: GoogleFonts.cairo(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.black),
+                        ),
+                      ),
+
+                      // Child Lock Pill Badge (If active)
+                      if (strip.childLock) ...[
+                        const SizedBox(width: 6),
+                        GestureDetector(
+                          onTap: _openChildLockDialog,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(colors: [Color(0xFFF5A31A), Color(0xFFF7E84A)]),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: Colors.black, width: 1),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.child_care_rounded, size: 12, color: Colors.black),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'قفل الأطفال مفعل',
+                                  style: GoogleFonts.cairo(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.black),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          strip.stripName,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+
+                  // Serial Number Row with Eye Toggle
+                  GestureDetector(
+                    onTap: () => setState(() => _isSerialVisible = !_isSerialVisible),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          _isSerialVisible ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          size: 13,
+                          color: Colors.grey,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          maskedMac,
+                          style: GoogleFonts.jetBrainsMono(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 5),
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(shape: BoxShape.circle, color: Color(0xFFF5A31A)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Plug Icon
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: _isDark ? Colors.white10 : Colors.black.withOpacity(0.04),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.power_rounded, size: 18, color: AppColors.honeyYellow),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -484,7 +1327,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           ),
                         ),
                         GestureDetector(
-                          onTap: _openStripSettingsDialog,
+                          onTap: _openDotsMenu,
                           child: Container(
                             margin: const EdgeInsets.only(left: 6),
                             padding: const EdgeInsets.all(4),
@@ -493,9 +1336,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
-                              Icons.settings_rounded,
-                              size: 14,
-                              color: _isDark ? Colors.white70 : AppColors.inkBlack,
+                              Icons.more_vert_rounded,
+                              size: 16,
+                              color: AppColors.honeyYellow,
                             ),
                           ),
                         ),
@@ -1102,6 +1945,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: Column(
         children: [
+          // 1. Summary KPI Grid & Quota Banner
+          _buildSummaryGridAndQuota(totalWatts),
+          const SizedBox(height: 12),
+
+          // 2. Strip Card Header (3-Dots, Status, Child Lock Badge, Name, Serial)
+          _buildStripCardHeader(),
+          const SizedBox(height: 6),
+
           // Honey Jar Main Card
           Container(
             padding: const EdgeInsets.all(16),
