@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/storage/secure_storage.dart';
+import '../../core/security/biometric_service.dart';
 import '../../core/localization/app_locale.dart';
 import '../../core/services/home_widget_service.dart';
 import '../../data/models/strip_model.dart';

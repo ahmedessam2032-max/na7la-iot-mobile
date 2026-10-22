@@ -102,7 +102,7 @@ class _AppLockGateState extends State<AppLockGate> with WidgetsBindingObserver {
     }
 
     // Gorgeous Obsidian / Ceramic Lock Screen
-    final bg = _isDark ? AppColors.darkBackground : AppColors.lightBackground;
+    final bg = _isDark ? AppColors.darkOuter : AppColors.lightBg;
     final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
     final textSecondary = _isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
     final cardBg = _isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;

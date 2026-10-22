@@ -14,6 +14,7 @@ class SettingsTab extends StatefulWidget {
   final VoidCallback onOpenProtection;
   final VoidCallback onOpenFamily;
   final VoidCallback onOpenAdminConsole;
+  final VoidCallback? onToggleTheme;
 
   const SettingsTab({
     super.key,
@@ -23,6 +24,7 @@ class SettingsTab extends StatefulWidget {
     required this.onOpenProtection,
     required this.onOpenFamily,
     required this.onOpenAdminConsole,
+    this.onToggleTheme,
   });
 
   @override
@@ -173,7 +175,7 @@ class _SettingsTabState extends State<SettingsTab> {
                 title: 'لغة التطبيق',
                 valueBadge: locale.isArabic ? 'العربية' : 'English',
                 onTap: () {
-                  locale.setLocale(Locale(locale.isArabic ? 'en' : 'ar'));
+                  locale.toggleLanguage();
                 },
               ),
             ],
