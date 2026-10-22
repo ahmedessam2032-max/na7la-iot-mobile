@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
-import '../../core/localization/app_locale.dart';
 import '../../core/storage/secure_storage.dart';
 import '../../core/security/biometric_service.dart';
+import '../../core/localization/app_locale.dart';
 import '../../data/models/strip_model.dart';
 import '../../widgets/pin_biometric_dialog.dart';
 
@@ -11,7 +11,6 @@ class SettingsTab extends StatefulWidget {
   final StripModel strip;
   final bool isDark;
   final bool isAdmin;
-  final VoidCallback onToggleTheme;
   final VoidCallback onOpenProtection;
   final VoidCallback onOpenFamily;
   final VoidCallback onOpenAdminConsole;
@@ -21,7 +20,6 @@ class SettingsTab extends StatefulWidget {
     required this.strip,
     required this.isDark,
     this.isAdmin = false,
-    required this.onToggleTheme,
     required this.onOpenProtection,
     required this.onOpenFamily,
     required this.onOpenAdminConsole,
@@ -34,6 +32,7 @@ class SettingsTab extends StatefulWidget {
 class _SettingsTabState extends State<SettingsTab> {
   double _tariffPrice = 1.45;
   bool _hasPin = false;
+  bool _appLockEnabled = false;
 
   @override
   void initState() {
@@ -44,11 +43,43 @@ class _SettingsTabState extends State<SettingsTab> {
   Future<void> _loadSettings() async {
     final price = await SecureStorageService.getTariffPrice();
     final hasPin = await BiometricService.hasPin();
+    final appLock = await SecureStorageService.isAppLockEnabled();
     if (mounted) {
       setState(() {
         _tariffPrice = price;
         _hasPin = hasPin;
+        _appLockEnabled = appLock;
       });
+    }
+  }
+
+  Future<void> _toggleAppLock(bool value) async {
+    if (value) {
+      final success = await BiometricService.authenticateBiometric(
+        reason: 'أكّد هويتك بالبصمة أو رمز الجهاز لتفعيل قفل التطبيق',
+      );
+      if (success) {
+        await SecureStorageService.setAppLockEnabled(true);
+        setState(() => _appLockEnabled = true);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('سيُطلب فتح التطبيق بالبصمة من الآن 🔐')),
+          );
+        }
+      }
+    } else {
+      final success = await BiometricService.authenticateBiometric(
+        reason: 'أكّد هويتك بالبصمة أو رمز الجهاز لإلغاء قفل التطبيق',
+      );
+      if (success) {
+        await SecureStorageService.setAppLockEnabled(false);
+        setState(() => _appLockEnabled = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تم إلغاء قفل التطبيق 🔓')),
+          );
+        }
+      }
     }
   }
 
@@ -138,24 +169,19 @@ class _SettingsTabState extends State<SettingsTab> {
           _buildCard(
             children: [
               _buildRow(
-                icon: Icons.palette_outlined,
-                title: 'مظهر التطبيق',
-                valueBadge: widget.isDark ? 'داكن أوبسيديان 🌙' : 'سيراميك أبيض ☀️',
-                onTap: widget.onToggleTheme,
-              ),
-              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
-              _buildRow(
                 icon: Icons.language_rounded,
-                title: 'لغة الواجهة',
+                title: 'لغة التطبيق',
                 valueBadge: locale.isArabic ? 'العربية' : 'English',
-                onTap: () => locale.toggleLanguage(),
+                onTap: () {
+                  locale.setLocale(Locale(locale.isArabic ? 'en' : 'ar'));
+                },
               ),
             ],
           ),
           const SizedBox(height: 16),
 
           // Section 2: Security & Protection
-          _buildSectionHeader('حماية المشترك والأمان'),
+          _buildSectionHeader('الأمان والحماية المتقدمة'),
           _buildCard(
             children: [
               _buildRow(
@@ -167,9 +193,17 @@ class _SettingsTabState extends State<SettingsTab> {
               Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
               _buildRow(
                 icon: Icons.lock_outline_rounded,
-                title: 'رمز PIN الماستر والبصمة',
+                title: 'رمز PIN الماستر',
                 valueBadge: _hasPin ? 'مفعّل 🔐' : 'تعيين الرمز ⚠️',
                 onTap: _openPinSetupDialog,
+              ),
+              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+              _buildSwitchRow(
+                icon: Icons.fingerprint_rounded,
+                title: 'قفل التطبيق بالبصمة',
+                subtitle: 'طلب البصمة أو رمز الجهاز عند فتح التطبيق',
+                value: _appLockEnabled,
+                onChanged: _toggleAppLock,
               ),
               Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
               _buildRow(
@@ -202,7 +236,36 @@ class _SettingsTabState extends State<SettingsTab> {
                 ),
               ],
             ),
+            const SizedBox(height: 16),
           ],
+
+          // Section 4: Device & System Info
+          _buildSectionHeader('معلومات الجهاز والاتصال'),
+          _buildCard(
+            children: [
+              _buildRow(
+                icon: Icons.memory_rounded,
+                title: 'موديل المشترك',
+                valueBadge: widget.strip.model,
+                onTap: () {},
+              ),
+              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+              _buildRow(
+                icon: Icons.tag_rounded,
+                title: 'عنوان MAC المشترك',
+                valueBadge: widget.strip.macAddress,
+                onTap: () {},
+              ),
+              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+              _buildRow(
+                icon: Icons.system_update_rounded,
+                title: 'إصدار الفيرموير (OTA)',
+                valueBadge: 'v${widget.strip.fwVersion}',
+                onTap: () {},
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
         ],
       ),
     );
@@ -210,21 +273,21 @@ class _SettingsTabState extends State<SettingsTab> {
 
   Widget _buildSectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8, right: 4, left: 4),
+      padding: const EdgeInsets.only(right: 6, bottom: 8),
       child: Text(
         title,
         style: GoogleFonts.cairo(
           fontSize: 12,
-          fontWeight: FontWeight.w900,
-          color: AppColors.honeyYellow,
+          fontWeight: FontWeight.w800,
+          color: widget.isDark ? AppColors.honeyYellow : const Color(0xFFD97706),
         ),
       ),
     );
   }
 
   Widget _buildCard({required List<Widget> children}) {
-    final borderColor = widget.isDark ? AppColors.borderDark : AppColors.borderLight;
     final cardBg = widget.isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;
+    final borderColor = widget.isDark ? AppColors.borderDark : AppColors.borderLight;
 
     return Container(
       decoration: BoxDecoration(
@@ -279,6 +342,50 @@ class _SettingsTabState extends State<SettingsTab> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSwitchRow({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    final textPrimary = widget.isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = widget.isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: AppColors.honeyYellow),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800, color: textPrimary),
+                  ),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.cairo(fontSize: 10, color: textSecondary),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          Switch(
+            value: value,
+            activeColor: AppColors.honeyYellow,
+            onChanged: onChanged,
+          ),
+        ],
       ),
     );
   }

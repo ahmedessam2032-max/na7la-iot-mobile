@@ -16,20 +16,33 @@ class BiometricService {
     }
   }
 
-  /// Trigger fingerprint / face unlock prompt
-  static Future<bool> authenticateBiometric({String reason = 'المس مستشعر البصمة لفتح المخرج المحمي'}) async {
+  /// List enrolled biometrics
+  static Future<List<BiometricType>> getAvailableBiometrics() async {
+    try {
+      return await _auth.getAvailableBiometrics();
+    } on PlatformException {
+      return [];
+    }
+  }
+
+  /// Trigger fingerprint / face / device security prompt
+  static Future<bool> authenticateBiometric({
+    String reason = 'أكّد هويتك بالبصمة أو رمز الجهاز للمتابعة',
+    bool biometricOnly = false,
+  }) async {
     try {
       final isSupported = await canCheckBiometrics();
       if (!isSupported) return false;
 
       return await _auth.authenticate(
         localizedReason: reason,
-        options: const AuthenticationOptions(
+        options: AuthenticationOptions(
           stickyAuth: true,
-          biometricOnly: true,
+          biometricOnly: biometricOnly,
+          useErrorDialogs: true,
         ),
       );
-    } on PlatformException {
+    } on PlatformException catch (_) {
       return false;
     }
   }
@@ -38,6 +51,11 @@ class BiometricService {
   static Future<bool> hasPin() async {
     final savedPin = await SecureStorageService.getPin();
     return savedPin != null && savedPin.trim().isNotEmpty;
+  }
+
+  /// Retrieve the saved Master PIN
+  static Future<String?> getMasterPin() async {
+    return await SecureStorageService.getPin();
   }
 
   /// Check master PIN

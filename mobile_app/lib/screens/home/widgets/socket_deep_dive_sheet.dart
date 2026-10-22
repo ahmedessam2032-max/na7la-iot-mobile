@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/socket_model.dart';
 import '../../../data/repositories/strip_repository.dart';
+import '../../../core/security/biometric_service.dart';
 import '../../schedules/widgets/repeating_cycle_sheet.dart';
 
 class SocketDeepDiveSheet extends StatefulWidget {
@@ -152,7 +153,8 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
     await _repo.configSocket(widget.mac, widget.socket.socketIndex, payload);
 
     if (_isLocked != widget.socket.isLocked) {
-      await _repo.lockSocket(widget.mac, widget.socket.socketIndex, _isLocked);
+      final pin = await BiometricService.getMasterPin();
+      await _repo.lockSocket(widget.mac, widget.socket.socketIndex, _isLocked, pin: pin);
     }
 
     widget.socket.name = _nameController.text.trim();
@@ -230,6 +232,31 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
     );
   }
 
+  Widget _buildMetricItem(String label, String value, Color valueColor) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.cairo(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            color: widget.isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight,
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          value,
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bg = widget.isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;
@@ -296,6 +323,39 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
                   constraints: const BoxConstraints(),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+
+            // Live Telemetry Pill (Watt, Ampere, Temperature)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: widget.isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: borderColor, width: 1.0),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _buildMetricItem(
+                    '⚡ القدرة اللحظية',
+                    '${widget.socket.state ? widget.socket.currentWatt.toStringAsFixed(1) : "0.0"} W',
+                    widget.socket.state ? AppColors.honeyYellow : textSecondary,
+                  ),
+                  Container(width: 1, height: 24, color: borderColor),
+                  _buildMetricItem(
+                    '🔌 التيار الكهربائي',
+                    '${widget.socket.state ? (widget.socket.currentAmp > 0 ? widget.socket.currentAmp.toStringAsFixed(2) : (widget.socket.currentWatt / 228.0).toStringAsFixed(2)) : "0.00"} A',
+                    widget.socket.state ? (widget.isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)) : textSecondary,
+                  ),
+                  Container(width: 1, height: 24, color: borderColor),
+                  _buildMetricItem(
+                    '🌡️ حرارة البوردة',
+                    '${widget.socket.currentTempC > 0 ? widget.socket.currentTempC : 28}°C',
+                    textSecondary,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 14),
 

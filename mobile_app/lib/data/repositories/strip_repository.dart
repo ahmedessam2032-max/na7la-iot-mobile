@@ -235,12 +235,19 @@ class StripRepository {
     return updateProtection(mac, {'child_lock': enabled});
   }
 
-  Future<bool> lockSocket(String mac, int socketIndex, bool isLocked) async {
+  Future<bool> lockSocket(String mac, int socketIndex, bool isLocked, {String? pin}) async {
     final headers = await _getHeaders();
+    final Map<String, dynamic> body = {
+      'locked': isLocked,
+      'is_locked': isLocked,
+    };
+    if (pin != null && pin.isNotEmpty) {
+      body['pin'] = pin;
+    }
     final response = await http.post(
       Uri.parse('${ApiConstants.baseUrl}/strips/$mac/sockets/$socketIndex/lock'),
       headers: headers,
-      body: jsonEncode({'is_locked': isLocked}),
+      body: jsonEncode(body),
     );
     return response.statusCode == 200;
   }

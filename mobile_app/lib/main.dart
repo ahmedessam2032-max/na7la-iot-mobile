@@ -7,6 +7,7 @@ import 'core/storage/secure_storage.dart';
 import 'core/localization/app_locale.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_dashboard_screen.dart';
+import 'widgets/app_lock_gate.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,7 +66,7 @@ class Na7laApp extends StatelessWidget {
           theme: AppTheme.lightTheme(),
           darkTheme: AppTheme.darkTheme(),
           themeMode: initialDarkMode ? ThemeMode.dark : ThemeMode.light,
-          home: initialHasToken ? const HomeDashboardScreen() : const LoginScreen(),
+          home: initialHasToken ? const AppLockGate(child: HomeDashboardScreen()) : const LoginScreen(),
         );
       },
     );

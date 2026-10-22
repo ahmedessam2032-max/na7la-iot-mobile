@@ -169,13 +169,80 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       showDialog(
         context: context,
         builder: (_) => PinBiometricDialog(
-          title: socket.name,
+          title: 'تأكيد تبديل: ${socket.name}',
           isDark: _isDark,
+          onSuccessWithPin: (pin) => _flipSocketState(socket),
           onSuccess: () => _flipSocketState(socket),
         ),
       );
     } else {
       _flipSocketState(socket);
+    }
+  }
+
+  void _handleSocketLockToggle(SocketModel socket) async {
+    if (_selectedStrip == null) return;
+
+    if (socket.isLocked) {
+      // Currently locked -> Prompt to unlock permanently
+      showDialog(
+        context: context,
+        builder: (_) => PinBiometricDialog(
+          title: 'فك قفل ${socket.name}',
+          isDark: _isDark,
+          onSuccessWithPin: (pin) async {
+            setState(() => socket.isLocked = false);
+            final ok = await _repo.lockSocket(_selectedStrip!.macAddress, socket.socketIndex, false, pin: pin);
+            if (!ok && mounted) {
+              setState(() => socket.isLocked = true);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('تعذر فك قفل المقبس على الخادم')),
+              );
+            } else if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('تم فك قفل ${socket.name} بنجاح 🔓')),
+              );
+            }
+          },
+          onSuccess: () {},
+        ),
+      );
+    } else {
+      // Currently unlocked -> Lock it
+      final hasPin = await BiometricService.hasPin();
+      if (!hasPin) {
+        showDialog(
+          context: context,
+          builder: (_) => PinBiometricDialog(
+            title: 'إعداد رمز الحماية وقفل ${socket.name}',
+            isDark: _isDark,
+            onSuccessWithPin: (pin) async {
+              setState(() => socket.isLocked = true);
+              await _repo.lockSocket(_selectedStrip!.macAddress, socket.socketIndex, true, pin: pin);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('تم قفل ${socket.name} برمز الحماية 🔒')),
+                );
+              }
+            },
+            onSuccess: () {},
+          ),
+        );
+      } else {
+        final masterPin = await BiometricService.getMasterPin();
+        setState(() => socket.isLocked = true);
+        final ok = await _repo.lockSocket(_selectedStrip!.macAddress, socket.socketIndex, true, pin: masterPin);
+        if (!ok && mounted) {
+          setState(() => socket.isLocked = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('تعذر قفل المقبس على الخادم')),
+          );
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('تم قفل ${socket.name} برمز الحماية 🔒')),
+          );
+        }
+      }
     }
   }
 
@@ -2182,6 +2249,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   voltage: voltage,
                   onToggle: () => _onToggleSocket(socket),
                   onOpenDeepDive: () => _openDeepDive(socket),
+                  onToggleLock: () => _handleSocketLockToggle(socket),
                 );
               },
             ),

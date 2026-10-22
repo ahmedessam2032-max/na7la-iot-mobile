@@ -9,6 +9,7 @@ class SocketCard extends StatelessWidget {
   final double voltage;
   final VoidCallback onToggle;
   final VoidCallback onOpenDeepDive;
+  final VoidCallback? onToggleLock;
 
   const SocketCard({
     super.key,
@@ -17,6 +18,7 @@ class SocketCard extends StatelessWidget {
     this.voltage = 228.0,
     required this.onToggle,
     required this.onOpenDeepDive,
+    this.onToggleLock,
   });
 
   IconData _getSocketIcon(String iconName) {
@@ -116,6 +118,9 @@ class SocketCard extends StatelessWidget {
     final Color accentColor = isOn ? AppColors.honeyYellow : textSecondary;
 
     final int displayTemp = socket.currentTempC > 0 ? socket.currentTempC : 28;
+    final double displayAmp = socket.currentAmp > 0
+        ? socket.currentAmp
+        : (isOn && voltage > 0 ? (socket.currentWatt / voltage) : 0.0);
 
     return GestureDetector(
       onTap: onToggle,
@@ -133,26 +138,54 @@ class SocketCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Top Row: 3-Dots Menu & Voltage Tag
+            // Top Row: Menu & Lock Buttons (Left), Voltage & Router Tag (Right)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // Action Menu (3-dots)
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: onOpenDeepDive,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
-                      borderRadius: BorderRadius.circular(8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Action Menu (3-dots)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onOpenDeepDive,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          Icons.more_horiz_rounded,
+                          size: 16,
+                          color: textSecondary,
+                        ),
+                      ),
                     ),
-                    child: Icon(
-                      Icons.more_horiz_rounded,
-                      size: 16,
-                      color: textSecondary,
+                    const SizedBox(width: 5),
+                    // Interactive Per-Socket Lock Toggle Button
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: onToggleLock,
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: socket.isLocked
+                              ? Colors.red.withOpacity(0.2)
+                              : (isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04)),
+                          borderRadius: BorderRadius.circular(8),
+                          border: socket.isLocked
+                              ? Border.all(color: Colors.redAccent.withOpacity(0.7), width: 1.0)
+                              : null,
+                        ),
+                        child: Icon(
+                          socket.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                          size: 14,
+                          color: socket.isLocked ? Colors.redAccent : textSecondary.withOpacity(0.6),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
 
                 // Voltage / Router Badge
@@ -204,38 +237,20 @@ class SocketCard extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: isOn
-                              ? AppColors.honeyYellow.withOpacity(isDark ? 0.2 : 0.15)
-                              : (isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03)),
-                        ),
-                        child: Icon(
-                          _getSocketIcon(socket.icon),
-                          size: 22,
-                          color: isOn ? AppColors.honeyYellow : textSecondary,
-                        ),
-                      ),
-                      if (socket.isLocked)
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: Container(
-                            padding: const EdgeInsets.all(2),
-                            decoration: BoxDecoration(
-                              color: Colors.red.shade600,
-                              shape: BoxShape.circle,
-                            ),
-                            child: const Icon(Icons.lock_rounded, size: 9, color: Colors.white),
-                          ),
-                        ),
-                    ],
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isOn
+                          ? AppColors.honeyYellow.withOpacity(isDark ? 0.2 : 0.15)
+                          : (isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.03)),
+                    ),
+                    child: Icon(
+                      _getSocketIcon(socket.icon),
+                      size: 22,
+                      color: isOn ? AppColors.honeyYellow : textSecondary,
+                    ),
                   ),
                   const SizedBox(height: 5),
                   Text(
@@ -253,28 +268,49 @@ class SocketCard extends StatelessWidget {
               ),
             ),
 
-            // Bottom Row: Live Wattage & Temperature Badge
+            // Bottom Row: Live Wattage & Ampere (Left), Temperature & Index (Right)
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Live Wattage
+                // Live Wattage & Live Current (Ampere)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       isOn ? socket.currentWatt.toStringAsFixed(1) : '0.0',
                       style: GoogleFonts.jetBrainsMono(
-                        fontSize: 13.5,
+                        fontSize: 12,
                         fontWeight: FontWeight.w800,
                         color: isOn ? accentColor : textSecondary,
                       ),
                     ),
-                    const SizedBox(width: 2),
                     Text(
                       'W',
                       style: GoogleFonts.jetBrainsMono(
-                        fontSize: 9.5,
+                        fontSize: 8.5,
+                        fontWeight: FontWeight.w700,
+                        color: textSecondary,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      '•',
+                      style: TextStyle(fontSize: 8, color: textSecondary.withOpacity(0.4)),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      isOn ? displayAmp.toStringAsFixed(2) : '0.00',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                        color: isOn ? (isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7)) : textSecondary,
+                      ),
+                    ),
+                    Text(
+                      'A',
+                      style: GoogleFonts.jetBrainsMono(
+                        fontSize: 8.5,
                         fontWeight: FontWeight.w700,
                         color: textSecondary,
                       ),

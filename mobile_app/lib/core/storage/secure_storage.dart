@@ -9,6 +9,7 @@ class SecureStorageService {
   static const String keySelectedMac = 'na7la_selected_mac';
   static const String keyPinCode = 'na7la_pin_code';
   static const String keyBiometricEnabled = 'na7la_biometric_enabled';
+  static const String keyAppLockEnabled = 'na7la_app_lock_enabled';
   static const String keyDarkMode = 'na7la_dark_mode';
   static const String keyLanguage = 'na7la_language';
   static const String keyTariffPrice = 'na7la_tariff_price';
@@ -75,6 +76,15 @@ class SecureStorageService {
 
   static Future<bool> isBiometricEnabled() async {
     final val = await _storage.read(key: keyBiometricEnabled);
+    return val == 'true';
+  }
+
+  static Future<void> setAppLockEnabled(bool enabled) async {
+    await _storage.write(key: keyAppLockEnabled, value: enabled.toString());
+  }
+
+  static Future<bool> isAppLockEnabled() async {
+    final val = await _storage.read(key: keyAppLockEnabled);
     return val == 'true';
   }
 
