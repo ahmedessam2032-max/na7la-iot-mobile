@@ -42,6 +42,7 @@ class StripModel {
   });
 
   double get totalWatt => sockets.fold(0.0, (sum, s) => sum + (s.state ? s.currentWatt : 0.0));
+  double get totalWatts => totalWatt;
   double get totalAmp => sockets.fold(0.0, (sum, s) => sum + (s.state ? s.currentAmp : 0.0));
   double get totalKwh => sockets.fold(0.0, (sum, s) => sum + s.rawEnergyKwh);
   double get voltage => currentVoltage ?? 225.0;
