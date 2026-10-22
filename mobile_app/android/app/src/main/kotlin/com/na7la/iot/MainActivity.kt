@@ -153,7 +153,7 @@ class MainActivity: FlutterFragmentActivity() {
                                     currentStripNetwork = network
                                     // Bind the app process to this network so TCP sockets go directly to strip
                                     connectivityManager?.bindProcessToNetwork(network)
-                                    activity.runOnUiThread {
+                                    this@MainActivity.runOnUiThread {
                                         result.success(true)
                                     }
                                 }
@@ -161,7 +161,7 @@ class MainActivity: FlutterFragmentActivity() {
                                 override fun onUnavailable() {
                                     super.onUnavailable()
                                     currentStripNetwork = null
-                                    activity.runOnUiThread {
+                                    this@MainActivity.runOnUiThread {
                                         result.error("UNAVAILABLE", "Failed to connect to strip Wi-Fi", null)
                                     }
                                 }
@@ -279,7 +279,7 @@ class MainActivity: FlutterFragmentActivity() {
                             }
                         }
 
-                        activity.runOnUiThread {
+                        this@MainActivity.runOnUiThread {
                             if (succeeded) {
                                 result.success(mapOf(
                                     "success" to true,
