@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/strip_model.dart';
 import '../../data/models/socket_model.dart';
+import 'widgets/repeating_cycle_sheet.dart';
 
 class SchedulesTab extends StatelessWidget {
   final StripModel strip;
@@ -134,22 +135,52 @@ class SchedulesTab extends StatelessWidget {
                       ),
                     ],
                   ),
-                  ElevatedButton(
-                    onPressed: () => onOpenScheduleSheet(socket),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDark ? const Color(0xFF26241D) : Colors.black.withOpacity(0.06),
-                      foregroundColor: AppColors.honeyYellow,
-                      elevation: 0,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: AppColors.honeyYellow, width: 1),
+                  Row(
+                    children: [
+                      OutlinedButton(
+                        onPressed: () {
+                          showModalBottomSheet(
+                            context: context,
+                            isScrollControlled: true,
+                            backgroundColor: Colors.transparent,
+                            builder: (_) => RepeatingCycleSheet(
+                              mac: strip.macAddress,
+                              socket: socket,
+                              isDark: isDark,
+                              onCycleChanged: () => onOpenScheduleSheet(socket),
+                            ),
+                          );
+                        },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.routerCyan,
+                          side: const BorderSide(color: AppColors.routerCyan, width: 1),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        child: Text(
+                          'دورة 🔄',
+                          style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w800),
+                        ),
                       ),
-                    ),
-                    child: Text(
-                      'ضبط ⚙️',
-                      style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
-                    ),
+                      const SizedBox(width: 6),
+                      ElevatedButton(
+                        onPressed: () => onOpenScheduleSheet(socket),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isDark ? const Color(0xFF26241D) : Colors.black.withOpacity(0.06),
+                          foregroundColor: AppColors.honeyYellow,
+                          elevation: 0,
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            side: const BorderSide(color: AppColors.honeyYellow, width: 1),
+                          ),
+                        ),
+                        child: Text(
+                          'ضبط ⚙️',
+                          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

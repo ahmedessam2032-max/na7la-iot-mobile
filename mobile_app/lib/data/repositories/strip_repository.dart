@@ -4,6 +4,7 @@ import '../../core/constants/api_constants.dart';
 import '../../core/storage/secure_storage.dart';
 import '../models/user_model.dart';
 import '../models/strip_model.dart';
+import '../models/schedule_model.dart';
 
 class StripRepository {
   Future<Map<String, String>> _getHeaders() async {
@@ -277,6 +278,61 @@ class StripRepository {
     final headers = await _getHeaders();
     final response = await http.post(
       Uri.parse('${ApiConstants.baseUrl}/strips/$mac/claim'),
+      headers: headers,
+    );
+    return response.statusCode == 200;
+  }
+
+  // --- Schedules & Repeating Cycles Endpoints ---
+
+  Future<List<ScheduleModel>> getSocketSchedules(String mac, int socketIndex) async {
+    final headers = await _getHeaders();
+    final response = await http.get(
+      Uri.parse('${ApiConstants.baseUrl}/strips/$mac/sockets/$socketIndex/schedules'),
+      headers: headers,
+    );
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final list = data['schedules'] as List? ?? [];
+      return list.map((x) => ScheduleModel.fromJson(x)).toList();
+    }
+    return [];
+  }
+
+  Future<bool> createCycleSchedule({
+    required String mac,
+    required int socketIndex,
+    required int cycleOnSec,
+    required int cycleOffSec,
+    bool initialOn = true,
+  }) async {
+    final headers = await _getHeaders();
+    final response = await http.post(
+      Uri.parse('${ApiConstants.baseUrl}/strips/$mac/sockets/$socketIndex/schedules'),
+      headers: headers,
+      body: jsonEncode({
+        'schedule_type': 'CYCLE',
+        'cycle_on_sec': cycleOnSec,
+        'cycle_off_sec': cycleOffSec,
+        'target_state': initialOn,
+      }),
+    );
+    return response.statusCode == 200;
+  }
+
+  Future<bool> deleteSchedule(int scheduleId) async {
+    final headers = await _getHeaders();
+    final response = await http.delete(
+      Uri.parse('${ApiConstants.baseUrl}/schedules/$scheduleId'),
+      headers: headers,
+    );
+    return response.statusCode == 200;
+  }
+
+  Future<bool> toggleSchedule(int scheduleId) async {
+    final headers = await _getHeaders();
+    final response = await http.patch(
+      Uri.parse('${ApiConstants.baseUrl}/schedules/$scheduleId/toggle'),
       headers: headers,
     );
     return response.statusCode == 200;

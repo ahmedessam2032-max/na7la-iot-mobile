@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/storage/secure_storage.dart';
 import '../../core/localization/app_locale.dart';
+import '../../core/services/home_widget_service.dart';
 import '../../data/models/strip_model.dart';
 import '../../data/models/socket_model.dart';
 import '../../data/models/user_model.dart';
@@ -22,6 +23,7 @@ import '../auth/login_screen.dart';
 import '../schedules/schedules_tab.dart';
 import '../favorites/favorites_tab.dart';
 import '../settings/settings_tab.dart';
+import '../settings/widgets/controller_mode_dialog.dart';
 import '../account/account_tab.dart';
 import 'widgets/socket_deep_dive_sheet.dart';
 import 'widgets/digital_twin_card.dart';
@@ -107,6 +109,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       if (_strips.isNotEmpty) {
         _selectedStrip = _strips.first;
         _connectWebSocket();
+        HomeWidgetService.updateFromStrip(_selectedStrip!);
       }
       _isLoading = false;
     });
@@ -143,6 +146,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             if (sJson.containsKey('current_amp')) socket.currentAmp = (sJson['current_amp'] as num).toDouble();
             if (sJson.containsKey('raw_energy_kwh')) socket.rawEnergyKwh = (sJson['raw_energy_kwh'] as num).toDouble();
           }
+        }
+        if (_selectedStrip != null) {
+          HomeWidgetService.updateFromStrip(_selectedStrip!);
         }
       });
     });
@@ -704,6 +710,23 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           const SnackBar(content: Text('تم تأكيد رمز الحماية بنجاح')),
                         );
                       },
+                    ),
+                  );
+                },
+              ),
+
+              // Controller Target Mode (Cloud vs Offline LAN)
+              _buildDotsMenuItem(
+                icon: Icons.router_rounded,
+                iconColor: AppColors.routerCyan,
+                title: 'نمط الاتصال بالمشترك (سحابي / محلي بدون إنترنت)',
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  showDialog(
+                    context: context,
+                    builder: (_) => ControllerModeDialog(
+                      isDark: _isDark,
+                      mac: _selectedStrip!.macAddress,
                     ),
                   );
                 },

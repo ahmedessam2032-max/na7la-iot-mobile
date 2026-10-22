@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/socket_model.dart';
 import '../../../data/repositories/strip_repository.dart';
+import '../../schedules/widgets/repeating_cycle_sheet.dart';
 
 class SocketDeepDiveSheet extends StatefulWidget {
   final String mac;
@@ -239,6 +240,40 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: widget.isDark ? Colors.white70 : AppColors.inkBlack,
                 side: BorderSide(color: widget.isDark ? Colors.white24 : Colors.black26),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            // Repeating Cycles Action Button
+            OutlinedButton.icon(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => RepeatingCycleSheet(
+                    mac: widget.mac,
+                    socket: widget.socket,
+                    isDark: widget.isDark,
+                    onCycleChanged: () {
+                      widget.onUpdated(widget.socket);
+                    },
+                  ),
+                );
+              },
+              icon: const Icon(Icons.sync_rounded, color: AppColors.routerCyan, size: 18),
+              label: Text(
+                'دورات التشغيل المتكررة (Repeating Cycles) 🔄',
+                style: GoogleFonts.cairo(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  color: widget.isDark ? AppColors.routerCyan : const Color(0xFF0284C7),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.routerCyan, width: 1.5),
+                padding: const EdgeInsets.symmetric(vertical: 10),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
