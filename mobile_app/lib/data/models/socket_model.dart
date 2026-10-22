@@ -5,6 +5,7 @@ class SocketModel {
   String icon;
   bool isRouter;
   bool isLocked;
+  bool isFavorite;
   bool state;
   double currentWatt;
   double currentAmp;
@@ -25,6 +26,7 @@ class SocketModel {
     this.icon = 'power_plug',
     this.isRouter = false,
     this.isLocked = false,
+    this.isFavorite = false,
     this.state = false,
     this.currentWatt = 0.0,
     this.currentAmp = 0.0,
@@ -39,6 +41,8 @@ class SocketModel {
     this.hwOverheatFlag = false,
   });
 
+  double get totalKwh => rawEnergyKwh;
+
   factory SocketModel.fromJson(Map<String, dynamic> json) {
     final idx = json['socket_index'] ?? json['index'] ?? 1;
     return SocketModel(
@@ -48,6 +52,7 @@ class SocketModel {
       icon: json['icon'] ?? 'power_plug',
       isRouter: json['is_router'] ?? false,
       isLocked: json['is_locked'] ?? json['is_router'] ?? false,
+      isFavorite: json['is_favorite'] ?? false,
       state: json['state'] ?? json['on'] ?? json['reported_state'] ?? false,
       currentWatt: (json['current_watt'] ?? json['watt'] as num?)?.toDouble() ?? 0.0,
       currentAmp: (json['current_amp'] ?? json['amp'] as num?)?.toDouble() ?? 0.0,

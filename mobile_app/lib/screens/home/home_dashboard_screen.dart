@@ -481,7 +481,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     foregroundColor: AppColors.inkBlack,
                     onPressed: () async {
                       if (_currentUser != null && _currentUser!.role != 'admin' && _strips.length >= _currentUser!.maxStripsAllowed) {
-                        _showQuotaUpgradeModal();
+                        _showQuotaUpgradeDialog(_currentUser?.stripQuota ?? 1);
                         return;
                       }
                       final added = await Navigator.of(context).push<bool>(
@@ -2013,8 +2013,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           user: _currentUser,
           isDark: _isDark,
           stripsCount: _strips.length,
-          onUpgradeQuota: _showQuotaUpgradeModal,
-          onLogout: _logout,
+          onUpgradeQuota: () => _showQuotaUpgradeDialog(_currentUser?.stripQuota ?? 1),
+          onLogout: _confirmLogout,
         );
       default:
         return const SizedBox();

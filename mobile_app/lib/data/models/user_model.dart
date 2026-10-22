@@ -19,6 +19,7 @@ class UserModel {
 
   bool get isAdmin => role.toUpperCase() == 'ADMIN';
   int get stripQuota => maxStrips;
+  int get maxStripsAllowed => maxStrips;
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
