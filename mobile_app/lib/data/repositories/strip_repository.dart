@@ -355,6 +355,18 @@ class StripRepository {
     }
   }
 
+  Future<Map<String, dynamic>> getStripStatus(String mac) async {
+    try {
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/strips/$mac/status'),
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      }
+    } catch (_) {}
+    return {'ok': false, 'is_online': false};
+  }
+
   // --- Admin Endpoints ---
 
   Future<List<dynamic>> getAdminUsers() async {

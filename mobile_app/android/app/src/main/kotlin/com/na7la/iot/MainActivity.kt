@@ -1,6 +1,8 @@
 package com.na7la.iot
 
 import android.content.Context
+import android.content.Intent
+import android.location.LocationManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -9,7 +11,9 @@ import android.net.wifi.WifiInfo
 import android.net.wifi.WifiManager
 import android.net.wifi.WifiNetworkSpecifier
 import android.os.Build
+import android.provider.Settings
 import androidx.annotation.NonNull
+import androidx.core.location.LocationManagerCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -43,6 +47,31 @@ class MainActivity: FlutterActivity() {
                         result.success(true)
                     } else {
                         result.success(true)
+                    }
+                }
+
+                "isLocationEnabled" -> {
+                    try {
+                        val lm = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
+                        val isEnabled = if (lm != null) {
+                            LocationManagerCompat.isLocationEnabled(lm)
+                        } else {
+                            true
+                        }
+                        result.success(isEnabled)
+                    } catch (e: Exception) {
+                        result.success(true)
+                    }
+                }
+
+                "openLocationSettings" -> {
+                    try {
+                        val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.success(false)
                     }
                 }
 
@@ -156,8 +185,28 @@ class MainActivity: FlutterActivity() {
                         var socket: Socket? = null
                         var succeeded = false
                         var lastError = "Could not reach strip"
+                        var matchedIp = ""
 
-                        // 1. Gather candidate IPs: Gateway from network properties, 192.168.1.1, 192.168.4.1
+                        // Helper to read response until line feed or timeout
+                        fun readLine(inStream: InputStream, maxMs: Long = 1800): String {
+                            val start = System.currentTimeMillis()
+                            val sb = StringBuilder()
+                            val buf = ByteArray(1)
+                            while (System.currentTimeMillis() - start < maxMs) {
+                                if (inStream.available() > 0) {
+                                    val r = inStream.read(buf)
+                                    if (r == -1) break
+                                    val ch = buf[0].toInt().toChar()
+                                    if (ch == '\n') break
+                                    if (ch != '\r') sb.append(ch)
+                                } else {
+                                    Thread.sleep(50)
+                                }
+                            }
+                            return sb.toString().trim()
+                        }
+
+                        // 1. Candidate IPs: Gateway from link properties, 192.168.1.1, 192.168.4.1
                         val candidateIps = mutableListOf<String>()
                         try {
                             currentStripNetwork?.let { net ->
@@ -182,32 +231,42 @@ class MainActivity: FlutterActivity() {
                                     Socket()
                                 }
                                 socket = s
-                                s.soTimeout = 6000
-                                s.connect(InetSocketAddress(ip, port), 4000)
+                                s.soTimeout = 5000
+                                s.connect(InetSocketAddress(ip, port), 3500)
 
                                 val out: OutputStream = s.getOutputStream()
                                 val inStream: InputStream = s.getInputStream()
-                                val buf = ByteArray(512)
 
                                 // Step 1: Set Cloud Destination IP (up:ip:<serverIp>\r\n)
                                 val cmdIp = "up:ip:$serverIp\r\n".toByteArray(Charsets.UTF_8)
                                 out.write(cmdIp)
                                 out.flush()
-                                Thread.sleep(600)
+                                val respIp = readLine(inStream, 1500)
 
                                 // Step 2: Set Home Wi-Fi credentials (up:connect:<ssid>:<password>\r\n)
                                 val cmdConnect = "up:connect:$routerSsid:$routerPassword\r\n".toByteArray(Charsets.UTF_8)
                                 out.write(cmdConnect)
                                 out.flush()
-                                Thread.sleep(600)
+                                val respConnect = readLine(inStream, 2000)
+
+                                // Check if strip explicitly refused credentials
+                                if (respConnect.contains("err", ignoreCase = true) || respConnect.contains("fail", ignoreCase = true)) {
+                                    lastError = "المشترك رفض بيانات الواي فاي: $respConnect"
+                                    continue
+                                }
 
                                 // Step 3: Trigger reboot (up:reboot:0\r\n)
-                                val cmdReboot = "up:reboot:0\r\n".toByteArray(Charsets.UTF_8)
-                                out.write(cmdReboot)
-                                out.flush()
-                                Thread.sleep(300)
+                                try {
+                                    val cmdReboot = "up:reboot:0\r\n".toByteArray(Charsets.UTF_8)
+                                    out.write(cmdReboot)
+                                    out.flush()
+                                    Thread.sleep(300)
+                                } catch (_: Exception) {
+                                    // Strip drops socket immediately on reboot command
+                                }
 
                                 succeeded = true
+                                matchedIp = ip
                                 break
                             } catch (e: Exception) {
                                 lastError = "${e.javaClass.simpleName}: ${e.message}"
@@ -218,7 +277,11 @@ class MainActivity: FlutterActivity() {
 
                         activity.runOnUiThread {
                             if (succeeded) {
-                                result.success(mapOf("success" to true, "message" to "Provisioned successfully"))
+                                result.success(mapOf(
+                                    "success" to true,
+                                    "message" to "Provisioned successfully",
+                                    "ip" to matchedIp
+                                ))
                             } else {
                                 result.success(mapOf("success" to false, "error" to lastError))
                             }

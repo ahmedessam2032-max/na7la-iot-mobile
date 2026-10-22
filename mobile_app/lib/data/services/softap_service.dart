@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import '../../core/constants/api_constants.dart';
@@ -36,6 +37,26 @@ class SoftApService {
       return res ?? true;
     } catch (_) {
       return true;
+    }
+  }
+
+  /// Check whether Location services (GPS) are toggled ON in Android system
+  static Future<bool> isLocationEnabled() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('isLocationEnabled');
+      return res ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Open Android Location Settings screen so the user can toggle GPS ON
+  static Future<bool> openLocationSettings() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('openLocationSettings');
+      return res ?? false;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -77,7 +98,7 @@ class SoftApService {
 
   /// Calculate MTTL-W01 factory SoftAP password: LGU_ + last 7 characters of MAC
   static String calculateSoftApPassword(String macOrSsid) {
-    var clean = macOrSsid.replaceAll('TONLY_TAP_', '').replaceAll(':', '').replaceAll('-', '').toUpperCase();
+    var clean = macOrSsid.replaceAll('TONLY_TAP_', '').replaceAll('ONLY_TAP_', '').replaceAll(':', '').replaceAll('-', '').toUpperCase();
     if (clean.length >= 7) {
       final suffix = clean.substring(clean.length - 7);
       return 'LGU_$suffix';
@@ -87,15 +108,21 @@ class SoftApService {
 
   /// Extract potential MAC address from TONLY_TAP_ SSID
   static String extractMacFromSsid(String ssid) {
-    if (ssid.startsWith('TONLY_TAP_')) {
-      final suffix = ssid.replaceFirst('TONLY_TAP_', '').toUpperCase();
-      // Most MTTL-W01 chips have OUI 88D039 (Tonly Technology)
-      if (suffix.length == 7) {
-        return '88D03${suffix}';
-      }
-      return suffix;
+    var clean = ssid.toUpperCase();
+    if (clean.startsWith('TONLY_TAP_')) {
+      clean = clean.replaceFirst('TONLY_TAP_', '');
+    } else if (clean.startsWith('ONLY_TAP_')) {
+      clean = clean.replaceFirst('ONLY_TAP_', '');
     }
-    return ssid;
+    
+    // Most MTTL-W01 chips have OUI 88D039 (Tonly Technology)
+    if (clean.length == 7) {
+      return '88D03$clean';
+    }
+    if (clean.length == 4) {
+      return '88D03939$clean';
+    }
+    return clean;
   }
 
   /// Validate Wi-Fi credentials before sending to avoid strip crash/rejection
@@ -171,12 +198,14 @@ class SoftApService {
         // Command 2: Set Home Wi-Fi credentials
         socket.write('up:connect:$routerSsid:$routerPassword\r\n');
         await socket.flush();
-        await Future.delayed(const Duration(milliseconds: 600));
+        await Future.delayed(const Duration(milliseconds: 800));
 
-        // Command 3: Mandatory Reboot signal (Darwish exact sequence)
-        socket.write('up:reboot:0\r\n');
-        await socket.flush();
-        await Future.delayed(const Duration(milliseconds: 300));
+        // Command 3: Mandatory Reboot signal (MTTL-W01 exact sequence)
+        try {
+          socket.write('up:reboot:0\r\n');
+          await socket.flush();
+          await Future.delayed(const Duration(milliseconds: 300));
+        } catch (_) {}
 
         return true;
       } catch (_) {

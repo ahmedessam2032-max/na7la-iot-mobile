@@ -40,6 +40,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   List<StripModel> _strips = [];
   StripModel? _selectedStrip;
   StreamSubscription? _wsSubscription;
+  Timer? _autoPollTimer;
 
   String _tr(String key) => AppLocaleController.instance.tr(key);
 
@@ -54,10 +55,32 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void initState() {
     super.initState();
     _initApp();
+    _startPeriodicPoll();
+  }
+
+  void _startPeriodicPoll() {
+    _autoPollTimer?.cancel();
+    _autoPollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+      if (mounted && !_isLoading && _strips.isNotEmpty) {
+        _repo.getStrips().then((strips) {
+          if (mounted && strips.isNotEmpty) {
+            setState(() {
+              _strips = strips;
+              final currentMac = _selectedStrip?.macAddress;
+              _selectedStrip = strips.firstWhere(
+                (s) => s.macAddress == currentMac,
+                orElse: () => strips.first,
+              );
+            });
+          }
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _autoPollTimer?.cancel();
     _wsSubscription?.cancel();
     _wsManager.dispose();
     super.dispose();
@@ -88,6 +111,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     _wsSubscription = _wsManager.connect(_selectedStrip!.macAddress).listen((data) {
       if (!mounted) return;
       setState(() {
+        // Reactive Online Status check
+        if (data.containsKey('online')) {
+          _selectedStrip!.isOnline = data['online'] == true;
+        } else if (data['event'] == 'status_change') {
+          _selectedStrip!.isOnline = data['online'] == true;
+        } else if (data.containsKey('voltage') || data['event'] == 'telemetry_update') {
+          _selectedStrip!.isOnline = true;
+        }
+
         if (data.containsKey('voltage')) {
           _selectedStrip!.currentVoltage = (data['voltage'] as num?)?.toDouble();
         }
@@ -1061,9 +1093,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     final double totalKwh = _selectedStrip!.totalKwh;
     final double todayCost = totalKwh * 1.45;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
+    return RefreshIndicator(
+      onRefresh: _loadStrips,
+      color: AppColors.honeyAmber,
+      backgroundColor: widget.isDark ? AppColors.cardSurfaceDark : Colors.white,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        child: Column(
         children: [
           // Honey Jar Main Card
           Container(
@@ -1236,7 +1273,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildEmptyState() {

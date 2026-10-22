@@ -21,6 +21,7 @@ class _WizardScreenState extends State<WizardScreen> {
   int _currentStep = 1; // 1: Wi-Fi & Discovery, 2: Real Pairing & Cloud Polling, 3: Router & Customization
   bool _isLoading = false;
   bool _isScanning = false;
+  bool _isLocationDisabled = false;
   bool _isPasswordVisible = false;
   bool _showManualMacInput = false;
   bool _showManualConnectMode = false;
@@ -29,6 +30,7 @@ class _WizardScreenState extends State<WizardScreen> {
   final _ssidController = TextEditingController();
   final _passwordController = TextEditingController();
   final _manualMacController = TextEditingController();
+  final _apCodeController = TextEditingController();
   final _stripNameController = TextEditingController(text: 'مشترك الصالة الذكي');
 
   // Discovered networks & strips
@@ -57,6 +59,7 @@ class _WizardScreenState extends State<WizardScreen> {
     _ssidController.dispose();
     _passwordController.dispose();
     _manualMacController.dispose();
+    _apCodeController.dispose();
     _stripNameController.dispose();
     SoftApService.releaseStripAp();
     super.dispose();
@@ -67,24 +70,35 @@ class _WizardScreenState extends State<WizardScreen> {
     // 1. Request Android OS permissions (Location & Nearby Devices)
     await SoftApService.requestPermissions();
 
-    // 2. Auto-detect current connected home Wi-Fi SSID
+    // 2. Check if Location (GPS) is enabled in Android quick settings
+    final isLocOn = await SoftApService.isLocationEnabled();
+    if (mounted) {
+      setState(() => _isLocationDisabled = !isLocOn);
+    }
+
+    // 3. Auto-detect current connected home Wi-Fi SSID
     final currentSsid = await SoftApService.getCurrentSsid();
     if (currentSsid.isNotEmpty && mounted) {
       _ssidController.text = currentSsid;
     }
 
-    // 3. Scan nearby Wi-Fi networks to find any TONLY_TAP_* strips
+    // 4. Scan nearby Wi-Fi networks to find any TONLY_TAP_* strips
     await _scanWifi();
   }
 
   Future<void> _scanWifi() async {
     setState(() => _isScanning = true);
+    final isLocOn = await SoftApService.isLocationEnabled();
+    if (mounted) {
+      setState(() => _isLocationDisabled = !isLocOn);
+    }
+
     final networks = await SoftApService.scanNearbyWifiDetailed();
     if (!mounted) return;
 
     final strips = networks
         .map((n) => n.ssid)
-        .where((s) => s.toUpperCase().startsWith('TONLY_TAP_'))
+        .where((s) => s.toUpperCase().startsWith('TONLY_TAP_') || s.toUpperCase().startsWith('ONLY_TAP_'))
         .toList();
 
     setState(() {
@@ -147,8 +161,18 @@ class _WizardScreenState extends State<WizardScreen> {
     }
 
     if (_selectedStripSsid.isEmpty) {
+      final typedCode = _apCodeController.text.trim().toUpperCase();
+      if (typedCode.isNotEmpty) {
+        _selectedStripSsid = typedCode.startsWith('TONLY_TAP_') ? typedCode : 'TONLY_TAP_$typedCode';
+      } else if (isManualSocketDirect) {
+        // Fallback for direct PyDroid style: target the currently registered strip or prompt
+        _selectedStripSsid = 'TONLY_TAP_88D039394B53';
+      }
+    }
+
+    if (_selectedStripSsid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ يرجى اختيار المشترك الذكي المكتشف أو إدخال الماك يدوياً')),
+        const SnackBar(content: Text('⚠️ يرجى اختيار المشترك الذكي المكتشف أو إدخال كود المشترك (مثل 4B53)')),
       );
       return;
     }
@@ -196,26 +220,35 @@ class _WizardScreenState extends State<WizardScreen> {
 
       // Stage 4: Poll AWS Server for up to 60 seconds to verify real connection
       bool verifiedOnCloud = false;
+
+      // Register or claim strip on AWS cloud once
+      try {
+        await _repo.registerStrip(_resolvedMac, name: _stripNameController.text.trim());
+      } catch (_) {}
+
       for (int i = 0; i < 20; i++) {
         await Future.delayed(const Duration(seconds: 3));
         if (!mounted) return;
 
-        // Try registering/claiming strip on cloud
-        final res = await _repo.registerStrip(_resolvedMac, name: _stripNameController.text.trim());
-        if (res['ok'] == true || res['success'] == true) {
+        final status = await _repo.getStripStatus(_resolvedMac);
+        if (status['online'] == true || status['is_online'] == true) {
           verifiedOnCloud = true;
           break;
         }
       }
 
-      if (verifiedOnCloud || mounted) {
-        setState(() {
-          _currentStep = 3; // Advance to Router Safeguard and Finish
-        });
+      if (verifiedOnCloud) {
+        if (mounted) {
+          setState(() {
+            _currentStep = 3; // Advance to Router Safeguard and Finish
+          });
+        }
       } else {
-        setState(() {
-          _pairingErrorMessage = 'تعذر رصد المشترك على السيرفر. تأكد من إيقاف باقة الهاتف (Mobile Data)، وصحة باسورد راوتر 2.4 GHz وقرب المشترك من الإشارة.';
-        });
+        if (mounted) {
+          setState(() {
+            _pairingErrorMessage = 'تعذر رصد المشترك أونلاين على السيرفر بعد 60 ثانية.\nتأكد من إيقاف باقة الهاتف (Mobile Data)، وصحة باسورد راوتر 2.4 GHz وقرب المشترك من الراوتر.';
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -346,6 +379,55 @@ class _WizardScreenState extends State<WizardScreen> {
         const SizedBox(height: 14),
 
         // ⚠️ Pre-flight Checklist Card (Critical User Instructions)
+        if (_isLocationDisabled)
+          Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.red.shade900.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.redAccent, width: 1.5),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.location_off_rounded, color: Colors.redAccent, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'خدمات الموقع (GPS) مغلقة على هاتفك:',
+                        style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w900, color: Colors.redAccent),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'نظام أندرويد يمنع كشف شبكات الواي فاي القريبة للمشترك بدون تفعيل الـ GPS. شغّل الموقع ثم اضغط إعادة المسح.',
+                  style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      await SoftApService.openLocationSettings();
+                    },
+                    icon: const Icon(Icons.settings_rounded, size: 16),
+                    label: Text('فتح إعدادات الموقع لتفعيله ⚙️', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.redAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
@@ -498,8 +580,8 @@ class _WizardScreenState extends State<WizardScreen> {
         ),
         const SizedBox(height: 14),
 
-        // Fail-Safe Manual Connect Mode Toggle
-        if (_selectedStripSsid.isNotEmpty && !_showManualMacInput) ...[
+        // Fail-Safe Manual Connect Mode Toggle (Always available)
+        if (!_showManualMacInput) ...[
           GestureDetector(
             onTap: () => setState(() => _showManualConnectMode = !_showManualConnectMode),
             child: Container(
@@ -511,14 +593,14 @@ class _WizardScreenState extends State<WizardScreen> {
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.build_circle_outlined, size: 18, color: AppColors.honeyAmber),
+                  const Icon(Icons.flash_on_rounded, size: 18, color: AppColors.honeyAmber),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _showManualConnectMode
-                          ? 'إخفاء خيار الربط اليدوي'
-                          : 'صعوبة في الربط التلقائي؟ اضغط هنا للربط اليدوي 🛠️',
-                      style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.honeyAmber),
+                          ? 'إخفاء خيار الربط المباشر السريع'
+                          : '⚡ الربط المباشر السريع (طريقة باي درويد) 🛠️',
+                      style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.honeyAmber),
                     ),
                   ),
                   Icon(
@@ -542,26 +624,57 @@ class _WizardScreenState extends State<WizardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('خطوات الربط اليدوي المباشر:', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                  Text('خطوات الربط المباشر السريع (مثل باي درويد):', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
                   const SizedBox(height: 4),
-                  Text('1. افتح إعدادات الواي فاي في الموبايل.', style: GoogleFonts.cairo(fontSize: 10)),
-                  Text('2. اتصل بشبكة المشترك التالية واكتب باسوردها:', style: GoogleFonts.cairo(fontSize: 10)),
+                  Text('1. افتح إعدادات الواي فاي في الموبايل.', style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w700)),
+                  Text('2. اتصل بشبكة المشترك (تبدأ بـ TONLY_TAP_):', style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
-                  _buildCopyField('اسم الشبكة:', _selectedStripSsid),
-                  const SizedBox(height: 4),
-                  _buildCopyField('الباسورد:', calculatedPass),
+                  if (_selectedStripSsid.isNotEmpty) ...[
+                    _buildCopyField('اسم الشبكة:', _selectedStripSsid),
+                    const SizedBox(height: 4),
+                    _buildCopyField('الباسورد:', calculatedPass),
+                  ] else ...[
+                    Text('اكتب اسم الشبكة أو آخر 4 رموز للمشترك:', style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    TextField(
+                      controller: _apCodeController,
+                      onChanged: (val) {
+                        setState(() {
+                          final v = val.trim().toUpperCase();
+                          if (v.isNotEmpty) {
+                            _selectedStripSsid = v.startsWith('TONLY_TAP_') ? v : 'TONLY_TAP_$v';
+                          }
+                        });
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'مثال: 4B53 أو TONLY_TAP_4B53',
+                        prefixIcon: const Icon(Icons.wifi_tethering_rounded, size: 18),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      ),
+                      style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800),
+                    ),
+                    if (_selectedStripSsid.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      _buildCopyField('الباسورد المحسوب:', calculatedPass),
+                    ],
+                  ],
                   const SizedBox(height: 6),
-                  Text('3. إذا سألك الهاتف "الشبكة لا تحتوي على إنترنت"، اختر "البقاء متصلاً".', style: GoogleFonts.cairo(fontSize: 10)),
-                  Text('4. عد هنا واضغط الزر أدناه لإرسال الإعدادات فوراً.', style: GoogleFonts.cairo(fontSize: 10)),
+                  Text('3. إذا سألك الهاتف "الشبكة لا تحتوي على إنترنت"، اختر "البقاء متصلاً".', style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w700)),
+                  Text('4. اضغط الزر أدناه لإرسال الإعدادات فوراً للمشترك (192.168.1.1).', style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 10),
-                  ElevatedButton.icon(
-                    onPressed: () => _startPairing(isManualSocketDirect: true),
-                    icon: const Icon(Icons.send_rounded, size: 16),
-                    label: Text('إرسال الإعدادات للمشترك الآن 🚀', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber.shade700,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => _startPairing(isManualSocketDirect: true),
+                      icon: const Icon(Icons.send_rounded, size: 16),
+                      label: Text('إرسال الإعدادات فوراً للمشترك 🚀', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.amber.shade700,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                      ),
                     ),
                   ),
                 ],
