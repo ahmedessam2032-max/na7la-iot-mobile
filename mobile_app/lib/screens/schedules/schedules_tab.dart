@@ -54,7 +54,10 @@ class _SchedulesTabState extends State<SchedulesTab> {
     final success = await _repo.toggleSchedule(sched.id);
     if (success) {
       setState(() {
-        sched.isActive = !sched.isActive;
+        final idx = _allSchedules.indexWhere((s) => s.id == sched.id);
+        if (idx != -1) {
+          _allSchedules[idx] = sched.copyWith(isActive: !sched.isActive);
+        }
       });
     }
   }
@@ -281,7 +284,7 @@ class _SchedulesTabState extends State<SchedulesTab> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
+                                    color: widget.isDark ? Colors.white10 : Colors.black.withOpacity(0.05),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
                                   child: Text(
