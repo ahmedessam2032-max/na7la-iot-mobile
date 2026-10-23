@@ -82,7 +82,7 @@ class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
     final locale = AppLocaleController.instance;
     final double totalKwh = widget.strip.totalKwh;
     final double estimatedCost = totalKwh * _tariffPrice;
-    final bg = widget.isDark ? AppColors.darkBackground : AppColors.lightBackground;
+    final bg = widget.isDark ? AppColors.darkBg : AppColors.lightBg;
     final textPrimary = widget.isDark ? Colors.white : AppColors.inkBlack;
 
     return Scaffold(
