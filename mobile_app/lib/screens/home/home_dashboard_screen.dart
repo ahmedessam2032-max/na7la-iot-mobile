@@ -454,17 +454,43 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 // Save Name & Room Button
                 ElevatedButton.icon(
                   onPressed: () async {
-                    await _repo.updateStripMetadata(
+                    final newName = nameCtrl.text.trim();
+                    final success = await _repo.updateStripMetadata(
                       _selectedStrip!.macAddress,
-                      name: nameCtrl.text.trim(),
+                      name: newName,
                       roomCategory: chosenRoom,
                     );
                     Navigator.of(ctx).pop();
-                    _loadStrips();
-                    if (mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('تم حفظ بيانات المشترك بنجاح')),
-                      );
+                    if (success) {
+                      setState(() {
+                        _selectedStrip!.stripName = newName;
+                        _selectedStrip!.roomCategory = chosenRoom;
+                      });
+                      await _loadStrips();
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              AppLocaleController.instance.isArabic
+                                  ? 'تم حفظ بيانات المشترك بنجاح'
+                                  : 'Strip metadata saved successfully',
+                            ),
+                          ),
+                        );
+                      }
+                    } else {
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              AppLocaleController.instance.isArabic
+                                  ? 'فشل حفظ بيانات المشترك على الخادم'
+                                  : 'Failed to update strip metadata on server',
+                            ),
+                            backgroundColor: Colors.redAccent,
+                          ),
+                        );
+                      }
                     }
                   },
                   icon: const Icon(Icons.check_rounded, size: 18),
@@ -647,7 +673,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    'خيارات المشترك (${_selectedStrip!.stripName})',
+                    '${AppLocaleController.instance.tr('strip_options_title')} (${_selectedStrip!.stripName})',
                     style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w900),
                   ),
                   IconButton(
@@ -662,7 +688,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.edit_rounded,
                 iconColor: AppColors.honeyYellow,
-                title: 'إعادة تسمية المشترك والمكان',
+                title: AppLocaleController.instance.tr('menu_rename'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _openStripSettingsDialog();
@@ -673,7 +699,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.access_time_rounded,
                 iconColor: AppColors.honeyAmber,
-                title: 'جدولة ومؤقتات المخارج',
+                title: AppLocaleController.instance.tr('menu_schedules'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   if (_selectedStrip!.sockets.isNotEmpty) {
@@ -686,7 +712,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.bar_chart_rounded,
                 iconColor: AppColors.honeyYellow,
-                title: 'إحصائيات الطاقة والتحليلات',
+                title: AppLocaleController.instance.tr('menu_analytics'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _openEnergyAnalytics();
@@ -697,7 +723,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.history_rounded,
                 iconColor: AppColors.honeyAmber,
-                title: 'سجل النشاط اللحظي',
+                title: AppLocaleController.instance.tr('menu_logs'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _openActivityLogSheet();
@@ -708,7 +734,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.monitor_heart_rounded,
                 iconColor: const Color(0xFFFF6B6B),
-                title: 'حالة المشترك وفحص الهاردوير (Diagnostics)',
+                title: AppLocaleController.instance.tr('menu_diagnostics'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _openDiagnosticsDialog();
@@ -726,7 +752,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 child: _buildDotsMenuItem(
                   icon: Icons.child_care_rounded,
                   iconColor: AppColors.honeyYellow,
-                  title: 'قفل الأطفال (Child Lock)',
+                  title: AppLocaleController.instance.tr('menu_child_lock'),
                   trailing: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
@@ -734,7 +760,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      _selectedStrip!.childLock ? 'مفعل' : 'معطل',
+                      _selectedStrip!.childLock
+                          ? (AppLocaleController.instance.isArabic ? 'مفعل' : 'ON')
+                          : (AppLocaleController.instance.isArabic ? 'معطل' : 'OFF'),
                       style: GoogleFonts.cairo(
                         fontSize: 9.5,
                         fontWeight: FontWeight.w900,
@@ -753,7 +781,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.shield_outlined,
                 iconColor: AppColors.honeyYellow,
-                title: 'حماية الجهد الكهربائي (Voltage Guard)',
+                title: AppLocaleController.instance.tr('menu_voltage_guard'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _openVoltageProtectionDialog();
@@ -764,7 +792,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.group_rounded,
                 iconColor: AppColors.honeyAmber,
-                title: 'مشاركة المشترك مع العائلة والضيوف',
+                title: AppLocaleController.instance.tr('menu_family'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   _openFamilyScreen();
@@ -775,7 +803,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.lock_rounded,
                 iconColor: AppColors.honeyYellow,
-                title: 'قفل التحكم بكلمة سر / PIN',
+                title: AppLocaleController.instance.tr('menu_pin_lock'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   showDialog(
@@ -797,7 +825,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.router_rounded,
                 iconColor: AppColors.routerCyan,
-                title: 'نمط الاتصال بالمشترك (سحابي / محلي بدون إنترنت)',
+                title: AppLocaleController.instance.tr('menu_connection_mode'),
                 onTap: () {
                   Navigator.of(ctx).pop();
                   showDialog(
@@ -816,7 +844,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               _buildDotsMenuItem(
                 icon: Icons.delete_forever_rounded,
                 iconColor: Colors.redAccent,
-                title: 'حذف المشترك وإلغاء الاقتران 🗑️',
+                title: AppLocaleController.instance.tr('menu_delete_strip'),
                 isDanger: true,
                 onTap: () {
                   Navigator.of(ctx).pop();
@@ -1432,7 +1460,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   Row(
                     children: [
                       Text(
-                        'نحلة IoT',
+                        _tr('app_title'),
                         style: GoogleFonts.cairo(
                           fontSize: 16,
                           fontWeight: FontWeight.w900,
@@ -1449,7 +1477,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             border: Border.all(color: AppColors.inkBlack, width: 1),
                           ),
                           child: Text(
-                            _selectedStrip!.isOnline ? 'متصل' : 'أوفلاين',
+                            _selectedStrip!.isOnline ? _tr('online') : _tr('offline'),
                             style: GoogleFonts.cairo(fontSize: 8.5, fontWeight: FontWeight.w900, color: Colors.black),
                           ),
                         ),

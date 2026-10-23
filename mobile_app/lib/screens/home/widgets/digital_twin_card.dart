@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../data/models/strip_model.dart';
 import '../../../../data/models/socket_model.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/localization/app_locale.dart';
 
 class DigitalTwinCard extends StatelessWidget {
   final StripModel strip;
@@ -20,6 +21,8 @@ class DigitalTwinCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final locale = AppLocaleController.instance;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
@@ -60,7 +63,7 @@ class DigitalTwinCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'التوأم الرقمي الحي ⚡ (MTTL-W01)',
+                    locale.tr('twin_title'),
                     style: GoogleFonts.cairo(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
@@ -77,7 +80,7 @@ class DigitalTwinCard extends StatelessWidget {
                   border: Border.all(color: AppColors.honeyAmber.withOpacity(0.4)),
                 ),
                 child: Text(
-                  'تفاعلي مباشر 👆',
+                  locale.tr('twin_interactive'),
                   style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: AppColors.honeyAmber),
                 ),
               ),
@@ -217,11 +220,11 @@ class DigitalTwinCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildLegendItem(const Color(0xFF00E676), 'يعمل'),
+                      _buildLegendItem(const Color(0xFF00E676), locale.tr('twin_on')),
                       const SizedBox(width: 10),
-                      _buildLegendItem(const Color(0xFFFF1744), 'مطفأ'),
+                      _buildLegendItem(const Color(0xFFFF1744), locale.tr('twin_off')),
                       const SizedBox(width: 10),
-                      _buildLegendItem(const Color(0xFF00F0FF), 'متصل'),
+                      _buildLegendItem(const Color(0xFF00F0FF), locale.tr('twin_connected')),
                     ],
                   ),
                 ),
@@ -232,7 +235,7 @@ class DigitalTwinCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
-                    '👆 انقر للتبديل',
+                    locale.tr('twin_tap_hint'),
                     style: GoogleFonts.cairo(
                       fontSize: 9.5,
                       fontWeight: FontWeight.w700,

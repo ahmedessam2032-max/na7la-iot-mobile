@@ -291,117 +291,122 @@ class _SettingsTabState extends State<SettingsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final locale = AppLocaleController.instance;
+    return ListenableBuilder(
+      listenable: AppLocaleController.instance,
+      builder: (context, _) {
+        final locale = AppLocaleController.instance;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Section 1: Appearance & Language
-          _buildSectionHeader('المظهر واللغة'),
-          _buildCard(
+        return SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildRow(
-                icon: Icons.language_rounded,
-                title: 'لغة التطبيق',
-                valueBadge: locale.isArabic ? 'العربية' : 'English',
-                onTap: () {
-                  locale.toggleLanguage();
-                },
+              // Section 1: Appearance & Language
+              _buildSectionHeader(locale.tr('settings_sec_appearance')),
+              _buildCard(
+                children: [
+                  _buildRow(
+                    icon: Icons.language_rounded,
+                    title: locale.tr('settings_app_language'),
+                    valueBadge: locale.isArabic ? 'العربية 🇪🇬' : 'English 🇬🇧',
+                    onTap: () {
+                      locale.toggleLanguage();
+                    },
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-          // Section 2: Security & Protection
-          _buildSectionHeader('الأمان والحماية المتقدمة'),
-          _buildCard(
-            children: [
-              _buildRow(
-                icon: Icons.shield_outlined,
-                title: 'حماية الجهد والفولت الكهربائي',
-                valueBadge: '${widget.strip.minVoltage.toInt()}V - ${widget.strip.maxVoltage.toInt()}V',
-                onTap: widget.onOpenProtection,
+              // Section 2: Security & Protection
+              _buildSectionHeader(locale.tr('settings_sec_security')),
+              _buildCard(
+                children: [
+                  _buildRow(
+                    icon: Icons.shield_outlined,
+                    title: locale.tr('settings_voltage_protection'),
+                    valueBadge: '${widget.strip.minVoltage.toInt()}V - ${widget.strip.maxVoltage.toInt()}V',
+                    onTap: widget.onOpenProtection,
+                  ),
+                  Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+                  _buildRow(
+                    icon: Icons.lock_outline_rounded,
+                    title: locale.tr('settings_master_pin'),
+                    valueBadge: _hasPin ? locale.tr('settings_pin_active') : locale.tr('settings_pin_inactive'),
+                    onTap: _openPinSetupDialog,
+                  ),
+                  Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+                  _buildSwitchRow(
+                    icon: Icons.fingerprint_rounded,
+                    title: locale.tr('settings_biometric_lock'),
+                    subtitle: locale.tr('settings_biometric_sub'),
+                    value: _appLockEnabled,
+                    onChanged: _toggleAppLock,
+                  ),
+                  Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+                  _buildRow(
+                    icon: Icons.electric_bolt_outlined,
+                    title: locale.tr('settings_tariff_price'),
+                    valueBadge: '${_tariffPrice.toStringAsFixed(2)} ${locale.tr('egp')}',
+                    onTap: _openTariffDialog,
+                  ),
+                  Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+                  _buildRow(
+                    icon: Icons.people_outline_rounded,
+                    title: locale.tr('settings_family_sharing'),
+                    valueBadge: locale.isArabic ? 'إدارة العائلة' : 'Family',
+                    onTap: widget.onOpenFamily,
+                  ),
+                ],
               ),
-              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
-              _buildRow(
-                icon: Icons.lock_outline_rounded,
-                title: 'رمز PIN الماستر',
-                valueBadge: _hasPin ? 'مفعّل 🔐' : 'غير مفعّل 🔓',
-                onTap: _openPinSetupDialog,
-              ),
-              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
-              _buildSwitchRow(
-                icon: Icons.fingerprint_rounded,
-                title: 'قفل التطبيق بالبصمة',
-                subtitle: 'طلب البصمة أو رمز الجهاز عند فتح التطبيق',
-                value: _appLockEnabled,
-                onChanged: _toggleAppLock,
-              ),
-              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
-              _buildRow(
-                icon: Icons.electric_bolt_outlined,
-                title: 'سعر الكيلوواط (تسعيرة الفاتورة)',
-                valueBadge: '${_tariffPrice.toStringAsFixed(2)} ج.م',
-                onTap: _openTariffDialog,
-              ),
-              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
-              _buildRow(
-                icon: Icons.people_outline_rounded,
-                title: 'مشاركة الصلاحيات مع أفراد البيت',
-                valueBadge: 'إدارة العائلة',
-                onTap: widget.onOpenFamily,
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
+              const SizedBox(height: 16),
 
-          // Section 3: Admin Console (Strictly gated by isAdmin)
-          if (widget.isAdmin) ...[
-            _buildSectionHeader('إدارة المنصة المتقدمة (الأدمن)'),
-            _buildCard(
-              children: [
-                _buildRow(
-                  icon: Icons.admin_panel_settings_outlined,
-                  title: 'بوابة إدارة المنصة (الأدمن)',
-                  valueBadge: '👑 Console',
-                  onTap: widget.onOpenAdminConsole,
+              // Section 3: Admin Console (Strictly gated by isAdmin)
+              if (widget.isAdmin) ...[
+                _buildSectionHeader(locale.tr('settings_admin_portal')),
+                _buildCard(
+                  children: [
+                    _buildRow(
+                      icon: Icons.admin_panel_settings_outlined,
+                      title: locale.tr('settings_admin_portal'),
+                      valueBadge: '👑 Console',
+                      onTap: widget.onOpenAdminConsole,
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 16),
               ],
-            ),
-            const SizedBox(height: 16),
-          ],
 
-          // Section 4: Device & System Info
-          _buildSectionHeader('معلومات الجهاز والاتصال'),
-          _buildCard(
-            children: [
-              _buildRow(
-                icon: Icons.memory_rounded,
-                title: 'موديل المشترك',
-                valueBadge: widget.strip.model,
-                onTap: () {},
+              // Section 4: Device & System Info
+              _buildSectionHeader(locale.tr('settings_sec_system')),
+              _buildCard(
+                children: [
+                  _buildRow(
+                    icon: Icons.memory_rounded,
+                    title: locale.tr('settings_strip_model'),
+                    valueBadge: widget.strip.model,
+                    onTap: () {},
+                  ),
+                  Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+                  _buildRow(
+                    icon: Icons.tag_rounded,
+                    title: locale.tr('settings_mac_address'),
+                    valueBadge: widget.strip.macAddress,
+                    onTap: () {},
+                  ),
+                  Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
+                  _buildRow(
+                    icon: Icons.system_update_rounded,
+                    title: locale.tr('settings_fw_version'),
+                    valueBadge: 'v${widget.strip.fwVersion}',
+                    onTap: () {},
+                  ),
+                ],
               ),
-              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
-              _buildRow(
-                icon: Icons.tag_rounded,
-                title: 'عنوان MAC المشترك',
-                valueBadge: widget.strip.macAddress,
-                onTap: () {},
-              ),
-              Divider(height: 1, color: widget.isDark ? AppColors.borderDark : AppColors.borderLight),
-              _buildRow(
-                icon: Icons.system_update_rounded,
-                title: 'إصدار الفيرموير (OTA)',
-                valueBadge: 'v${widget.strip.fwVersion}',
-                onTap: () {},
-              ),
+              const SizedBox(height: 24),
             ],
           ),
-          const SizedBox(height: 24),
-        ],
-      ),
+        );
+      },
     );
   }
 

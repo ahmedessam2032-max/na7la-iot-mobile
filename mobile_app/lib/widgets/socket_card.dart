@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme/app_theme.dart';
+import '../core/localization/app_locale.dart';
 import '../data/models/socket_model.dart';
 
 class SocketCard extends StatelessWidget {
@@ -201,7 +202,7 @@ class SocketCard extends StatelessWidget {
                           border: Border.all(color: AppColors.routerCyan.withOpacity(0.4), width: 0.8),
                         ),
                         child: Text(
-                          'راوتر 🛡️',
+                          AppLocaleController.instance.tr('router_badge'),
                           style: GoogleFonts.cairo(
                             fontSize: 8.5,
                             fontWeight: FontWeight.w800,
@@ -254,7 +255,11 @@ class SocketCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    socket.name,
+                    AppLocaleController.instance.isArabic
+                        ? socket.name
+                        : (socket.isRouter
+                            ? AppLocaleController.instance.tr('outlet_router')
+                            : socket.name.replaceAll('مقبس', AppLocaleController.instance.tr('socket_prefix'))),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
