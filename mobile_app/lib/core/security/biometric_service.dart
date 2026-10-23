@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import '../storage/secure_storage.dart';
@@ -7,20 +8,22 @@ class BiometricService {
 
   /// Check if hardware supports biometrics
   static Future<bool> canCheckBiometrics() async {
+    if (kIsWeb) return false;
     try {
       final bool canAuthenticateWithBiometrics = await _auth.canCheckBiometrics;
       final bool canAuthenticate = canAuthenticateWithBiometrics || await _auth.isDeviceSupported();
       return canAuthenticate;
-    } on PlatformException {
+    } catch (_) {
       return false;
     }
   }
 
   /// List enrolled biometrics
   static Future<List<BiometricType>> getAvailableBiometrics() async {
+    if (kIsWeb) return [];
     try {
       return await _auth.getAvailableBiometrics();
-    } on PlatformException {
+    } catch (_) {
       return [];
     }
   }
@@ -30,6 +33,7 @@ class BiometricService {
     String reason = 'أكّد هويتك بالبصمة أو رمز الجهاز للمتابعة',
     bool biometricOnly = false,
   }) async {
+    if (kIsWeb) return false;
     try {
       final isSupported = await canCheckBiometrics();
       if (!isSupported) return false;
@@ -42,7 +46,7 @@ class BiometricService {
           useErrorDialogs: true,
         ),
       );
-    } on PlatformException catch (_) {
+    } catch (_) {
       return false;
     }
   }

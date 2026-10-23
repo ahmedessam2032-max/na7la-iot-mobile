@@ -40,19 +40,28 @@ class _PinBiometricDialogState extends State<PinBiometricDialog> {
   }
 
   Future<void> _checkSetupState() async {
-    final hasPin = await BiometricService.hasPin();
-    final canBio = await BiometricService.canCheckBiometrics();
-    if (!mounted) return;
+    try {
+      final hasPin = await BiometricService.hasPin();
+      final canBio = await BiometricService.canCheckBiometrics();
+      if (!mounted) return;
 
-    setState(() {
-      _isFirstTimeSetup = !hasPin;
-      _canCheckBiometric = canBio;
-      _isLoading = false;
-    });
+      setState(() {
+        _isFirstTimeSetup = !hasPin;
+        _canCheckBiometric = canBio;
+        _isLoading = false;
+      });
 
-    if (hasPin && canBio) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _triggerBiometric();
+      if (hasPin && canBio) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _triggerBiometric();
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isFirstTimeSetup = true;
+        _canCheckBiometric = false;
+        _isLoading = false;
       });
     }
   }
