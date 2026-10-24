@@ -8,6 +8,7 @@ class AppColors {
   static const Color emeraldDeep = Color(0xFF059669);
   static const Color emeraldDark = Color(0xFF059669);
   static const Color emeraldLightBg = Color(0xFFECFDF5);
+  static const Color emeraldSurfaceLight = Color(0xFFECFDF5);
 
   static const Color honeyYellow = Color(0xFFF59E0B);
   static const Color warningAmber = Color(0xFFF59E0B);

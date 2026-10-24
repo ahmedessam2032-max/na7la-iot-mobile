@@ -9,6 +9,7 @@ class AppLocaleController extends ChangeNotifier {
   String _currentLang = 'ar';
   String get currentLang => _currentLang;
   bool get isArabic => _currentLang == 'ar';
+  bool get isEnglish => _currentLang == 'en';
   TextDirection get textDirection => isArabic ? TextDirection.rtl : TextDirection.ltr;
   Locale get locale => isArabic ? const Locale('ar', 'EG') : const Locale('en', 'US');
 
