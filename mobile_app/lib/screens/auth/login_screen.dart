@@ -732,6 +732,9 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
     setState(() => _isLoading = false);
 
     if (res['success'] == true) {
+      if (res['otp_preview'] != null && res['otp_preview'].toString().isNotEmpty) {
+        _otpCtrl.text = res['otp_preview'].toString();
+      }
       setState(() => _step = 2);
       _startTimer();
     } else {

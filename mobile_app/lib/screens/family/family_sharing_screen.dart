@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'dart:math';
+import 'package:flutter/services.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/strip_model.dart';
 import '../../data/repositories/strip_repository.dart';
@@ -20,10 +19,16 @@ class FamilySharingScreen extends StatefulWidget {
 }
 
 class _FamilySharingScreenState extends State<FamilySharingScreen> {
-  final _repo = StripRepository();
-  String _inviteCode = '849-201';
+  final StripRepository _repo = StripRepository();
+  final TextEditingController _nameCtrl = TextEditingController();
+  final TextEditingController _emailCtrl = TextEditingController();
+
+  bool _wholeStrip = true;
+  final Set<int> _selectedSockets = {1, 2, 3, 4};
+  String _permissionLevel = 'FULL'; // FULL | PARTIAL | VIEW
   List<dynamic> _shares = [];
-  bool _isLoading = false;
+  bool _isLoading = true;
+  bool _creating = false;
 
   @override
   void initState() {
@@ -34,7 +39,7 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
   Future<void> _loadShares() async {
     setState(() => _isLoading = true);
     try {
-      final list = await _repo.getShares(widget.strip.macAddress);
+      final list = await _repo.getShares(widget.strip.mac);
       if (mounted) {
         setState(() {
           _shares = list;
@@ -46,89 +51,204 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
     }
   }
 
-  void _generateNewCode() {
-    final rnd = Random();
-    final p1 = 100 + rnd.nextInt(900);
-    final p2 = 100 + rnd.nextInt(900);
-    setState(() => _inviteCode = '$p1-$p2');
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('تم توليد كود دعوة جديد صالح لمدة 15 دقيقة')),
-    );
+  Future<void> _createRealShare() async {
+    final name = _nameCtrl.text.trim().isEmpty
+        ? (_emailCtrl.text.trim().isNotEmpty ? _emailCtrl.text.trim().split('@').first : 'فرد عائلة')
+        : _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final socksStr = _wholeStrip
+        ? '1,2,3,4'
+        : (_selectedSockets.isEmpty ? '1' : (_selectedSockets.toList()..sort()).join(','));
+
+    setState(() => _creating = true);
+    try {
+      final res = await _repo.createShare(
+        widget.strip.mac,
+        name,
+        _wholeStrip ? _permissionLevel : 'PARTIAL',
+        socksStr,
+        email: email.isEmpty ? null : email,
+      );
+      if (!mounted) return;
+      setState(() => _creating = false);
+      if (res['ok'] == true) {
+        final code = res['share']?['invite_code'] ?? '';
+        _nameCtrl.clear();
+        _emailCtrl.clear();
+        await _loadShares();
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('تم إنشاء المشاركة بنجاح! كود الدعوة: $code'),
+            backgroundColor: AppColors.emeraldActive,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['detail']?.toString() ?? 'تعذر إنشاء المشاركة'),
+            backgroundColor: AppColors.dangerRed,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _creating = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ: $e'), backgroundColor: AppColors.dangerRed),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 1. Invite Code Generator Card
+          // 1. Create Real Share Card (Whole Strip or Specific Outlet + Email & Invite Code)
           Container(
-            padding: const EdgeInsets.all(18),
-            decoration: AppTheme.inkCardDecoration(isDark: widget.isDark),
+            padding: const EdgeInsets.all(16),
+            decoration: AppTheme.inkCardDecoration(isDark: isDark, radius: 18),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: AppColors.honeyYellow,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: AppColors.inkBlack, width: 1.5),
-                  ),
-                  child: Text(
-                    'مشاركة الخلية بأمان',
-                    style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w900),
-                  ),
+                const Row(
+                  children: [
+                    Icon(Icons.person_add_alt_1_rounded, color: AppColors.emeraldActive),
+                    SizedBox(width: 8),
+                    Text(
+                      'مشاركة المشترك أو مخرج محدد',
+                      style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'إضافة فرد جديد أو ضيف',
-                  style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w900),
+                const SizedBox(height: 6),
+                const Text(
+                  'شارك المشترك بالكامل أو مخرجاً واحداً فقط عبر البريد الإلكتروني أو كود دعوة سحابي فعلي:',
+                  style: TextStyle(fontSize: 11.5, color: Colors.grey),
                 ),
-                Text(
-                  'كود دعوة فوري صالح لمرة واحدة فقط (ينتهي خلال 15 دقيقة):',
-                  style: GoogleFonts.cairo(fontSize: 10, color: widget.isDark ? Colors.white60 : Colors.black54),
-                ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
 
-                // Big Code Display
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: AppColors.inkBlack,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: AppColors.honeyAmber, width: 2),
+                // Scope Toggle: Whole Strip vs Single/Selected Outlets
+                Row(
+                  children: [
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Center(child: Text('المشترك بالكامل (4 مخارج)', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800))),
+                        selected: _wholeStrip,
+                        selectedColor: AppColors.emeraldActive.withOpacity(0.2),
+                        onSelected: (_) => setState(() {
+                          _wholeStrip = true;
+                          _selectedSockets
+                            ..clear()
+                            ..addAll([1, 2, 3, 4]);
+                        }),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ChoiceChip(
+                        label: const Center(child: Text('مخرج محدد فقط', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800))),
+                        selected: !_wholeStrip,
+                        selectedColor: AppColors.emeraldActive.withOpacity(0.2),
+                        onSelected: (_) => setState(() {
+                          _wholeStrip = false;
+                          _selectedSockets
+                            ..clear()
+                            ..add(1);
+                        }),
+                      ),
+                    ),
+                  ],
+                ),
+
+                if (!_wholeStrip) ...[
+                  const SizedBox(height: 10),
+                  const Text('اختر المخارج المسموح بالتحكم بها:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 8,
+                    children: widget.strip.sockets.map((s) {
+                      final sel = _selectedSockets.contains(s.index);
+                      return FilterChip(
+                        selected: sel,
+                        selectedColor: AppColors.emeraldActive.withOpacity(0.2),
+                        label: Text('${s.name} (#${s.index})', style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                        onSelected: (v) {
+                          setState(() {
+                            if (v) {
+                              _selectedSockets.add(s.index);
+                            } else if (_selectedSockets.length > 1) {
+                              _selectedSockets.remove(s.index);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('كود الدعوة الفوري:',
-                              style: GoogleFonts.cairo(fontSize: 9, color: Colors.white60)),
-                          Text(
-                            _inviteCode,
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.honeyYellow,
-                              letterSpacing: 2,
-                            ),
-                          ),
-                        ],
-                      ),
-                      ElevatedButton.icon(
-                        onPressed: _generateNewCode,
-                        icon: const Icon(Icons.refresh_rounded, size: 16),
-                        label: Text('تجديد', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.honeyYellow,
-                          foregroundColor: AppColors.inkBlack,
-                        ),
-                      ),
-                    ],
+                ],
+
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'اسم الفرد أو الضيف',
+                    hintText: 'مثال: أحمد / غرفة المعيشة',
+                    prefixIcon: const Icon(Icons.badge_outlined, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: _emailCtrl,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    labelText: 'البريد الإلكتروني للمستخدم (اختياري)',
+                    hintText: 'user@example.com',
+                    prefixIcon: const Icon(Icons.email_outlined, size: 18),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    isDense: true,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Text('مستوى الصلاحية:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800)),
+                    const SizedBox(width: 10),
+                    ChoiceChip(
+                      label: const Text('تحكم وتشغيل 🎛️', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                      selected: _permissionLevel != 'VIEW',
+                      selectedColor: AppColors.emeraldActive.withOpacity(0.2),
+                      onSelected: (_) => setState(() => _permissionLevel = 'FULL'),
+                    ),
+                    const SizedBox(width: 8),
+                    ChoiceChip(
+                      label: const Text('مشاهدة فقط 👀', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+                      selected: _permissionLevel == 'VIEW',
+                      selectedColor: AppColors.routerCyan.withOpacity(0.2),
+                      onSelected: (_) => setState(() => _permissionLevel = 'VIEW'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.emeraldActive,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: _creating ? null : _createRealShare,
+                    icon: _creating
+                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                        : const Icon(Icons.share_rounded, size: 18),
+                    label: const Text('إنشاء مشاركة وتوليد كود الدعوة', style: TextStyle(fontWeight: FontWeight.w900)),
                   ),
                 ),
               ],
@@ -136,10 +256,10 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
           ),
           const SizedBox(height: 16),
 
-          // 2. Family Members List Container
+          // 2. Active Shares List from Backend
           Container(
-            padding: const EdgeInsets.all(18),
-            decoration: AppTheme.inkCardDecoration(isDark: widget.isDark),
+            padding: const EdgeInsets.all(16),
+            decoration: AppTheme.inkCardDecoration(isDark: isDark, radius: 18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -147,131 +267,124 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '👨‍👩‍👧 أعضاء البيت والصلاحيات',
-                      style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900),
+                      '👨‍👩‍👧 المشاركات الفعالة (${_shares.length})',
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900),
                     ),
-                    if (_isLoading)
-                      const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.honeyYellow),
-                      ),
+                    IconButton(
+                      onPressed: _loadShares,
+                      icon: const Icon(Icons.refresh_rounded, size: 18),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
-
-                // Owner Row (Dynamic Master Account)
-                _buildMemberCard(
-                  name: 'أنت (المالك الرئيسي)',
-                  roleLabel: 'تحكم كامل 👑',
-                  roleColor: AppColors.honeyYellow,
-                  subtitle: 'كافة الصلاحيات + إدارة المشترك وتغيير الـ PIN',
-                ),
-                const SizedBox(height: 10),
-
-                // Dynamic Shared Members List
-                if (_shares.isNotEmpty) ...[
-                  ..._shares.map((share) {
-                    final name = share['member_name'] ?? share['user_email'] ?? 'فرد عائلة';
-                    final perm = (share['permission_level'] ?? 'CONTROL').toString().toUpperCase();
-                    final isControl = perm == 'CONTROL' || perm == 'FULL';
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _buildMemberCard(
-                        name: name,
-                        roleLabel: isControl ? 'تحكم جزئي 🎛️' : 'مشاهدة فقط 👀',
-                        roleColor: isControl ? AppColors.routerCyan : Colors.blueGrey.shade300,
-                        subtitle: isControl ? 'مسموح له بالتحكم في المخارج المحددة' : 'مراقبة الاستهلاك فقط',
+                const SizedBox(height: 8),
+                if (_isLoading)
+                  const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(child: CircularProgressIndicator(color: AppColors.emeraldActive)),
+                  )
+                else if (_shares.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Center(
+                      child: Text('لا توجد مشاركات مضافة حالياً لهذا المشترك', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ),
+                  )
+                else
+                  ..._shares.map((sh) {
+                    final int shId = (sh['id'] as num?)?.toInt() ?? 0;
+                    final String name = (sh['name'] ?? sh['member_name'] ?? 'فرد عائلة').toString();
+                    final String code = (sh['invite_code'] ?? '').toString();
+                    final String email = (sh['email'] ?? '').toString();
+                    final List socks = (sh['allowed_sockets'] as List?) ?? [1, 2, 3, 4];
+                    final String perm = (sh['permission_level'] ?? 'FULL').toString();
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withOpacity(0.03) : const Color(0xFFF8FAFC),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: isDark ? AppColors.borderDark : AppColors.borderLight),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(name, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900)),
+                                if (email.isNotEmpty && !email.endsWith('@na7la.local'))
+                                  Text(email, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.emeraldActive.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        socks.length >= 4 ? 'كل المخارج (1-4)' : 'مخارج: ${socks.join(", ")}',
+                                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.emeraldActive),
+                                      ),
+                                    ),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.amber.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        perm == 'VIEW' ? 'مشاهدة فقط' : 'تحكم',
+                                        style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                    if (code.isNotEmpty)
+                                      GestureDetector(
+                                        onTap: () {
+                                          Clipboard.setData(ClipboardData(text: code));
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(content: Text('تم نسخ كود الدعوة: $code')),
+                                          );
+                                        },
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.blue.withOpacity(0.12),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.copy_rounded, size: 11, color: Colors.blue),
+                                              const SizedBox(width: 3),
+                                              Text(code, style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w900, color: Colors.blue)),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: 'إلغاء المشاركة',
+                            icon: const Icon(Icons.delete_outline_rounded, color: AppColors.dangerRed),
+                            onPressed: () async {
+                              final ok = await _repo.deleteShare(shId);
+                              if (ok) await _loadShares();
+                            },
+                          ),
+                        ],
                       ),
                     );
                   }),
-                ] else ...[
-                  // Clean Empty State matching Web Dashboard & Reference
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 14),
-                    decoration: BoxDecoration(
-                      color: widget.isDark ? Colors.white.withOpacity(0.02) : Colors.black.withOpacity(0.02),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: widget.isDark ? Colors.white10 : Colors.black12,
-                        style: BorderStyle.solid,
-                      ),
-                    ),
-                    child: Column(
-                      children: [
-                        const Icon(Icons.people_outline_rounded, size: 28, color: AppColors.honeyAmber),
-                        const SizedBox(height: 8),
-                        Text(
-                          'لا يوجد أفراد عائلة أو ضيوف مضافون بعد',
-                          style: GoogleFonts.cairo(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w800,
-                            color: widget.isDark ? Colors.white70 : AppColors.inkBlack,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'استخدم كود الدعوة الفوري بالأعلى لمشاركة التحكم مع عائلتك بأمان.',
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.cairo(
-                            fontSize: 10,
-                            color: widget.isDark ? Colors.white38 : Colors.black45,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMemberCard({
-    required String name,
-    required String roleLabel,
-    required Color roleColor,
-    required String subtitle,
-    List<Widget>? extraWidgets,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: widget.isDark ? AppColors.cardMutedDark : Colors.black.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: widget.isDark ? AppColors.darkBorder : AppColors.inkBlack,
-          width: 1.5,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(name, style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900)),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: roleColor,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.inkBlack, width: 1),
-                ),
-                child: Text(
-                  roleLabel,
-                  style: GoogleFonts.cairo(fontSize: 9, fontWeight: FontWeight.w900, color: AppColors.inkBlack),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 2),
-          Text(subtitle, style: GoogleFonts.cairo(fontSize: 10, color: widget.isDark ? Colors.white60 : Colors.black54)),
-          if (extraWidgets != null) ...extraWidgets,
         ],
       ),
     );

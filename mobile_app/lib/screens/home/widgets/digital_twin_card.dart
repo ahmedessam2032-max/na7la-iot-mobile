@@ -24,22 +24,15 @@ class DigitalTwinCard extends StatelessWidget {
     final locale = AppLocaleController.instance;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(14),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14130F) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? AppColors.honeyYellow.withOpacity(0.35) : AppColors.honeyYellow,
-          width: 1.5,
+          color: isDark ? AppColors.emeraldPrimary.withOpacity(0.35) : const Color(0xFFE2E8F0),
+          width: 1.2,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black.withOpacity(0.55) : Colors.amber.withOpacity(0.08),
-            offset: const Offset(0, 6),
-            blurRadius: 20,
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

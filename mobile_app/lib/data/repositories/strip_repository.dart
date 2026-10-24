@@ -93,7 +93,7 @@ class StripRepository {
     await SecureStorageService.clearSession();
   }
 
-  // --- Password Reset & Language Sync ---
+  // --- Password Reset, Preferences & Feedback ---
 
   Future<Map<String, dynamic>> requestForgotPassword(String email) async {
     try {
@@ -104,7 +104,12 @@ class StripRepository {
       );
       final data = jsonDecode(response.body);
       if (response.statusCode == 200 && data['ok'] == true) {
-        return {'success': true, 'message': data['message'] ?? 'تم إرسال كود التحقق بنجاح'};
+        return {
+          'success': true,
+          'message': data['message'] ?? 'تم إرسال كود التحقق بنجاح',
+          'otp_preview': data['otp_preview'],
+          'smtp_delivered': data['smtp_delivered'] ?? false,
+        };
       }
       return {'success': false, 'message': data['detail'] ?? 'تعذر إرسال كود التحقق'};
     } catch (e) {
@@ -173,6 +178,52 @@ class StripRepository {
     }
   }
 
+  Future<bool> updateUserPreferences(Map<String, dynamic> prefs) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.patch(
+        Uri.parse('${ApiConstants.baseUrl}/auth/preferences'),
+        headers: headers,
+        body: jsonEncode(prefs),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> submitFeedback(String categoryOrMessage, [String? message]) async {
+    try {
+      final headers = await _getHeaders();
+      final finalMsg = message != null ? '[$categoryOrMessage] $message' : categoryOrMessage;
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/feedback'),
+        headers: headers,
+        body: jsonEncode({'message': finalMsg}),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteMyAccount() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.delete(
+        Uri.parse('${ApiConstants.baseUrl}/auth/account'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        await SecureStorageService.clearSession();
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<UserModel?> getAuthStatus() async {
     final headers = await _getHeaders();
     final response = await http.get(
@@ -188,12 +239,26 @@ class StripRepository {
     return null;
   }
 
+  Future<Map<String, dynamic>> getMyProfileRaw() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/auth/me'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return {};
+  }
+
   Future<bool> setPin(String newPin) async {
     final headers = await _getHeaders();
     final response = await http.post(
       Uri.parse('${ApiConstants.baseUrl}/auth/set-pin'),
       headers: headers,
-      body: jsonEncode({'new_pin': newPin, 'confirm_pin': newPin}),
+      body: jsonEncode({'pin': newPin, 'new_pin': newPin, 'confirm_pin': newPin}),
     );
     if (response.statusCode == 200) {
       await SecureStorageService.savePin(newPin);
@@ -229,6 +294,23 @@ class StripRepository {
       }),
     );
     return response.statusCode == 200;
+  }
+
+  Future<Map<String, dynamic>> restartSocket(String mac, int socketIndex) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/strips/$mac/sockets/$socketIndex/restart'),
+        headers: headers,
+      );
+      final data = jsonDecode(response.body);
+      return {
+        'ok': response.statusCode == 200 && data['ok'] == true,
+        'message': data['message'] ?? data['detail'] ?? '',
+      };
+    } catch (e) {
+      return {'ok': false, 'message': 'تعذر إعادة التشغيل: $e'};
+    }
   }
 
   Future<bool> updateChildLock(String mac, bool enabled) async {
@@ -290,7 +372,104 @@ class StripRepository {
     return response.statusCode == 200;
   }
 
+  // --- Diagnostics, Health, Logs, Energy Stats & OTA ---
+
+  Future<Map<String, dynamic>> getStripHealth(String mac) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/strips/$mac/health'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return {'ok': false};
+  }
+
+  Future<Map<String, dynamic>> getEnergyStats(
+    String mac, {
+    String period = 'day',
+    String? tariffMode,
+    double? flatRate,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final queryParams = <String, String>{'period': period};
+      if (tariffMode != null) queryParams['tariff_mode'] = tariffMode;
+      if (flatRate != null) queryParams['flat_rate'] = flatRate.toString();
+      final uri = Uri.parse('${ApiConstants.baseUrl}/strips/$mac/energy-stats')
+          .replace(queryParameters: queryParams);
+      final response = await http.get(uri, headers: headers);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return {'ok': false};
+  }
+
+  Future<Map<String, dynamic>> getAllStripsEnergyMonitor() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/energy-monitor/all'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return {'ok': false};
+  }
+
+  Future<List<Map<String, dynamic>>> getStripLogs(String mac, {int limit = 40}) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/strips/$mac/logs?limit=$limit'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final list = data['logs'] as List? ?? [];
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<Map<String, dynamic>> requestOtaUpdate(String mac) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/strips/$mac/ota-update'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+    } catch (_) {}
+    return {'ok': false, 'message': 'تعذر الاتصال بالسيرفر لفحص الفيرموير'};
+  }
+
   // --- Schedules & Repeating Cycles Endpoints ---
+
+  Future<List<ScheduleModel>> getStripSchedules(String mac) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/strips/$mac/schedules'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final list = data['schedules'] as List? ?? [];
+        return list.map((x) => ScheduleModel.fromJson(x)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
 
   Future<List<ScheduleModel>> getSocketSchedules(String mac, int socketIndex) async {
     final headers = await _getHeaders();
@@ -311,6 +490,8 @@ class StripRepository {
     required int socketIndex,
     required String scheduleType, // TIMER / CYCLE / CRON / AUTO_OFF
     bool targetState = true,
+    bool holdState = false,
+    List<int>? socketIndices,
     int? timerDurationSec,
     int? cycleOnSec,
     int? cycleOffSec,
@@ -321,11 +502,21 @@ class StripRepository {
     final Map<String, dynamic> body = {
       'schedule_type': scheduleType,
       'target_state': targetState,
+      'hold_state': holdState,
     };
-    if (timerDurationSec != null) body['timer_duration_sec'] = timerDurationSec;
+    if (socketIndices != null && socketIndices.isNotEmpty) {
+      body['socket_indices'] = socketIndices;
+    }
+    if (timerDurationSec != null) {
+      body['duration_sec'] = timerDurationSec;
+      body['timer_duration_sec'] = timerDurationSec;
+    }
     if (cycleOnSec != null) body['cycle_on_sec'] = cycleOnSec;
     if (cycleOffSec != null) body['cycle_off_sec'] = cycleOffSec;
-    if (cronExpression != null) body['cron_expression'] = cronExpression;
+    if (cronExpression != null) {
+      body['cron_expr'] = cronExpression;
+      body['cron_expression'] = cronExpression;
+    }
     if (autoOffDelaySec != null) body['auto_off_delay_sec'] = autoOffDelaySec;
 
     final response = await http.post(
@@ -375,6 +566,75 @@ class StripRepository {
     return response.statusCode == 200;
   }
 
+  // --- Scenes Endpoints ---
+
+  Future<List<Map<String, dynamic>>> getScenes() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiConstants.baseUrl}/scenes'),
+        headers: headers,
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final list = data['scenes'] as List? ?? [];
+        return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  Future<bool> createScene({
+    required String name,
+    String icon = '⚡',
+    int staggerDelayMs = 1000,
+    required List<Map<String, dynamic>> actions,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/scenes'),
+        headers: headers,
+        body: jsonEncode({
+          'scene_name': name,
+          'name': name,
+          'icon': icon,
+          'stagger_delay_ms': staggerDelayMs,
+          'actions': actions,
+        }),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> executeScene(int sceneId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/scenes/$sceneId/execute'),
+        headers: headers,
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteScene(int sceneId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.delete(
+        Uri.parse('${ApiConstants.baseUrl}/scenes/$sceneId'),
+        headers: headers,
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // --- Family & Shares Endpoints ---
 
   Future<List<dynamic>> getShares(String mac) async {
@@ -390,15 +650,30 @@ class StripRepository {
     return [];
   }
 
-  Future<Map<String, dynamic>> createShare(String mac, String memberName, String permissionLevel, String allowedSockets) async {
+  Future<Map<String, dynamic>> createShare(
+    String mac,
+    String memberName,
+    String permissionLevel,
+    String allowedSockets, {
+    String? email,
+    int durationHours = 0,
+  }) async {
     final headers = await _getHeaders();
+    final sockList = allowedSockets
+        .split(',')
+        .map((e) => int.tryParse(e.trim()))
+        .whereType<int>()
+        .toList();
     final response = await http.post(
       Uri.parse('${ApiConstants.baseUrl}/strips/$mac/shares'),
       headers: headers,
       body: jsonEncode({
+        'name': memberName,
         'member_name': memberName,
         'permission_level': permissionLevel,
-        'allowed_sockets': allowedSockets,
+        'allowed_sockets': sockList.isNotEmpty ? sockList : [1, 2, 3, 4],
+        if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+        'duration_hours': durationHours,
       }),
     );
     return jsonDecode(response.body);

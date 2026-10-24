@@ -1,98 +1,149 @@
 class SocketModel {
   final int id;
-  final int socketIndex;
-  String name;
-  String icon;
-  bool isRouter;
-  bool isLocked;
-  bool isFavorite;
-  bool state;
-  double currentWatt;
-  double currentAmp;
-  int currentTempC;
-  double rawEnergyKwh;
-  bool compressorProtect;
-  int compressorDelaySec;
-  double? minWattCutoff;
-  int cutoffDelaySec;
-  double? maxWattLimit;
-  int? autoOffDelaySec;
-  String powerOnBehavior; // ON / OFF / LAST
-  bool hwOverloadFlag;
-  bool hwOverheatFlag;
+  final int index;
+  final String name;
+  final String icon;
+  final String colorHex;
+  final int linkGroup;
+  final bool doorbellMode;
+  final int doorbellPulseSec;
+  final bool isPinnedState;
+  final double? alertWattThreshold;
+  final int? autoOffDelaySec;
+  final bool isRouter;
+  final bool isLocked;
+  final bool isFavorite;
+  final bool isOn;
+  final bool desiredOn;
+  final String powerOnBehavior;
+  final double watt;
+  final double amp;
+  final int? tempC;
+  final double kwh;
+  final double costEgp;
+  final double maxWattLimit;
+  final double? minWattCutoff;
+  final int cutoffDelaySec;
+  final bool compressorProtect;
+  final int compressorDelaySec;
+  final int? masterSocketId;
+  final double masterTriggerWatt;
 
   SocketModel({
     required this.id,
-    required this.socketIndex,
+    required this.index,
     required this.name,
-    this.icon = 'power_plug',
-    this.isRouter = false,
+    required this.icon,
+    this.colorHex = '#10B981',
+    this.linkGroup = 0,
+    this.doorbellMode = false,
+    this.doorbellPulseSec = 3,
+    this.isPinnedState = false,
+    this.alertWattThreshold,
+    this.autoOffDelaySec,
+    required this.isRouter,
     this.isLocked = false,
-    this.isFavorite = false,
-    this.state = false,
-    this.currentWatt = 0.0,
-    this.currentAmp = 0.0,
-    this.currentTempC = 0,
-    this.rawEnergyKwh = 0.0,
-    this.compressorProtect = false,
-    this.compressorDelaySec = 180,
+    required this.isFavorite,
+    required this.isOn,
+    required this.desiredOn,
+    this.powerOnBehavior = 'LAST',
+    required this.watt,
+    required this.amp,
+    this.tempC,
+    required this.kwh,
+    required this.costEgp,
+    this.maxWattLimit = 2500.0,
     this.minWattCutoff,
     this.cutoffDelaySec = 600,
-    this.maxWattLimit,
-    this.autoOffDelaySec,
-    this.powerOnBehavior = 'LAST',
-    this.hwOverloadFlag = false,
-    this.hwOverheatFlag = false,
+    this.compressorProtect = false,
+    this.compressorDelaySec = 180,
+    this.masterSocketId,
+    this.masterTriggerWatt = 20.0,
   });
 
-  double get totalKwh => rawEnergyKwh;
-
   factory SocketModel.fromJson(Map<String, dynamic> json) {
-    final idx = json['socket_index'] ?? json['index'] ?? 1;
     return SocketModel(
-      id: json['id'] ?? idx,
-      socketIndex: idx,
-      name: json['name'] ?? 'مقبس $idx',
+      id: json['id'] ?? 0,
+      index: json['index'] ?? 1,
+      name: json['name'] ?? 'مقبس',
       icon: json['icon'] ?? 'power_plug',
+      colorHex: json['color_hex'] ?? '#10B981',
+      linkGroup: (json['link_group'] as num?)?.toInt() ?? 0,
+      doorbellMode: json['doorbell_mode'] == true,
+      doorbellPulseSec: (json['doorbell_pulse_sec'] as num?)?.toInt() ?? 3,
+      isPinnedState: json['is_pinned_state'] == true,
+      alertWattThreshold: (json['alert_watt_threshold'] as num?)?.toDouble(),
+      autoOffDelaySec: (json['auto_off_delay_sec'] as num?)?.toInt(),
       isRouter: json['is_router'] ?? false,
-      isLocked: json['is_locked'] ?? json['is_router'] ?? false,
+      isLocked: json['is_locked'] ?? false,
       isFavorite: json['is_favorite'] ?? false,
-      state: json['state'] ?? json['on'] ?? json['reported_state'] ?? false,
-      currentWatt: (json['current_watt'] ?? json['watt'] as num?)?.toDouble() ?? 0.0,
-      currentAmp: (json['current_amp'] ?? json['amp'] as num?)?.toDouble() ?? 0.0,
-      currentTempC: json['current_temp_c'] ?? json['temp_c'] ?? 0,
-      rawEnergyKwh: (json['raw_energy_kwh'] ?? json['kwh'] as num?)?.toDouble() ?? 0.0,
+      isOn: json['on'] ?? false,
+      desiredOn: json['desired_on'] ?? (json['on'] ?? false),
+      powerOnBehavior: json['power_on_behavior'] ?? 'LAST',
+      watt: (json['watt'] ?? 0.0).toDouble(),
+      amp: (json['amp'] ?? 0.0).toDouble(),
+      tempC: json['temp_c'],
+      kwh: (json['kwh'] ?? 0.0).toDouble(),
+      costEgp: (json['cost_egp'] ?? 0.0).toDouble(),
+      maxWattLimit: (json['max_watt_limit'] ?? 2500.0).toDouble(),
+      minWattCutoff: json['min_watt_cutoff'] != null ? (json['min_watt_cutoff'] as num).toDouble() : null,
+      cutoffDelaySec: json['cutoff_delay_sec'] ?? 600,
       compressorProtect: json['compressor_protect'] ?? false,
       compressorDelaySec: json['compressor_delay_sec'] ?? 180,
-      minWattCutoff: (json['min_watt_cutoff'] as num?)?.toDouble(),
-      cutoffDelaySec: json['cutoff_delay_sec'] ?? 600,
-      maxWattLimit: (json['max_watt_limit'] as num?)?.toDouble(),
-      autoOffDelaySec: json['auto_off_delay_sec'] as int?,
-      powerOnBehavior: json['power_on_behavior'] ?? 'LAST',
-      hwOverloadFlag: json['hw_overload_flag'] ?? false,
-      hwOverheatFlag: json['hw_overheat_flag'] ?? false,
+      masterSocketId: json['master_socket_id'],
+      masterTriggerWatt: (json['master_trigger_watt'] ?? 20.0).toDouble(),
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'socket_index': socketIndex,
-      'name': name,
-      'icon': icon,
-      'is_router': isRouter,
-      'is_locked': isLocked,
-      'state': state,
-      'current_watt': currentWatt,
-      'current_amp': currentAmp,
-      'current_temp_c': currentTempC,
-      'raw_energy_kwh': rawEnergyKwh,
-      'compressor_protect': compressorProtect,
-      'compressor_delay_sec': compressorDelaySec,
-      'min_watt_cutoff': minWattCutoff,
-      'cutoff_delay_sec': cutoffDelaySec,
-      'max_watt_limit': maxWattLimit,
-      'auto_off_delay_sec': autoOffDelaySec,
-      'power_on_behavior': powerOnBehavior,
-    };
+  SocketModel copyWith({
+    bool? isOn,
+    bool? desiredOn,
+    bool? isFavorite,
+    bool? isRouter,
+    bool? isLocked,
+    String? name,
+    String? icon,
+    String? colorHex,
+    int? linkGroup,
+    bool? doorbellMode,
+    int? doorbellPulseSec,
+    bool? isPinnedState,
+    double? alertWattThreshold,
+    int? autoOffDelaySec,
+    double? watt,
+    double? amp,
+    int? tempC,
+  }) {
+    return SocketModel(
+      id: id,
+      index: index,
+      name: name ?? this.name,
+      icon: icon ?? this.icon,
+      colorHex: colorHex ?? this.colorHex,
+      linkGroup: linkGroup ?? this.linkGroup,
+      doorbellMode: doorbellMode ?? this.doorbellMode,
+      doorbellPulseSec: doorbellPulseSec ?? this.doorbellPulseSec,
+      isPinnedState: isPinnedState ?? this.isPinnedState,
+      alertWattThreshold: alertWattThreshold ?? this.alertWattThreshold,
+      autoOffDelaySec: autoOffDelaySec ?? this.autoOffDelaySec,
+      isRouter: isRouter ?? this.isRouter,
+      isLocked: isLocked ?? this.isLocked,
+      isFavorite: isFavorite ?? this.isFavorite,
+      isOn: isOn ?? this.isOn,
+      desiredOn: desiredOn ?? this.desiredOn,
+      powerOnBehavior: powerOnBehavior,
+      watt: watt ?? this.watt,
+      amp: amp ?? this.amp,
+      tempC: tempC ?? this.tempC,
+      kwh: kwh,
+      costEgp: costEgp,
+      maxWattLimit: maxWattLimit,
+      minWattCutoff: minWattCutoff,
+      cutoffDelaySec: cutoffDelaySec,
+      compressorProtect: compressorProtect,
+      compressorDelaySec: compressorDelaySec,
+      masterSocketId: masterSocketId,
+      masterTriggerWatt: masterTriggerWatt,
+    );
   }
 }

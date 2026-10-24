@@ -94,7 +94,7 @@ class SecureStorageService {
 
   static Future<bool> isDarkMode() async {
     final val = await _storage.read(key: keyDarkMode);
-    return val != 'false'; // Defaults to TRUE (Dark Titanium)
+    return val == 'true'; // Defaults to FALSE (Clean Material 3 Light Mode)
   }
 
   static Future<void> setLanguage(String lang) async {
