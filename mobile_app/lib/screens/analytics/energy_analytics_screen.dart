@@ -6,10 +6,12 @@ import '../../data/repositories/strip_repository.dart';
 
 class EnergyAnalyticsScreen extends StatefulWidget {
   final StripModel strip;
+  final bool? isDark;
 
   const EnergyAnalyticsScreen({
     super.key,
     required this.strip,
+    this.isDark,
   });
 
   @override

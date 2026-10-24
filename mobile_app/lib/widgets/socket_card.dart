@@ -9,6 +9,7 @@ class SocketCard extends StatelessWidget {
   final VoidCallback? onLockToggle;
   final bool isCompact;
   final bool? isDark;
+  final double? voltage;
 
   const SocketCard({
     super.key,
@@ -18,6 +19,7 @@ class SocketCard extends StatelessWidget {
     this.onLockToggle,
     this.isCompact = true,
     this.isDark,
+    this.voltage,
   });
 
   IconData _resolveIcon(String iconName) {

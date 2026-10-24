@@ -44,7 +44,7 @@ class StripModel {
   set stripName(String v) => name = v;
 
   double get currentVoltage => voltage;
-  set currentVoltage(double v) => voltage = v;
+  set currentVoltage(double? v) => voltage = v ?? 220.0;
 
   String get fwVersion => fw;
   set fwVersion(String v) => fw = v;
