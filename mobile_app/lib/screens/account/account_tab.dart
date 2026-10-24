@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/user_model.dart';
 import '../../data/repositories/strip_repository.dart';
@@ -20,6 +21,58 @@ class AccountTab extends StatelessWidget {
     required this.onUpgradeQuota,
     required this.onLogout,
   });
+
+  Future<void> _openJoinShareDialog(BuildContext context) async {
+    final codeCtrl = TextEditingController();
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          '👨‍👩‍👧 الانضمام لمشترك عائلي بكود دعوة',
+          style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+        ),
+        content: TextField(
+          controller: codeCtrl,
+          textCapitalization: TextCapitalization.characters,
+          decoration: InputDecoration(
+            labelText: 'أدخل كود الدعوة (مثال: NA7LA-XXXX)',
+            prefixIcon: const Icon(Icons.vpn_key_rounded, color: AppColors.emeraldPrimary),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('إلغاء', style: GoogleFonts.cairo(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.emeraldPrimary,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              final code = codeCtrl.text.trim();
+              if (code.isEmpty) return;
+              final repo = StripRepository();
+              final res = await repo.joinSharedStrip(code);
+              if (ctx.mounted) Navigator.pop(ctx);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(res['message'] ?? res['detail'] ?? 'تمت العملية'),
+                    backgroundColor: res['ok'] == true ? AppColors.emeraldPrimary : AppColors.dangerRed,
+                  ),
+                );
+              }
+            },
+            child: Text('ربط المشترك بحسابي', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _confirmDeleteAccount(BuildContext context) async {
     final confirm = await showDialog<bool>(
@@ -112,7 +165,7 @@ class AccountTab extends StatelessWidget {
 
           // User Profile Card
           Container(
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
             decoration: BoxDecoration(
               color: cardBg,
               borderRadius: BorderRadius.circular(20),
@@ -121,8 +174,8 @@ class AccountTab extends StatelessWidget {
             child: Column(
               children: [
                 Container(
-                  width: 64,
-                  height: 64,
+                  width: 62,
+                  height: 62,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: const LinearGradient(
@@ -137,10 +190,10 @@ class AccountTab extends StatelessWidget {
                     ],
                   ),
                   child: const Center(
-                    child: Icon(Icons.person_rounded, size: 34, color: Colors.white),
+                    child: Icon(Icons.person_rounded, size: 32, color: Colors.white),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Text(
                   user?.fullName ?? user?.email.split('@').first ?? 'مستخدم Na7la IoT',
                   style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.w900, color: textPrimary),
@@ -169,7 +222,50 @@ class AccountTab extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
+
+          // Join Shared Strip by Invite Code Button
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1.2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'الانضمام لمشترك عائلي مشترك 👨‍👩‍👧',
+                        style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w900, color: textPrimary),
+                      ),
+                      Text(
+                        'أدخل كود الدعوة المرسل إليك للتحكم بالمشترك أو المخرج',
+                        style: GoogleFonts.cairo(fontSize: 10, color: textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _openJoinShareDialog(context),
+                  icon: const Icon(Icons.vpn_key_rounded, size: 15),
+                  label: Text('إدخال الكود', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.emeraldPrimary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
 
           // Upgrade Plan CTA Button
           Container(
@@ -214,7 +310,88 @@ class AccountTab extends StatelessWidget {
               ],
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 14),
+
+          // Eng. Ahmed Essam Developer Card & Quranic Verse
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: borderColor, width: 1.2),
+            ),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: AppColors.emeraldPrimary.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.engineering_rounded, color: AppColors.emeraldPrimary, size: 22),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'تطوير وتصميم: م. أحمد عصام (Eng. Ahmed Essam)',
+                            style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w900, color: textPrimary),
+                          ),
+                          Text(
+                            'IoT Systems & Cloud Software Architect • Na7la IoT v2.0.0',
+                            style: GoogleFonts.cairo(fontSize: 10, color: textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => launchUrl(Uri.parse('https://wa.me/201152843472'), mode: LaunchMode.externalApplication),
+                        icon: const Icon(Icons.chat_rounded, size: 16, color: AppColors.emeraldPrimary),
+                        label: Text('واتساب المطور', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.emeraldPrimary),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => launchUrl(Uri.parse('https://www.linkedin.com/in/ahmed-essam32'), mode: LaunchMode.externalApplication),
+                        icon: const Icon(Icons.business_center_rounded, size: 16, color: AppColors.routerCyan),
+                        label: Text('LinkedIn', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.routerCyan)),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: AppColors.routerCyan),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  '﴿ وَمَا تَوْفِيقِي إِلَّا بِاللَّهِ ۚ عَلَيْهِ تَوَكَّلْتُ وَإِلَيْهِ أُنِيبُ ﴾',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.cairo(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.emeraldPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
 
           // Logout Button
           OutlinedButton.icon(
@@ -230,7 +407,7 @@ class AccountTab extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           if (!(user?.isAdmin ?? false))
             TextButton.icon(

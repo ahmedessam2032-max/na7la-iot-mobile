@@ -11,6 +11,7 @@ class FileDownloaderService {
     try {
       final token = await SecureStorageService.getToken();
       final headers = <String, String>{
+        if (token != null) 'X-Na7la-Token': token,
         if (token != null) 'Authorization': 'Bearer $token',
       };
       final response = await http.get(

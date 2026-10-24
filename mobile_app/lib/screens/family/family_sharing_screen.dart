@@ -103,11 +103,31 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
+    return Scaffold(
+      backgroundColor: isDark ? AppColors.darkOuter : AppColors.lightBg,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('👨‍👩‍👧 المشاركة العائلية وصلاحيات المخارج', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
+            Text(widget.strip.name, style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'تحديث القائمة',
+            onPressed: _loadShares,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
           // 1. Create Real Share Card (Whole Strip or Specific Outlet + Email & Invite Code)
           Container(
             padding: const EdgeInsets.all(16),
@@ -386,6 +406,7 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }

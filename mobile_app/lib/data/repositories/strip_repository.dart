@@ -688,6 +688,29 @@ class StripRepository {
     return response.statusCode == 200;
   }
 
+  Future<bool> toggleShare(int shareId) async {
+    final headers = await _getHeaders();
+    final response = await http.patch(
+      Uri.parse('${ApiConstants.baseUrl}/shares/$shareId/toggle'),
+      headers: headers,
+    );
+    return response.statusCode == 200;
+  }
+
+  Future<Map<String, dynamic>> joinSharedStrip(String inviteCode) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/strips/join-share'),
+        headers: headers,
+        body: jsonEncode({'invite_code': inviteCode.trim().toUpperCase()}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'ok': false, 'detail': 'خطأ في الاتصال بالسيرفر: $e'};
+    }
+  }
+
   Future<bool> deleteStrip(String mac) async {
     final headers = await _getHeaders();
     final response = await http.delete(
