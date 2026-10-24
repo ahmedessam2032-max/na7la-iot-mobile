@@ -103,19 +103,23 @@ class _FamilySharingScreenState extends State<FamilySharingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = AppThemeController.instance.isDark ? true : widget.isDark;
+    final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
     return Directionality(
       textDirection: AppLocaleController.instance.textDirection,
       child: Scaffold(
         backgroundColor: isDark ? AppColors.darkOuter : AppColors.lightBg,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: isDark ? AppColors.cardSurfaceDark : Colors.white,
+          foregroundColor: textPrimary,
           elevation: 0,
+          iconTheme: IconThemeData(color: textPrimary),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(trBi('👨‍👩‍👧 المشاركة العائلية وصلاحيات المخارج', '👨‍👩‍👧 Family Sharing & Outlet Access'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-              Text(widget.strip.name, style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
+              Text(trBi('👨‍👩‍👧 المشاركة العائلية وصلاحيات المخارج', '👨‍👩‍👧 Family Sharing & Outlet Access'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: textPrimary)),
+              Text(widget.strip.name, style: TextStyle(fontSize: 11.5, color: textSecondary)),
             ],
           ),
           actions: [

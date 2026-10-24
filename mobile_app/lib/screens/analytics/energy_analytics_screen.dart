@@ -114,7 +114,9 @@ class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = widget.isDark ?? AppThemeController.instance.isDark;
+    final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
     final totalKwh = ((_stats['total_kwh'] ?? widget.strip.totalKwh) as num).toDouble();
     final peakWatt = ((_stats['peak_watt'] ?? widget.strip.totalWatt) as num).toDouble();
     final currentWatt = ((_stats['current_watt'] ?? widget.strip.totalWatt) as num).toDouble();
@@ -131,13 +133,15 @@ class _EnergyAnalyticsScreenState extends State<EnergyAnalyticsScreen> {
       child: Scaffold(
         backgroundColor: isDark ? AppColors.darkOuter : AppColors.lightBg,
         appBar: AppBar(
-          backgroundColor: Colors.transparent,
+          backgroundColor: isDark ? AppColors.cardSurfaceDark : Colors.white,
+          foregroundColor: textPrimary,
           elevation: 0,
+          iconTheme: IconThemeData(color: textPrimary),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(trBi('📊 مراقب الاستهلاك وتقرير الطاقة', '📊 Energy Monitor & Consumption Report'), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900)),
-              Text(widget.strip.name, style: const TextStyle(fontSize: 11.5, color: Colors.grey)),
+              Text(trBi('📊 مراقب الاستهلاك وتقرير الطاقة', '📊 Energy Monitor & Consumption Report'), style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: textPrimary)),
+              Text(widget.strip.name, style: TextStyle(fontSize: 11.5, color: textSecondary)),
             ],
           ),
           actions: [

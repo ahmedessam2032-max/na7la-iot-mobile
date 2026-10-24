@@ -165,6 +165,11 @@ class SocketCard extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (socket.isRouter)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 2),
+                        child: Text('🌐', style: TextStyle(fontSize: 10)),
+                      ),
                     if (socket.compressorProtect)
                       const Padding(
                         padding: EdgeInsets.only(right: 2),
@@ -187,18 +192,25 @@ class SocketCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    GestureDetector(
+                    InkWell(
                       onTap: onLockToggle ?? menuCallback,
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 3),
+                        decoration: socket.isLocked
+                            ? BoxDecoration(
+                                color: const Color(0xFFF59E0B).withOpacity(0.16),
+                                borderRadius: BorderRadius.circular(7),
+                              )
+                            : null,
                         child: Icon(
-                          (socket.isLocked || socket.isRouter)
+                          socket.isLocked
                               ? Icons.lock_rounded
                               : Icons.lock_open_rounded,
-                          size: 13.5,
-                          color: (socket.isLocked || socket.isRouter)
+                          size: 14,
+                          color: socket.isLocked
                               ? const Color(0xFFF59E0B)
-                              : textSecondary.withOpacity(0.55),
+                              : textSecondary.withOpacity(0.65),
                         ),
                       ),
                     ),

@@ -4,6 +4,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/socket_model.dart';
 import '../../../data/models/schedule_model.dart';
 import '../../../data/repositories/strip_repository.dart';
+import '../../../widgets/pin_biometric_dialog.dart';
 
 class SocketDeepDiveSheet extends StatefulWidget {
   final String stripMac;
@@ -236,10 +237,11 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: AppThemeController.instance.isDark ? AppColors.cardSurfaceDark : Colors.white,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setSheetState) {
-          final isDark = Theme.of(ctx).brightness == Brightness.dark;
+          final isDark = AppThemeController.instance.isDark;
           return Directionality(
             textDirection: AppLocaleController.instance.textDirection,
             child: Padding(
@@ -562,7 +564,6 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
           'max_watt_limit': 120.0,
           'compressor_protect': false,
           'is_router': true,
-          'is_locked': true,
         };
         break;
       case 'charger':
@@ -625,9 +626,53 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
     );
   }
 
+  void _toggleOutletLockWithAuth(bool isDark) {
+    final displaySockName = trOutletName(_sock.name, _sock.index);
+    final nextLock = !_sock.isLocked;
+    showDialog(
+      context: context,
+      builder: (_) => PinBiometricDialog(
+        title: nextLock
+            ? trBi('تأكيد قفل وحماية: $displaySockName 🔒', 'Confirm Lock & Child Guard: $displaySockName 🔒')
+            : trBi('تأكيد فتح قفل: $displaySockName 🔓', 'Confirm Unlock: $displaySockName 🔓'),
+        isDark: isDark,
+        onSuccessWithPin: (pin) async {
+          setState(() => _sock = _sock.copyWith(isLocked: nextLock));
+          await _applyPatch(
+            {'is_locked': nextLock},
+            successMsg: nextLock
+                ? trBi(
+                    '🔒 تم قفل "$displaySockName" وتفعيل قفل الأطفال الفردي له',
+                    '🔒 "$displaySockName" locked & protected with individual Child Guard',
+                  )
+                : trBi(
+                    '🔓 تم فتح قفل "$displaySockName" بنجاح',
+                    '🔓 "$displaySockName" unlocked successfully',
+                  ),
+          );
+        },
+        onSuccess: () async {
+          setState(() => _sock = _sock.copyWith(isLocked: nextLock));
+          await _applyPatch(
+            {'is_locked': nextLock},
+            successMsg: nextLock
+                ? trBi(
+                    '🔒 تم قفل "$displaySockName" وتفعيل قفل الأطفال الفردي له',
+                    '🔒 "$displaySockName" locked & protected with individual Child Guard',
+                  )
+                : trBi(
+                    '🔓 تم فتح قفل "$displaySockName" بنجاح',
+                    '🔓 "$displaySockName" unlocked successfully',
+                  ),
+          );
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = AppThemeController.instance.isDark;
     final surfaceColor = isDark ? AppColors.cardSurfaceDark : Colors.white;
     final textColor = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
     final subColor = isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
@@ -821,7 +866,25 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
                 onTap: _openDoorbellModal,
               ),
 
-              // 9. Pin Current State
+              // 9. Per-Outlet Lock (PIN/Biometric + Individual Child Lock)
+              _buildMenuRow(
+                icon: _sock.isLocked ? Icons.lock_rounded : Icons.lock_open_rounded,
+                iconColor: _sock.isLocked ? const Color(0xFFF59E0B) : Colors.grey,
+                title: _sock.isLocked
+                    ? trBi('فتح قفل المخرج وإلغاء قفل الأطفال الفردي 🔓', 'Unlock Outlet & Disable Individual Child Guard 🔓')
+                    : trBi('قفل المخرج بالبصمة/PIN + قفل الأطفال الفردي 🔒', 'Lock Outlet (PIN/Biometrics + Child Guard) 🔒'),
+                subtitle: _sock.isLocked
+                    ? trBi('مقفول حالياً — محمي بالبصمة/PIN وضد أزرار المشترك الفيزيائية', 'Locked — Protected by PIN/Biometrics & physical button Child Guard')
+                    : trBi('طلب البصمة/PIN عند التبديل ومنع الأطفال من فصله من زر المشترك', 'Require PIN/Biometrics to switch & block physical button presses'),
+                trailing: Switch(
+                  value: _sock.isLocked,
+                  activeColor: const Color(0xFFF59E0B),
+                  onChanged: (_) => _toggleOutletLockWithAuth(isDark),
+                ),
+                onTap: () => _toggleOutletLockWithAuth(isDark),
+              ),
+
+              // 10. Pin Current State
               _buildMenuRow(
                 icon: Icons.push_pin_rounded,
                 iconColor: _sock.isPinnedState ? AppColors.dangerRed : Colors.grey,
@@ -858,7 +921,7 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
                 },
               ),
 
-              // 10. Router Protection Toggle
+              // 11. Router Protection Toggle
               _buildMenuRow(
                 icon: Icons.router_rounded,
                 iconColor: _sock.isRouter ? AppColors.routerCyan : Colors.grey,
@@ -931,6 +994,9 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
     required VoidCallback onTap,
     Widget? trailing,
   }) {
+    final isDark = AppThemeController.instance.isDark;
+    final textColor = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final subColor = isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
     return ListTile(
       dense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
@@ -944,20 +1010,21 @@ class _SocketDeepDiveSheetState extends State<SocketDeepDiveSheet> {
         ),
         child: Icon(icon, color: iconColor, size: 19),
       ),
-      title: Text(title, style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800)),
-      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11)),
+      title: Text(title, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: textColor)),
+      subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: subColor)),
       trailing: trailing ?? const Icon(Icons.chevron_right_rounded, size: 18, color: Colors.grey),
       onTap: onTap,
     );
   }
 
   Widget _buildPresetChip(String label, String key, bool isDark) {
+    final textColor = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
       child: ActionChip(
         backgroundColor: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        label: Text(label, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800)),
+        label: Text(label, style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: textColor)),
         onPressed: () => _applyQuickPreset(key),
       ),
     );
@@ -1038,7 +1105,7 @@ class _OutletScheduleModalState extends State<_OutletScheduleModal> with SingleT
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark = AppThemeController.instance.isDark;
     final displaySockName = trOutletName(widget.socket.name, widget.socket.index);
     return Directionality(
       textDirection: AppLocaleController.instance.textDirection,

@@ -605,7 +605,6 @@ class _WizardScreenState extends State<WizardScreen> with WidgetsBindingObserver
     );
 
     if (_routerSocketIndex > 0) {
-      await _repo.lockSocket(_resolvedMac, _routerSocketIndex, true);
       await _repo.configSocket(_resolvedMac, _routerSocketIndex, {
         'name': AppLocaleController.instance.isArabic ? 'راوتر الإنترنت' : 'Internet Router',
         'icon': 'router',

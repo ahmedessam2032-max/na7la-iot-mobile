@@ -477,7 +477,6 @@ def ensure_db_migrations():
             if sock_cols:
                 if "is_locked" not in sock_cols:
                     conn.execute(text("ALTER TABLE sockets ADD COLUMN is_locked BOOLEAN DEFAULT 0"))
-                    conn.execute(text("UPDATE sockets SET is_locked = 1 WHERE is_router = 1"))
                 if "color_hex" not in sock_cols:
                     conn.execute(text("ALTER TABLE sockets ADD COLUMN color_hex VARCHAR(20) DEFAULT '#10B981'"))
                 if "link_group" not in sock_cols:
@@ -1105,7 +1104,7 @@ def claim_strip(mac: str, req: ClaimStripReq, request: Request, db: Session = De
                 name="مقبس 1" if s_idx == 1 else ("راوتر" if s_idx == 2 else f"مقبس {s_idx}"),
                 icon="tv" if s_idx == 1 else ("router" if s_idx == 2 else "plug"),
                 is_router=(s_idx == 2),
-                is_locked=(s_idx == 2),
+                is_locked=False,
                 reported_state=False,
                 desired_state=False
             )
@@ -1758,23 +1757,29 @@ def toggle_socket_lock(
     target_lock = req.locked if req.locked is not None else req.is_locked
     next_state = not current_state if target_lock is None else target_lock
 
-    # If unlocking, verify user PIN or account password (zero hardcoded fallback PINs)
+    # If unlocking and user has a server-side PIN hash and sent a PIN, verify it
     if current_state and not next_state and req.pin:
-        rl_key = f"{auth.get('user_id')}:{get_client_ip(request)}"
-        rate_limiter.check_or_raise("pin_verify", rl_key, max_attempts=5, window_sec=600)
         user = db.query(User).filter(User.id == auth.get("user_id")).first()
-        valid = False
-        if user:
-            if user.pin_code_hash and verify_password(req.pin, user.pin_code_hash):
-                valid = True
-            elif user.password_hash and verify_password(req.pin, user.password_hash):
-                valid = True
-        if not valid:
-            rate_limiter.record_attempt("pin_verify", rl_key)
-            raise HTTPException(status_code=401, detail="رمز الـ PIN أو كلمة المرور غير صحيحة")
-        rate_limiter.reset("pin_verify", rl_key)
+        if user and user.pin_code_hash:
+            rl_key = f"{auth.get('user_id')}:{get_client_ip(request)}"
+            rate_limiter.check_or_raise("pin_verify", rl_key, max_attempts=5, window_sec=600)
+            valid = verify_password(req.pin, user.pin_code_hash) or (
+                bool(user.password_hash) and verify_password(req.pin, user.password_hash)
+            )
+            if not valid:
+                rate_limiter.record_attempt("pin_verify", rl_key)
+                raise HTTPException(status_code=401, detail="رمز الـ PIN أو كلمة المرور غير صحيحة")
+            rate_limiter.reset("pin_verify", rl_key)
 
     sock.is_locked = next_state
+    log_event(
+        db,
+        strip.id,
+        socket_index,
+        "SOCKET_LOCK" if next_state else "SOCKET_UNLOCK",
+        auth.get("name", "USER") if auth else "USER",
+        f"{'تم قفل المخرج وتفعيل قفل الأطفال الفردي له 🔒' if next_state else 'تم فتح قفل المخرج 🔓'} ({sock.name})",
+    )
     db.commit()
     return {"ok": True, "socket_index": socket_index, "is_locked": sock.is_locked}
 

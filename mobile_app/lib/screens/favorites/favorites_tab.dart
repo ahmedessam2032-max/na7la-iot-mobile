@@ -11,6 +11,7 @@ class FavoritesTab extends StatelessWidget {
   final bool isDark;
   final Function(SocketModel socket) onToggleSocket;
   final Function(SocketModel socket) onOpenDeepDive;
+  final Function(SocketModel socket)? onLockToggle;
   final VoidCallback onGoToDashboard;
 
   const FavoritesTab({
@@ -19,12 +20,14 @@ class FavoritesTab extends StatelessWidget {
     required this.isDark,
     required this.onToggleSocket,
     required this.onOpenDeepDive,
+    this.onLockToggle,
     required this.onGoToDashboard,
   });
 
   @override
   Widget build(BuildContext context) {
     final favoriteSockets = strip?.sockets.where((s) => s.isFavorite).toList() ?? [];
+    final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -34,7 +37,7 @@ class FavoritesTab extends StatelessWidget {
           if (favoriteSockets.isNotEmpty && strip != null) ...[
             Text(
               trBi('⭐ المخارج المفضلة (تحكم فوري)', '⭐ Favorite Outlets (Quick Control)'),
-              style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w900),
+              style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w900, color: textPrimary),
             ),
             const SizedBox(height: 10),
             GridView.builder(
@@ -55,6 +58,7 @@ class FavoritesTab extends StatelessWidget {
                   voltage: strip!.voltage,
                   onToggle: () => onToggleSocket(s),
                   onOpenDeepDive: () => onOpenDeepDive(s),
+                  onLockToggle: onLockToggle != null ? () => onLockToggle!(s) : null,
                 );
               },
             ),

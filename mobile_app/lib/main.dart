@@ -12,23 +12,14 @@ import 'widgets/app_lock_gate.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set system navigation and status bar style
-  SystemChrome.setSystemUIOverlayStyle(
-    const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.dark,
-    ),
-  );
-
   await AppLocaleController.instance.init();
+  await AppThemeController.instance.init();
   final token = await SecureStorageService.getToken();
-  final isDark = await SecureStorageService.isDarkMode();
 
   runApp(
     ProviderScope(
       child: Na7laApp(
         initialHasToken: token != null && token.isNotEmpty,
-        initialDarkMode: isDark,
       ),
     ),
   );
@@ -36,20 +27,30 @@ void main() async {
 
 class Na7laApp extends StatelessWidget {
   final bool initialHasToken;
-  final bool initialDarkMode;
 
   const Na7laApp({
     super.key,
     required this.initialHasToken,
-    required this.initialDarkMode,
   });
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: AppLocaleController.instance,
+      animation: Listenable.merge([
+        AppLocaleController.instance,
+        AppThemeController.instance,
+      ]),
       builder: (context, _) {
         final localeCtrl = AppLocaleController.instance;
+        final themeCtrl = AppThemeController.instance;
+
+        SystemChrome.setSystemUIOverlayStyle(
+          SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: themeCtrl.isDark ? Brightness.light : Brightness.dark,
+          ),
+        );
+
         return MaterialApp(
           title: localeCtrl.tr('app_title'),
           debugShowCheckedModeBanner: false,
@@ -65,7 +66,7 @@ class Na7laApp extends StatelessWidget {
           ],
           theme: AppTheme.lightTheme(),
           darkTheme: AppTheme.darkTheme(),
-          themeMode: initialDarkMode ? ThemeMode.dark : ThemeMode.light,
+          themeMode: themeCtrl.themeMode,
           home: initialHasToken ? const AppLockGate(child: HomeDashboardScreen()) : const LoginScreen(),
         );
       },

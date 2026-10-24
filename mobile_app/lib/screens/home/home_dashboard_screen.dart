@@ -99,7 +99,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   Future<void> _initApp() async {
     // Permissions are requested ONLY when entering WizardScreen (Pairing), never on app launch.
-    _isDark = await SecureStorageService.isDarkMode();
+    await AppThemeController.instance.init();
+    _isDark = AppThemeController.instance.isDark;
     _tariffPrice = await SecureStorageService.getTariffPrice();
     _currentUser = await _repo.getAuthStatus();
     await _loadStrips();
@@ -182,14 +183,86 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           HomeWidgetService.updateFromStrip(_selectedStrip!);
         }
       });
+
+      if ((data['event'] == 'locked_outlet_physical_blocked' ||
+              data['event'] == 'pin_state_blocked') &&
+          data['message'] != null &&
+          mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(data['message'].toString()),
+            backgroundColor: AppColors.warningAmber,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     });
   }
 
   void _toggleTheme() {
+    AppThemeController.instance.toggleTheme();
     setState(() {
-      _isDark = !_isDark;
+      _isDark = AppThemeController.instance.isDark;
     });
-    SecureStorageService.setDarkMode(_isDark);
+  }
+
+  void _onToggleSocketLock(SocketModel socket) {
+    if (_selectedStrip == null) return;
+    final sockDisplayName = trOutletName(socket.name, socket.socketIndex);
+    final nextLock = !socket.isLocked;
+
+    showDialog(
+      context: context,
+      builder: (_) => PinBiometricDialog(
+        title: nextLock
+            ? trBi('تأكيد قفل وحماية: $sockDisplayName 🔒', 'Confirm Lock & Child Guard: $sockDisplayName 🔒')
+            : trBi('تأكيد فتح قفل: $sockDisplayName 🔓', 'Confirm Unlock: $sockDisplayName 🔓'),
+        isDark: _isDark,
+        onSuccessWithPin: (pin) => _applySocketLockState(socket, nextLock, sockDisplayName),
+        onSuccess: () => _applySocketLockState(socket, nextLock, sockDisplayName),
+      ),
+    );
+  }
+
+  Future<void> _applySocketLockState(SocketModel socket, bool nextLock, String sockDisplayName) async {
+    if (_selectedStrip == null) return;
+    setState(() {
+      socket.isLocked = nextLock;
+    });
+    final ok = await _repo.configSocket(_selectedStrip!.macAddress, socket.socketIndex, {
+      'is_locked': nextLock,
+    });
+    if (!mounted) return;
+    if (!ok) {
+      setState(() {
+        socket.isLocked = !nextLock;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(trBi('❌ تعذر حفظ حالة قفل المخرج على السيرفر', '❌ Failed to save outlet lock state to server')),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          nextLock
+              ? trBi(
+                  '🔒 تم قفل "$sockDisplayName" وتفعيل قفل الأطفال الفردي له',
+                  '🔒 "$sockDisplayName" locked & protected with individual Child Guard',
+                )
+              : trBi(
+                  '🔓 تم فتح قفل "$sockDisplayName" بنجاح',
+                  '🔓 "$sockDisplayName" unlocked successfully',
+                ),
+        ),
+        backgroundColor: AppColors.emeraldPrimary,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
   }
 
   // ===================== SOCKET SWITCHING & HARDWARE GUARDS =====================
@@ -848,6 +921,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           isDark: _isDark,
           onToggleSocket: _onToggleSocket,
           onOpenDeepDive: _openDeepDive,
+          onLockToggle: _onToggleSocketLock,
           onGoToDashboard: () => setState(() => _selectedTabIndex = 0),
         );
       case 3:
@@ -1289,6 +1363,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         voltage: voltage,
                         onToggle: () => _onToggleSocket(socket),
                         onOpenDeepDive: () => _openDeepDive(socket),
+                        onLockToggle: () => _onToggleSocketLock(socket),
                       );
                     },
                   ),
@@ -1398,11 +1473,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     Expanded(
                       child: Text(
                         trBi('إعدادات المشترك (${strip.stripName})', 'Strip Settings (${strip.stripName})'),
-                        style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+                        style: GoogleFonts.cairo(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w900,
+                          color: _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                        ),
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20),
+                      icon: Icon(
+                        Icons.close_rounded,
+                        size: 20,
+                        color: _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight,
+                      ),
                       onPressed: () => Navigator.of(ctx).pop(),
                     ),
                   ],
@@ -1673,6 +1756,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void _openClaimBySerialDialog() {
     final macCtrl = TextEditingController();
     final nameCtrl = TextEditingController(text: trBi('مشترك ذكي', 'Smart Strip'));
+    final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
 
     showDialog(
       context: context,
@@ -1681,13 +1765,16 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         child: AlertDialog(
           backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text(trBi('ربط مشترك بالسيريال (MAC) 🔗', 'Link Strip by Serial (MAC) 🔗'), style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
+          title: Text(
+            trBi('ربط مشترك بالسيريال (MAC) 🔗', 'Link Strip by Serial (MAC) 🔗'),
+            style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: macCtrl,
-                style: GoogleFonts.jetBrainsMono(fontSize: 13, fontWeight: FontWeight.w800),
+                style: GoogleFonts.jetBrainsMono(fontSize: 13, fontWeight: FontWeight.w800, color: textPrimary),
                 decoration: InputDecoration(
                   labelText: trBi('رقم السيريال / MAC Address', 'Serial Number / MAC Address'),
                   hintText: trBi('مثال: AA11BB22CC33', 'e.g. AA11BB22CC33'),
@@ -1697,7 +1784,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               const SizedBox(height: 10),
               TextField(
                 controller: nameCtrl,
-                style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
+                style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800, color: textPrimary),
                 decoration: InputDecoration(
                   labelText: trBi('اسم المشترك', 'Strip Name'),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -1753,6 +1840,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       return;
     }
     final nameCtrl = TextEditingController();
+    final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
     final Map<int, bool?> socketActions = {
       for (final s in _selectedStrip!.sockets) s.socketIndex: s.isRouter ? null : false,
     };
@@ -1765,7 +1853,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           child: AlertDialog(
             backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            title: Text(trBi('إنشاء مشهد ذكي جديد 🎬', 'Create New Smart Scene 🎬'), style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
+            title: Text(
+              trBi('إنشاء مشهد ذكي جديد 🎬', 'Create New Smart Scene 🎬'),
+              style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
+            ),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -1773,7 +1864,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 children: [
                   TextField(
                     controller: nameCtrl,
-                    style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
+                    style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800, color: textPrimary),
                     decoration: InputDecoration(
                       labelText: trBi('اسم المشهد (مثال: وضع النوم / الخروج)', 'Scene Name (e.g. Sleep / Away)'),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -1782,7 +1873,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   const SizedBox(height: 12),
                   Text(
                     trBi('اختر حالة كل مخرج عند الضغط على المشهد:', 'Select action for each outlet when triggered:'),
-                    style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
+                    style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: textPrimary),
                   ),
                   const SizedBox(height: 6),
                   ..._selectedStrip!.sockets.map((s) {
@@ -1795,7 +1886,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                           Expanded(
                             child: Text(
                               '#${s.socketIndex} ${trOutletName(s.name, s.socketIndex)}',
-                              style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800),
+                              style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: textPrimary),
                             ),
                           ),
                           SegmentedButton<bool?>(
@@ -2504,6 +2595,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (_selectedStrip == null) return;
     final nameCtrl = TextEditingController(text: _selectedStrip!.stripName);
     String chosenRoom = _selectedStrip!.roomCategory;
+    final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
 
     showDialog(
       context: context,
@@ -2513,7 +2605,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           child: AlertDialog(
             backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-            title: Text(trBi('تعديل اسم ومكان المشترك ✏️', 'Edit Strip Name & Room ✏️'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
+            title: Text(
+              trBi('تعديل اسم ومكان المشترك ✏️', 'Edit Strip Name & Room ✏️'),
+              style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15, color: textPrimary),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2524,16 +2619,18 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     labelText: trBi('اسم المشترك', 'Strip Name'),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
-                  style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
+                  style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800, color: textPrimary),
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
                   value: ['living', 'office', 'bedroom', 'kitchen'].contains(chosenRoom) ? chosenRoom : 'living',
+                  dropdownColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+                  style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800, color: textPrimary),
                   items: [
-                    DropdownMenuItem(value: 'living', child: Text(trBi('صالة المعيشة 🛋️', 'Living Room 🛋️'))),
-                    DropdownMenuItem(value: 'office', child: Text(trBi('غرفة المكتب 💻', 'Office 💻'))),
-                    DropdownMenuItem(value: 'bedroom', child: Text(trBi('غرفة النوم 🛏️', 'Bedroom 🛏️'))),
-                    DropdownMenuItem(value: 'kitchen', child: Text(trBi('المطبخ 🍳', 'Kitchen 🍳'))),
+                    DropdownMenuItem(value: 'living', child: Text(trBi('صالة المعيشة 🛋️', 'Living Room 🛋️'), style: TextStyle(color: textPrimary))),
+                    DropdownMenuItem(value: 'office', child: Text(trBi('غرفة المكتب 💻', 'Office 💻'), style: TextStyle(color: textPrimary))),
+                    DropdownMenuItem(value: 'bedroom', child: Text(trBi('غرفة النوم 🛏️', 'Bedroom 🛏️'), style: TextStyle(color: textPrimary))),
+                    DropdownMenuItem(value: 'kitchen', child: Text(trBi('المطبخ 🍳', 'Kitchen 🍳'), style: TextStyle(color: textPrimary))),
                   ],
                   onChanged: (val) {
                     if (val != null) setDialogState(() => chosenRoom = val);

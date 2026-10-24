@@ -1,5 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../storage/secure_storage.dart';
+
+class AppThemeController extends ChangeNotifier {
+  static final AppThemeController instance = AppThemeController._internal();
+  AppThemeController._internal();
+
+  bool _isDark = false;
+  bool get isDark => _isDark;
+  ThemeMode get themeMode => _isDark ? ThemeMode.dark : ThemeMode.light;
+
+  Future<void> init() async {
+    _isDark = await SecureStorageService.isDarkMode();
+    notifyListeners();
+  }
+
+  Future<void> setDarkMode(bool value) async {
+    if (_isDark == value) return;
+    _isDark = value;
+    await SecureStorageService.setDarkMode(value);
+    notifyListeners();
+  }
+
+  Future<void> toggleTheme() async {
+    _isDark = !_isDark;
+    await SecureStorageService.setDarkMode(_isDark);
+    notifyListeners();
+  }
+}
 
 class AppColors {
   // WattQ 1.0.27 Emerald Green Primary + Na7la Warm Accents
@@ -26,7 +54,7 @@ class AppColors {
   static const Color cardMutedLight = Color(0xFFF1F5F9);
   static const Color borderLight = Color(0xFFE2E8F0);
   static const Color textPrimaryLight = Color(0xFF0F172A);
-  static const Color textSecondaryLight = Color(0xFF64748B);
+  static const Color textSecondaryLight = Color(0xFF475569);
 
   // Clean Material 3 Dark Slate Palette (WattQ 1.0.27 Dark Mode)
   static const Color darkOuter = Color(0xFF0F172A);
@@ -36,7 +64,7 @@ class AppColors {
   static const Color cardActiveDark = Color(0xFF1E2638);
   static const Color borderDark = Color(0xFF334155);
   static const Color textPrimaryDark = Color(0xFFF8FAFC);
-  static const Color textSecondaryDark = Color(0xFF94A3B8);
+  static const Color textSecondaryDark = Color(0xFFCBD5E1);
 
   // Protection & Special Roles
   static const Color routerCyan = Color(0xFF0284C7);
@@ -111,43 +139,205 @@ class AppTheme {
   }
 
   static ThemeData lightTheme() {
-    final baseText = GoogleFonts.cairoTextTheme();
+    final baseText = GoogleFonts.cairoTextTheme().apply(
+      bodyColor: AppColors.textPrimaryLight,
+      displayColor: AppColors.textPrimaryLight,
+    );
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: AppColors.emeraldActive,
       scaffoldBackgroundColor: AppColors.lightBg,
       cardColor: AppColors.cardSurfaceLight,
+      canvasColor: AppColors.cardSurfaceLight,
       dividerColor: AppColors.borderLight,
-      textTheme: baseText.apply(
-        bodyColor: AppColors.textPrimaryLight,
-        displayColor: AppColors.textPrimaryLight,
+      textTheme: baseText,
+      iconTheme: const IconThemeData(color: AppColors.textPrimaryLight),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.cardMutedLight,
+        selectedColor: AppColors.emeraldActive.withOpacity(0.18),
+        side: const BorderSide(color: AppColors.borderLight),
+        labelStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryLight,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+        secondaryLabelStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryLight,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return Colors.white;
+            return AppColors.textPrimaryLight;
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return AppColors.emeraldActive;
+            return AppColors.cardMutedLight;
+          }),
+          side: const WidgetStatePropertyAll(BorderSide(color: AppColors.borderLight)),
+          textStyle: WidgetStatePropertyAll(
+            GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.cardSurfaceLight,
+        foregroundColor: AppColors.textPrimaryLight,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryLight),
+        titleTextStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryLight,
+          fontSize: 16,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      dialogTheme: DialogTheme(
+        backgroundColor: AppColors.cardSurfaceLight,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryLight,
+          fontSize: 16,
+          fontWeight: FontWeight.w900,
+        ),
+        contentTextStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryLight,
+          fontSize: 13,
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.cardSurfaceLight,
+        surfaceTintColor: Colors.transparent,
+      ),
+      listTileTheme: const ListTileThemeData(
+        textColor: AppColors.textPrimaryLight,
+        iconColor: AppColors.textPrimaryLight,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.cardMutedLight,
+        labelStyle: GoogleFonts.cairo(color: AppColors.textSecondaryLight, fontWeight: FontWeight.w700),
+        hintStyle: GoogleFonts.cairo(color: AppColors.textSecondaryLight),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderLight, width: 1.2),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.emeraldActive, width: 1.6),
+        ),
       ),
       colorScheme: const ColorScheme.light(
         primary: AppColors.emeraldActive,
         secondary: AppColors.emeraldActive,
         surface: AppColors.cardSurfaceLight,
+        onSurface: AppColors.textPrimaryLight,
+        onPrimary: Colors.white,
       ),
     );
   }
 
   static ThemeData darkTheme() {
-    final baseText = GoogleFonts.cairoTextTheme();
+    final baseText = GoogleFonts.cairoTextTheme().apply(
+      bodyColor: AppColors.textPrimaryDark,
+      displayColor: AppColors.textPrimaryDark,
+    );
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       primaryColor: AppColors.emeraldActive,
       scaffoldBackgroundColor: AppColors.darkOuter,
       cardColor: AppColors.cardSurfaceDark,
+      canvasColor: AppColors.cardSurfaceDark,
       dividerColor: AppColors.borderDark,
-      textTheme: baseText.apply(
-        bodyColor: AppColors.textPrimaryDark,
-        displayColor: AppColors.textPrimaryDark,
+      textTheme: baseText,
+      iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+      chipTheme: ChipThemeData(
+        backgroundColor: AppColors.cardMutedDark,
+        selectedColor: AppColors.emeraldActive.withOpacity(0.24),
+        side: const BorderSide(color: AppColors.borderDark),
+        labelStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryDark,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+        secondaryLabelStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryDark,
+          fontSize: 11.5,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          foregroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return Colors.white;
+            return AppColors.textPrimaryDark;
+          }),
+          backgroundColor: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.selected)) return AppColors.emeraldActive;
+            return AppColors.cardMutedDark;
+          }),
+          side: const WidgetStatePropertyAll(BorderSide(color: AppColors.borderDark)),
+          textStyle: WidgetStatePropertyAll(
+            GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
+          ),
+        ),
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: AppColors.cardSurfaceDark,
+        foregroundColor: AppColors.textPrimaryDark,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: AppColors.textPrimaryDark),
+        titleTextStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryDark,
+          fontSize: 16,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+      dialogTheme: DialogTheme(
+        backgroundColor: AppColors.cardSurfaceDark,
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryDark,
+          fontSize: 16,
+          fontWeight: FontWeight.w900,
+        ),
+        contentTextStyle: GoogleFonts.cairo(
+          color: AppColors.textPrimaryDark,
+          fontSize: 13,
+        ),
+      ),
+      bottomSheetTheme: const BottomSheetThemeData(
+        backgroundColor: AppColors.cardSurfaceDark,
+        surfaceTintColor: Colors.transparent,
+      ),
+      listTileTheme: const ListTileThemeData(
+        textColor: AppColors.textPrimaryDark,
+        iconColor: AppColors.textPrimaryDark,
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: AppColors.cardMutedDark,
+        labelStyle: GoogleFonts.cairo(color: AppColors.textSecondaryDark, fontWeight: FontWeight.w700),
+        hintStyle: GoogleFonts.cairo(color: AppColors.textSecondaryDark),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.borderDark, width: 1.2),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.emeraldActive, width: 1.6),
+        ),
       ),
       colorScheme: const ColorScheme.dark(
         primary: AppColors.emeraldActive,
         secondary: AppColors.emeraldActive,
         surface: AppColors.cardSurfaceDark,
+        onSurface: AppColors.textPrimaryDark,
+        onPrimary: Colors.white,
       ),
     );
   }

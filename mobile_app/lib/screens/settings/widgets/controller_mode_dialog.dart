@@ -61,6 +61,8 @@ class _ControllerModeDialogState extends State<ControllerModeDialog> {
   Widget build(BuildContext context) {
     final bg = widget.isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;
     final borderCol = widget.isDark ? AppColors.borderDark : AppColors.borderLight;
+    final textPrimary = widget.isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = widget.isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
 
     return Directionality(
       textDirection: AppLocaleController.instance.textDirection,
@@ -87,11 +89,11 @@ class _ControllerModeDialogState extends State<ControllerModeDialog> {
                 children: [
                   Text(
                     trBi('نمط الاتصال بالمشترك', 'Strip Connection Mode'),
-                    style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15),
+                    style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15, color: textPrimary),
                   ),
                   Text(
                     trBi('سحابي أو محلي بدون إنترنت', 'Cloud or Offline LAN Mode'),
-                    style: GoogleFonts.cairo(fontSize: 10.5, color: Colors.grey),
+                    style: GoogleFonts.cairo(fontSize: 10.5, color: textSecondary),
                   ),
                 ],
               ),
@@ -108,7 +110,7 @@ class _ControllerModeDialogState extends State<ControllerModeDialog> {
                   'يمكنك الاختيار بين التحكم عبر سحابة نحلة العالمية أو التحكم المباشر داخل شبكة الواي فاي المنزلية بدون إنترنت.',
                   'Choose between controlling via Na7la Cloud anywhere or direct local LAN control inside your home Wi-Fi.',
                 ),
-                style: GoogleFonts.cairo(fontSize: 11.5, height: 1.4, color: widget.isDark ? Colors.white70 : Colors.black87),
+                style: GoogleFonts.cairo(fontSize: 11.5, height: 1.4, color: textSecondary),
               ),
               const SizedBox(height: 16),
 
@@ -139,11 +141,11 @@ class _ControllerModeDialogState extends State<ControllerModeDialog> {
                         children: [
                           Text(
                             trBi('🌐 الوضع السحابي (Cloud Mode)', '🌐 Cloud Mode (AWS)'),
-                            style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
+                            style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900, color: textPrimary),
                           ),
                           Text(
                             trBi('سيرفر AWS (13.61.25.9) - تحكم من أي مكان بالخارج', 'AWS Cloud (13.61.25.9) - Control from anywhere'),
-                            style: GoogleFonts.cairo(fontSize: 9.5, color: Colors.grey),
+                            style: GoogleFonts.cairo(fontSize: 9.5, color: textSecondary),
                           ),
                         ],
                       ),
@@ -180,11 +182,11 @@ class _ControllerModeDialogState extends State<ControllerModeDialog> {
                         children: [
                           Text(
                             trBi('🏠 الوضع المحلي (Offline LAN Mode)', '🏠 Offline LAN Mode'),
-                            style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
+                            style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900, color: textPrimary),
                           ),
                           Text(
                             trBi('خادم TCP مدمج بالهاتف - استجابة فورية دون إنترنت', 'Built-in phone TCP server - instant offline response'),
-                            style: GoogleFonts.cairo(fontSize: 9.5, color: Colors.grey),
+                            style: GoogleFonts.cairo(fontSize: 9.5, color: textSecondary),
                           ),
                         ],
                       ),
@@ -211,7 +213,7 @@ class _ControllerModeDialogState extends State<ControllerModeDialog> {
                           _lanService.hasConnectedStrip
                               ? trBi('المشترك متصل مباشرة بالهاتف محلياً ⚡', 'Strip is connected directly to your phone ⚡')
                               : trBi('الخادم المحلي يستمع على 10086 بانتظار اتصال المشترك...', 'Local hub listening on 10086 waiting for strip...'),
-                          style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w700),
+                          style: GoogleFonts.cairo(fontSize: 10, fontWeight: FontWeight.w700, color: textPrimary),
                         ),
                       ),
                     ],
@@ -224,7 +226,7 @@ class _ControllerModeDialogState extends State<ControllerModeDialog> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: Text(trBi('إغلاق', 'Close'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+            child: Text(trBi('إغلاق', 'Close'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, color: AppColors.emeraldActive)),
           ),
         ],
       ),

@@ -511,7 +511,7 @@ class Na7laTCPHub:
             db.close()
 
     async def handle_physical_button(self, session: StripSession, ch: int, is_on: bool) -> None:
-        """معالجة الضغط اليدوي على زر المشترك مع دعم تثبيت الحالة وربط المجموعات ووضع الجرس"""
+        """معالجة الضغط اليدوي على زر المشترك مع دعم قفل الأطفال الفردي للمخرج المقفول وتثبيت الحالة وربط المجموعات ووضع الجرس"""
         if not session.mac:
             return
         db = SessionLocal()
@@ -520,7 +520,7 @@ class Na7laTCPHub:
             if not strip:
                 return
 
-            # 1. التحقق من تثبيت الحالة (Pin State Guard) عند الضغط اليدوي
+            # 1. التحقق من تثبيت الحالة (Pin State Guard) وقفل المخرج الفردي/الأطفال (Per-Outlet Lock & Child Guard) عند الضغط اليدوي
             if ch in (1, 2, 3, 4):
                 target_sock = next((s for s in strip.sockets if s.socket_index == ch), None)
                 if target_sock and getattr(target_sock, "is_pinned_state", False) and is_on != target_sock.desired_state:
@@ -537,12 +537,26 @@ class Na7laTCPHub:
                     })
                     return
 
+                if target_sock and getattr(target_sock, "is_locked", False) and is_on != target_sock.desired_state:
+                    asyncio.create_task(session.set_outlets([ch], target_sock.desired_state))
+                    log_event(
+                        db, strip.id, ch, "LOCKED_OUTLET_CHILD_GUARD", "PROTECTION",
+                        f"منع تغيير المخرج {ch} ({target_sock.name}) من الزر الفيزيائي لأن قفل المخرج وقفل الأطفال الفردي مفعل عليه 🔒"
+                    )
+                    db.commit()
+                    await self.broadcast_update(strip.mac_address, {
+                        "event": "locked_outlet_physical_blocked",
+                        "socket_index": ch,
+                        "message": f"تم حماية المخرج '{target_sock.name}' من الضغط اليدوي لأن قفل المخرج/الأطفال مفعل عليه 🔒"
+                    })
+                    return
+
             # 2. تحديث حالة المخارج المتأثرة وفحص ربط المجموعات (Link Group) ووضع الجرس (Doorbell)
             linked_group_to_sync = 0
             for sock in strip.sockets:
                 if ch == 0 or sock.socket_index == ch:
-                    if ch == 0 and getattr(sock, "is_pinned_state", False) and is_on != sock.desired_state:
-                        # استرجاع المخرج المثبت إذا ضغط المستخدم الزر الرئيسي على المشترك
+                    if ch == 0 and (getattr(sock, "is_pinned_state", False) or getattr(sock, "is_locked", False)) and is_on != sock.desired_state:
+                        # استرجاع المخرج المثبت أو المقفول إذا ضغط المستخدم الزر الرئيسي على المشترك
                         asyncio.create_task(session.set_outlets([sock.socket_index], sock.desired_state))
                         continue
                     sock.reported_state = is_on
@@ -564,7 +578,7 @@ class Na7laTCPHub:
                 linked_indices = []
                 for s in strip.sockets:
                     if s.socket_index != ch and (getattr(s, "link_group", 0) == linked_group_to_sync):
-                        if getattr(s, "is_pinned_state", False):
+                        if getattr(s, "is_pinned_state", False) or getattr(s, "is_locked", False):
                             continue
                         if not is_on and s.is_router:
                             continue
