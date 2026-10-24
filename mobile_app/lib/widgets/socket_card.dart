@@ -5,7 +5,8 @@ import '../data/models/socket_model.dart';
 class SocketCard extends StatelessWidget {
   final SocketModel socket;
   final VoidCallback onToggle;
-  final VoidCallback onLongPress;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onOpenDeepDive;
   final VoidCallback? onLockToggle;
   final bool isCompact;
   final bool? isDark;
@@ -15,7 +16,8 @@ class SocketCard extends StatelessWidget {
     super.key,
     required this.socket,
     required this.onToggle,
-    required this.onLongPress,
+    this.onLongPress,
+    this.onOpenDeepDive,
     this.onLockToggle,
     this.isCompact = true,
     this.isDark,
@@ -64,9 +66,11 @@ class SocketCard extends StatelessWidget {
         ? Colors.white.withOpacity(0.92)
         : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight);
 
+    final menuCallback = onOpenDeepDive ?? onLongPress;
+
     return GestureDetector(
       onTap: onToggle,
-      onLongPress: onLongPress,
+      onLongPress: menuCallback,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
@@ -115,7 +119,7 @@ class SocketCard extends StatelessWidget {
                 Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    onTap: onLongPress,
+                    onTap: menuCallback,
                     borderRadius: BorderRadius.circular(10),
                     child: Container(
                       width: 28,
