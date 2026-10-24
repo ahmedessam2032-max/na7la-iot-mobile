@@ -164,6 +164,42 @@ class StripRepository {
     }
   }
 
+  Future<Map<String, dynamic>> changePassword({
+    required String currentPassword,
+    required String newPassword,
+    required String confirmPassword,
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('${ApiConstants.baseUrl}/auth/change-password'),
+        headers: headers,
+        body: jsonEncode({
+          'current_password': currentPassword.trim(),
+          'new_password': newPassword.trim(),
+          'confirm_password': confirmPassword.trim(),
+        }),
+      );
+      final data = jsonDecode(response.body);
+      if (response.statusCode == 200 && data['ok'] == true) {
+        final newToken = data['token']?.toString();
+        if (newToken != null && newToken.isNotEmpty) {
+          await SecureStorageService.saveToken(newToken);
+        }
+        return {
+          'success': true,
+          'message': data['message'] ?? 'تم تغيير كلمة المرور وإبطال الجلسات الأخرى بنجاح',
+        };
+      }
+      return {
+        'success': false,
+        'message': data['detail'] ?? 'تعذر تغيير كلمة المرور',
+      };
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال بالسيرفر: $e'};
+    }
+  }
+
   Future<bool> updateLanguage(String lang) async {
     try {
       final headers = await _getHeaders();
@@ -755,8 +791,10 @@ class StripRepository {
 
   Future<Map<String, dynamic>> getStripStatus(String mac) async {
     try {
+      final headers = await _getHeaders();
       final response = await http.get(
         Uri.parse('${ApiConstants.baseUrl}/strips/$mac/status'),
+        headers: headers,
       );
       if (response.statusCode == 200) {
         return jsonDecode(response.body);
@@ -791,6 +829,19 @@ class StripRepository {
       return data['strips'] as List? ?? [];
     }
     return [];
+  }
+
+  Future<bool> unbindAdminStrip(int stripId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.delete(
+        Uri.parse('${ApiConstants.baseUrl}/admin/strips/$stripId'),
+        headers: headers,
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<bool> updateAdminUserQuota(int userId, int newQuota) async {

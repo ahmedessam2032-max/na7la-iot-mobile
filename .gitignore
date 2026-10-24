@@ -1,8 +1,15 @@
-# Python
+# Python & Secrets
 __pycache__/
 *.py[cod]
 *$py.class
 *.env
+.env
+.encryption_keys.json
+brevo_key.txt
+*.db
+*.db-wal
+*.db-shm
+/data/
 venv/
 .venv/
 
@@ -28,6 +35,8 @@ scratch/
 .tempmediaStorage/
 *.mp4
 *.apk
+*.zip
+web_sandbox*/
 others programmers APKs/
 تسجيل المشترك/
 تسجيل المشترك darwish-smart-power/

@@ -30,10 +30,15 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from config import settings
-from database import engine, Base, SessionLocal, get_db
+from crypto_utils import (
+    compute_blind_index, hash_otp, verify_otp_hash,
+    mask_mac, mask_ip, mask_email, normalize_mac, rate_limiter
+)
+from database import engine, Base, SessionLocal, get_db, run_db_migrations
 from models import (
     User, Strip, Socket, Schedule, Scene, AuditLog, EnergyLog,
-    SharedAccess, PasswordReset, OutletRunSession, FeedbackSuggestion
+    SharedAccess, PasswordReset, OutletRunSession, FeedbackSuggestion,
+    find_user_by_email, find_user_by_google_uid, find_strip_by_mac, find_share_by_invite_code
 )
 from tcp_server import na7la_hub
 from plugins import log_event
@@ -117,6 +122,49 @@ def send_otp_email(target_email: str, otp_code: str) -> bool:
   </div>
 </body>
 </html>"""
+    # 1. الإرسال الفوري عبر Brevo Transactional Email HTTP API (إذا كان المفتاح متاحاً)
+    brevo_key = getattr(settings, "BREVO_API_KEY", "").strip()
+    if not brevo_key:
+        for key_path in ("/app/data/brevo_key.txt", "./brevo_key.txt"):
+            if os.path.exists(key_path):
+                try:
+                    brevo_key = Path(key_path).read_text(encoding="utf-8").strip()
+                    if brevo_key:
+                        break
+                except Exception:
+                    pass
+
+    if brevo_key:
+        try:
+            import urllib.request
+            sender_email = getattr(settings, "SMTP_FROM_EMAIL", "ahmedessam2032@gmail.com")
+            if sender_email == "noreply@na7la-iot.com":
+                sender_email = "ahmedessam2032@gmail.com"
+            sender_name = getattr(settings, "SMTP_FROM_NAME", "Na7la IOT")
+            payload_bytes = json.dumps({
+                "sender": {"name": sender_name, "email": sender_email},
+                "to": [{"email": target_email}],
+                "subject": subject,
+                "htmlContent": html_content,
+                "textContent": f"كود التحقق الخاص بك في Na7la IoT هو: {otp_code} (صالح لمدة 10 دقائق)"
+            }).encode("utf-8")
+            req_http = urllib.request.Request(
+                "https://api.brevo.com/v3/smtp/email",
+                data=payload_bytes,
+                headers={
+                    "accept": "application/json",
+                    "api-key": brevo_key,
+                    "content-type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req_http, timeout=10) as resp:
+                if 200 <= resp.status < 300:
+                    print(f"[Na7la IoT Email] ✉️ Brevo API OTP email delivered to {mask_email(target_email)}")
+                    return True
+        except Exception as err:
+            print(f"[Na7la IoT Email] ⚠️ Brevo API error sending to {mask_email(target_email)}: {err}")
+
     if getattr(settings, "SMTP_HOST", "") and getattr(settings, "SMTP_USER", ""):
         try:
             msg = MIMEMultipart("alternative")
@@ -129,13 +177,13 @@ def send_otp_email(target_email: str, otp_code: str) -> bool:
                 server.starttls()
                 server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                 server.send_message(msg)
-            print(f"[Na7la IoT Email] ✉️ OTP email successfully delivered to {target_email}")
+            print(f"[Na7la IoT Email] ✉️ OTP email successfully delivered to {mask_email(target_email)}")
             return True
         except Exception as err:
-            print(f"[Na7la IoT Email] ⚠️ SMTP error sending to {target_email}: {err}")
+            print(f"[Na7la IoT Email] ⚠️ SMTP error sending to {mask_email(target_email)}: {err}")
             return False
 
-    print(f"[Na7la IoT Email] ✉️ [AUTH OTP CODE for {target_email}]: {otp_code}")
+    print(f"[Na7la IoT Email] ⚠️ No email provider configured for {mask_email(target_email)} (OTP suppressed from server logs)")
     return False
 
 
@@ -197,8 +245,49 @@ def decode_auth_token(token: str) -> Optional[dict]:
         return None
 
 
-def get_current_user(request: Request, db: Session) -> Optional[dict]:
-    """استخراج بيانات المستخدم والصلاحيات من الهيدر الصريح أولاً ثم الكوكي"""
+def get_client_ip(request: Optional[Request]) -> str:
+    """استخراج عنوان الـ IP الفعلي للعميل للتحقق من الشبكة المحلية وحماية التخمين"""
+    if not request:
+        return "unknown"
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        return xff.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def _validate_decoded_session(payload: Optional[dict], db: Session) -> Optional[dict]:
+    """التحقق الصارم من صلاحية الجلسة ومطابقة token_version لإبطال التوكنات القديمة فوراً عند تغيير الباسورد"""
+    if not payload:
+        return None
+    if payload.get("role") == "MEMBER" and payload.get("share_id"):
+        sh = db.query(SharedAccess).filter(SharedAccess.id == payload.get("share_id"), SharedAccess.is_active == True).first()
+        if not sh:
+            return None
+        if sh.expires_at and sh.expires_at.replace(tzinfo=timezone.utc) < utc_now():
+            return None
+        return payload
+
+    uid = payload.get("user_id")
+    if not uid:
+        return None
+    user = db.query(User).filter(User.id == uid).first()
+    if not user:
+        return None
+    current_tv = user.token_version or 1
+    token_tv = payload.get("tv")
+    if token_tv is None or int(token_tv) != int(current_tv):
+        return None
+    payload["role"] = user.role
+    payload["email"] = user.email
+    return payload
+
+
+def get_current_user(request: Optional[Request], db: Session) -> Optional[dict]:
+    """استخراج بيانات المستخدم والصلاحيات والتحقق من عدم إبطال الجلسة"""
+    if not request:
+        return None
     token = request.headers.get("X-Na7la-Token")
     if not token:
         auth_header = request.headers.get("Authorization")
@@ -208,7 +297,23 @@ def get_current_user(request: Request, db: Session) -> Optional[dict]:
         token = request.cookies.get("na7la_token")
     if not token:
         return None
-    return decode_auth_token(token)
+    return _validate_decoded_session(decode_auth_token(token), db)
+
+
+def get_ws_user(websocket: WebSocket, db: Session) -> Optional[dict]:
+    """التحقق من هوية المتصل عبر WebSocket لمنع التنصت على قراءات المشترك"""
+    token = websocket.query_params.get("token")
+    if not token:
+        token = websocket.headers.get("X-Na7la-Token")
+    if not token:
+        auth_header = websocket.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header[7:].strip()
+    if not token:
+        token = websocket.cookies.get("na7la_token")
+    if not token:
+        return None
+    return _validate_decoded_session(decode_auth_token(token), db)
 
 
 # ==============================================================================
@@ -397,6 +502,7 @@ def ensure_db_migrations():
                 conn.commit()
     except Exception as e:
         print(f"[Na7la DB Migration] Info: {e}")
+    run_db_migrations(engine)
 
 ensure_db_migrations()
 
@@ -544,7 +650,7 @@ class AdminSetupReq(BaseModel):
         return (self.full_name or self.name or "").strip()
 
     def get_pin(self) -> str:
-        return (self.pin_code or self.pin or "1234").strip()
+        return (self.pin_code or self.pin or "").strip()
 
 
 class RegisterReq(BaseModel):
@@ -558,7 +664,13 @@ class RegisterReq(BaseModel):
         return (self.full_name or "").strip()
 
     def get_pin(self) -> str:
-        return (self.pin_code or self.pin or "1234").strip()
+        return (self.pin_code or self.pin or "").strip()
+
+
+class ChangePasswordReq(BaseModel):
+    current_password: str
+    new_password: str
+    confirm_password: Optional[str] = None
 
 
 class GoogleAuthReq(BaseModel):
@@ -706,9 +818,9 @@ def get_dashboard():
 @app.get("/download/app-release.apk", tags=["Mobile App"])
 def download_app_apk():
     """تحميل تطبيق الأندرويد الرسمي Na7la IoT APK مباشرة"""
-    for p in ["/app/app-release.apk", "/home/ubuntu/na7la-iot/app-release.apk", "app-release.apk"]:
+    for p in ["/app/data/app-release.apk", "/app/app-release.apk", "/home/ubuntu/na7la-iot/app-release.apk", "app-release.apk", "Na7la-IoT-v2.0.0.apk"]:
         if os.path.exists(p):
-            return FileResponse(p, media_type="application/vnd.android.package-archive", filename="Na7la_IoT_v1.3.3.apk")
+            return FileResponse(p, media_type="application/vnd.android.package-archive", filename="Na7la-IoT-v2.0.0.apk")
     raise HTTPException(status_code=404, detail="APK build not found on server")
 
 
@@ -801,7 +913,7 @@ def list_strips(request: Request, user_id: Optional[int] = None, db: Session = D
             "owner_id": st.owner_id,
             "model": st.model,
             "fw": st.fw_version,
-            "ip": st.ip_address,
+            "ip": mask_ip(st.ip_address) if st.ip_address else None,
             "online": is_live_online,
             "voltage": st.current_voltage if is_live_online else 0.0,
             "rssi": st.wifi_rssi if is_live_online else None,
@@ -836,40 +948,81 @@ def list_strips(request: Request, user_id: Optional[int] = None, db: Session = D
 
 
 @app.get("/api/v1/strips/unclaimed", tags=["Strips & Control"])
-def list_unclaimed_strips(db: Session = Depends(get_db)):
-    """استعراض المشتركات المكتشفة على الشبكة التي لم يتم ربطها بعد"""
+def list_unclaimed_strips(request: Request, db: Session = Depends(get_db)):
+    """استعراض المشتركات غير المربوطة للمستخدم المتواجد على نفس الشبكة المنزلية فقط (منع اختطاف الـ MAC عن بُعد)"""
+    auth = get_current_user(request, db)
+    if not auth:
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً للبحث عن المشتركات")
+
+    client_ip = get_client_ip(request)
+    is_local_dev = client_ip in ("127.0.0.1", "::1", "localhost", "testclient")
+
     strips = db.query(Strip).filter(Strip.owner_id == None).all()
+    seen_macs = set()
     result = []
     for st in strips:
+        clean_m = normalize_mac(st.mac_address)
+        seen_macs.add(clean_m)
+        sess = na7la_hub.sessions.get(clean_m)
+        dev_ip = sess.ip if sess else st.ip_address
+        if not is_local_dev and (not dev_ip or dev_ip != client_ip):
+            continue
+        is_live = (clean_m in na7la_hub.sessions) or bool(st.is_online)
         result.append({
             "id": st.id,
-            "mac": st.mac_address,
-            "name": st.strip_name,
+            "mac": clean_m,
+            "name": f"Na7la Strip ({clean_m[-4:]})",
             "model": st.model,
             "fw": st.fw_version,
-            "ip": st.ip_address,
-            "online": st.is_online,
+            "online": is_live,
             "voltage": st.current_voltage,
             "rssi": st.wifi_rssi,
         })
+    for mac, sess in list(na7la_hub.sessions.items()):
+        clean = normalize_mac(mac)
+        if clean not in seen_macs:
+            if not is_local_dev and sess.ip != client_ip:
+                continue
+            existing_owned = find_strip_by_mac(db, clean)
+            if not existing_owned or existing_owned.owner_id is None:
+                result.append({
+                    "id": existing_owned.id if existing_owned else None,
+                    "mac": clean,
+                    "name": f"Na7la Strip ({clean[-4:]})",
+                    "model": getattr(sess, "model", "lgutap"),
+                    "fw": getattr(sess, "fw_version", "0.1.55"),
+                    "online": True,
+                    "voltage": 220.0,
+                    "rssi": -40,
+                })
     return {"unclaimed": result}
 
 
-
 @app.get("/api/v1/strips/{mac}/status", tags=["Strips & Control"])
-def get_strip_status(mac: str, db: Session = Depends(get_db)):
-    clean_mac = re.sub(r'[^A-Fa-f0-9]', '', mac).upper()
-    strip = db.query(Strip).filter(Strip.mac_address == clean_mac).first()
+def get_strip_status(mac: str, request: Request, db: Session = Depends(get_db)):
+    auth = get_current_user(request, db)
+    if not auth:
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+
+    clean_mac = normalize_mac(mac)
+    strip = find_strip_by_mac(db, clean_mac)
+    in_hub = clean_mac in na7la_hub.sessions
     if not strip:
+        sess = na7la_hub.sessions.get(clean_mac)
+        client_ip = get_client_ip(request)
+        same_net = bool(sess and (sess.ip == client_ip or client_ip in ("127.0.0.1", "::1", "testclient")))
         return {
             "ok": True,
             "exists": False,
-            "mac": clean_mac,
-            "online": False,
-            "is_online": False,
-            "status": "not_found"
+            "online": bool(in_hub and same_net),
+            "is_online": bool(in_hub and same_net),
+            "fw": getattr(sess, "fw_version", None) if (sess and same_net) else None,
+            "status": "online_unclaimed" if (in_hub and same_net) else "not_found"
         }
-    
+
+    if strip.owner_id is not None:
+        check_strip_access(strip, auth, db, require_control=False)
+
     has_recent = False
     if strip.last_seen:
         try:
@@ -879,15 +1032,13 @@ def get_strip_status(mac: str, db: Session = Depends(get_db)):
             has_recent = (diff <= 75)
         except Exception:
             has_recent = False
-            
+
     is_live = (clean_mac in na7la_hub.sessions) or (bool(strip.is_online) and has_recent)
     return {
         "ok": True,
         "exists": True,
-        "mac": clean_mac,
         "strip_id": strip.id,
         "name": strip.strip_name,
-        "owner_id": strip.owner_id,
         "online": is_live,
         "is_online": is_live,
         "voltage": strip.current_voltage if is_live else 0.0,
@@ -895,9 +1046,10 @@ def get_strip_status(mac: str, db: Session = Depends(get_db)):
         "status": "online" if is_live else "offline"
     }
 
+
 @app.post("/api/v1/strips/{mac}/claim", tags=["Strips & Control"])
 def claim_strip(mac: str, req: ClaimStripReq, request: Request, db: Session = Depends(get_db)):
-    """ربط وتخصيص المشترك المكتشف ونسب ملكيته لحساب المستخدم"""
+    """ربط وتخصيص المشترك المكتشف ونسب ملكيته لحساب المستخدم حصرياً"""
     auth = get_current_user(request, db)
     if not auth:
         raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً لربط المشترك بحسابك")
@@ -907,17 +1059,39 @@ def claim_strip(mac: str, req: ClaimStripReq, request: Request, db: Session = De
     if not user:
         raise HTTPException(status_code=401, detail="المستخدم غير موجود")
 
-    clean_mac = re.sub(r'[^A-Fa-f0-9]', '', mac).upper()
-    strip = db.query(Strip).filter(Strip.mac_address == clean_mac).first()
+    rl_key = f"{user.id}:{get_client_ip(request)}"
+    rate_limiter.check_or_raise("strip_register", rl_key, max_attempts=6, window_sec=600)
+
+    clean_mac = normalize_mac(mac)
+    if len(clean_mac) != 12:
+        rate_limiter.record_attempt("strip_register", rl_key)
+        raise HTTPException(status_code=400, detail="صيغة عنوان MAC غير صحيحة")
+
+    strip = find_strip_by_mac(db, clean_mac)
+    if strip and strip.owner_id is not None and strip.owner_id != user.id:
+        rate_limiter.record_attempt("strip_register", rl_key)
+        raise HTTPException(
+            status_code=409,
+            detail="هذا المشترك مرتبط بحساب مستخدم آخر، ولا يمكن لأي حساب (حتى الأدمن) انتزاع ملكيته."
+        )
+
+    if user.role != "ADMIN" and (not strip or strip.owner_id != user.id):
+        owned_count = db.query(Strip).filter(Strip.owner_id == user.id).count()
+        limit = user.max_strips or getattr(settings, "DEFAULT_USER_MAX_STRIPS", 1)
+        if owned_count >= limit:
+            raise HTTPException(
+                status_code=403,
+                detail="تم الوصول للحد الأقصى للمشتركات المسموحة لباقتك. يرجى الترقية لخطة برو."
+            )
+
     if not strip:
-        # Pre-provision strip if not connected to server yet
         strip = Strip(
             mac_address=clean_mac,
             strip_name=req.strip_name.strip() if req.strip_name else f"مشترك ذكي ({clean_mac[-4:]})",
             owner_id=user.id,
             model="lgutap",
             fw_version="0.1.55-1.0.146",
-            is_online=False,
+            is_online=(clean_mac in na7la_hub.sessions),
             room_category=req.room_category.strip() if req.room_category else "Living Room",
             icon=req.icon.strip() if req.icon else "💻"
         )
@@ -938,32 +1112,6 @@ def claim_strip(mac: str, req: ClaimStripReq, request: Request, db: Session = De
             db.add(s_obj)
         db.commit()
 
-    auth = get_current_user(request, db)
-    if not auth:
-        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً لربط المشترك بحسابك")
-
-    user_id = auth.get("user_id")
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=401, detail="المستخدم غير موجود")
-
-    # حماية ملكية المشترك (Conflict Protection)
-    if strip.owner_id is not None and strip.owner_id != user.id and user.role != "ADMIN":
-        raise HTTPException(
-            status_code=409,
-            detail="هذا المشترك مرتبط بحساب آخر، يرجى فك ارتباطه من الحساب القديم أولاً"
-        )
-
-    # التحقق من كوتا الأجهزة المسموحة (Free: 1, Pro: 15)
-    if user.role != "ADMIN" and strip.owner_id != user.id:
-        owned_count = db.query(Strip).filter(Strip.owner_id == user.id).count()
-        limit = user.max_strips or getattr(settings, "DEFAULT_USER_MAX_STRIPS", 1)
-        if owned_count >= limit:
-            raise HTTPException(
-                status_code=403,
-                detail="تم الوصول للحد الأقصى للمشتركات المسموحة لباقاتك (الخطة المجانية: مشترك واحد). يرجى الترقية إلى خطة برو الاحترافية."
-            )
-
     strip.owner_id = user.id
     if req.strip_name:
         strip.strip_name = req.strip_name.strip()
@@ -983,8 +1131,10 @@ def claim_strip(mac: str, req: ClaimStripReq, request: Request, db: Session = De
                     sock.is_router = bool(s_info["is_router"])
 
     db.commit()
-    actor = auth.get("name") if auth else "ADMIN"
+    rate_limiter.reset("strip_register", rl_key)
+    actor = auth.get("name") or "USER"
     log_event(db, strip.id, 0, "STRIP_CLAIM", actor, f"تم ربط المشترك '{strip.strip_name}' وتخصيص الغرفة '{strip.room_category}'")
+    db.commit()
     return {
         "ok": True,
         "strip": {
@@ -1027,16 +1177,16 @@ async def provision_strip_ap(req: ProvisionApReq):
 
 @app.patch("/api/v1/strips/{mac}", tags=["Strips & Control"])
 def update_strip_metadata(mac: str, req: UpdateStripReq, request: Request, db: Session = Depends(get_db)):
-    """تعديل اسم المشترك أو أيقونته أو تصنيف الغرفة"""
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    """تعديل اسم المشترك أو أيقونته أو تصنيف الغرفة (للمالك الفعلي للمشترك حصرياً)"""
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
 
     auth = get_current_user(request, db)
-    admin = db.query(User).filter(User.role == "ADMIN").first()
-    if admin:
-        if not auth or (auth.get("role") != "ADMIN" and strip.owner_id != auth.get("user_id")):
-            raise HTTPException(status_code=403, detail="تعديل بيانات المشترك متاح للمدير أو لمالك المشترك فقط")
+    if not auth:
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+    if strip.owner_id != auth.get("user_id"):
+        raise HTTPException(status_code=403, detail="تعديل بيانات المشترك متاح لمالك المشترك فقط")
 
     if req.strip_name is not None:
         strip.strip_name = req.strip_name.strip()
@@ -1051,39 +1201,26 @@ def update_strip_metadata(mac: str, req: UpdateStripReq, request: Request, db: S
 
 @app.delete("/api/v1/strips/{mac}", tags=["Strips & Control"])
 def unpair_strip(mac: str, request: Request, db: Session = Depends(get_db)):
-    """فك ربط المشترك من الحساب أو حذفه نهائياً من قاعدة البيانات إذا كان الطالب مديراً"""
-    mac = mac.upper()
-    strip = db.query(Strip).filter(Strip.mac_address == mac).first()
+    """فك ربط المشترك وحذف بياناته المشفرة بواسطة مالكه الفعلي حصرياً"""
+    clean_mac = normalize_mac(mac)
+    strip = find_strip_by_mac(db, clean_mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
 
     auth = get_current_user(request, db)
-    admin_exists = db.query(User).filter(User.role == "ADMIN").first()
-    if admin_exists:
-        if not auth:
-            raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
-        if auth.get("role") != "ADMIN" and strip.owner_id != auth.get("user_id"):
-            raise HTTPException(status_code=403, detail="فك ربط المشترك متاح للمدير فقط")
+    if not auth:
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+    if strip.owner_id is not None and strip.owner_id != auth.get("user_id"):
+        raise HTTPException(status_code=403, detail="فك ربط المشترك متاح لمالك المشترك فقط")
 
-    is_admin = bool(auth and auth.get("role") == "ADMIN")
-    if is_admin or strip.owner_id is None:
-        session = na7la_hub.get_session(mac)
-        if session:
-            try:
-                session.writer.close()
-            except Exception:
-                pass
-            na7la_hub.sessions.pop(mac, None)
+    session = na7la_hub.get_session(clean_mac)
+    if session:
+        session.strip_id = None
 
-        strip_name = strip.strip_name
-        db.delete(strip)
-        db.commit()
-        return {"ok": True, "message": f"تم حذف المشترك '{strip_name}' ({mac}) نهائياً من النظام"}
-    else:
-        strip.owner_id = None
-        db.commit()
-        log_event(db, strip.id, 0, "STRIP_UNPAIR", auth.get("name", "USER"), f"تم فك ربط المشترك '{strip.strip_name}' ({mac}) من الحساب")
-        return {"ok": True, "message": "تم فك ربط المشترك بنجاح"}
+    strip_name = strip.strip_name
+    db.delete(strip)
+    db.commit()
+    return {"ok": True, "message": f"تم فك ربط المشترك '{strip_name}' وحذف بياناته بنجاح"}
 
 
 class RegisterStripReq(BaseModel):
@@ -1105,13 +1242,18 @@ def register_strip_mac(req: RegisterStripReq, request: Request, db: Session = De
     if not user:
         raise HTTPException(status_code=401, detail="حساب المستخدم غير موجود")
 
-    clean_mac = req.mac.strip().replace(":", "").replace("-", "").upper()
+    rl_key = f"{user.id}:{get_client_ip(request)}"
+    rate_limiter.check_or_raise("strip_register", rl_key, max_attempts=6, window_sec=600)
+
+    clean_mac = normalize_mac(req.mac)
     if len(clean_mac) != 12:
+        rate_limiter.record_attempt("strip_register", rl_key)
         raise HTTPException(status_code=400, detail="صيغة عنوان MAC غير صحيحة (يجب أن تتكون من 12 رمزاً)")
 
-    existing = db.query(Strip).filter(Strip.mac_address == clean_mac).first()
+    existing = find_strip_by_mac(db, clean_mac)
     if existing:
-        if existing.owner_id is not None and existing.owner_id != user.id and user.role != "ADMIN":
+        if existing.owner_id is not None and existing.owner_id != user.id:
+            rate_limiter.record_attempt("strip_register", rl_key)
             raise HTTPException(
                 status_code=409,
                 detail="هذا المشترك مرتبط بحساب آخر، يرجى فك ارتباطه من الحساب القديم أولاً"
@@ -1124,11 +1266,12 @@ def register_strip_mac(req: RegisterStripReq, request: Request, db: Session = De
             if req.icon:
                 existing.icon = req.icon
             db.commit()
+            rate_limiter.reset("strip_register", rl_key)
             return {
                 "ok": True,
                 "success": True,
                 "already_owned": True,
-                "message": f"المشترك {clean_mac} مقترن بحسابك بالفعل مسبقاً",
+                "message": "المشترك مقترن بحسابك بالفعل مسبقاً",
                 "strip_id": existing.id
             }
 
@@ -1141,14 +1284,22 @@ def register_strip_mac(req: RegisterStripReq, request: Request, db: Session = De
             detail="تم الوصول للحد الأقصى للمشتركات المسموحة لباقاتك (الخطة المجانية: مشترك واحد). يرجى الترقية إلى خطة برو الاحترافية."
         )
 
+    live_sess = na7la_hub.get_session(clean_mac)
     if existing:
         existing.owner_id = user.id
         if req.name:
             existing.strip_name = req.name.strip()
         existing.room_category = req.room_category or "office"
         existing.icon = req.icon or "💻"
+        if live_sess:
+            existing.is_online = True
+            existing.ip_address = live_sess.ip
+            existing.fw_version = getattr(live_sess, "fw_version", existing.fw_version)
+            existing.last_seen = utc_now()
+            live_sess.strip_id = existing.id
         db.commit()
-        return {"ok": True, "message": f"تم اقتران المشترك {clean_mac} بحسابك بنجاح", "strip_id": existing.id}
+        rate_limiter.reset("strip_register", rl_key)
+        return {"ok": True, "message": "تم اقتران المشترك بحسابك بنجاح", "strip_id": existing.id}
     else:
         strip = Strip(
             mac_address=clean_mac,
@@ -1156,10 +1307,15 @@ def register_strip_mac(req: RegisterStripReq, request: Request, db: Session = De
             owner_id=user.id,
             room_category=req.room_category or "office",
             icon=req.icon or "💻",
-            is_online=False
+            is_online=bool(live_sess),
+            ip_address=live_sess.ip if live_sess else None,
+            fw_version=getattr(live_sess, "fw_version", "0.1.55") if live_sess else None,
+            last_seen=utc_now() if live_sess else None,
         )
         db.add(strip)
         db.flush()
+        if live_sess:
+            live_sess.strip_id = strip.id
         for i in range(1, 5):
             db.add(Socket(
                 strip_id=strip.id,
@@ -1168,7 +1324,8 @@ def register_strip_mac(req: RegisterStripReq, request: Request, db: Session = De
                 power_on_behavior="LAST",
             ))
         db.commit()
-        return {"ok": True, "message": f"تم تسجيل المشترك {clean_mac} واقترانه بحسابك بنجاح", "strip_id": strip.id}
+        rate_limiter.reset("strip_register", rl_key)
+        return {"ok": True, "message": "تم تسجيل المشترك واقترانه بحسابك بنجاح", "strip_id": strip.id}
 
 
 def _sync_run_session_on_switch(db: Session, strip: Strip, sock: Socket, target_state: bool):
@@ -1215,7 +1372,7 @@ async def switch_socket(
     request: Request = None,
     db: Session = Depends(get_db)
 ):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير مسجل")
 
@@ -1224,7 +1381,7 @@ async def switch_socket(
     actor = auth.get("name", "USER") if auth else "USER"
 
     # التحقق من صلاحية المخارج المسموحة في حال كان المستخدم فرد عائلة مشارك
-    if auth and strip.owner_id != auth.get("user_id") and auth.get("role") != "ADMIN":
+    if auth and strip.owner_id != auth.get("user_id"):
         share = db.query(SharedAccess).filter(
             SharedAccess.strip_id == strip.id,
             SharedAccess.shared_with_user_id == auth.get("user_id"),
@@ -1395,7 +1552,7 @@ async def _complete_socket_restart_after_delay(mac: str, strip_id: int, socket_i
             "reason": "RESTART_COMPLETE",
         })
     except Exception as e:
-        print(f"[Socket Restart] Error completing restart for {mac}#{socket_index}: {e}")
+        print(f"[Socket Restart] Error completing restart for {mask_mac(mac)}#{socket_index}: {e}")
     finally:
         db.close()
 
@@ -1408,7 +1565,7 @@ async def restart_socket_endpoint(
     db: Session = Depends(get_db)
 ):
     """إعادة تشغيل المخرج فعلياً (إيقاف لمدة 5 ثوانٍ ثم إعادة التشغيل تلقائياً)"""
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير مسجل")
 
@@ -1420,6 +1577,10 @@ async def restart_socket_endpoint(
     if not sock:
         raise HTTPException(status_code=404, detail="رقم المقبس غير صحيح")
 
+    if strip.child_lock:
+        raise HTTPException(status_code=403, detail="قفل الأطفال مفعل على المشترك! يرجى إلغاء قفل الأطفال أولاً.")
+    if getattr(sock, "is_locked", False):
+        raise HTTPException(status_code=403, detail=f"المخرج '{sock.name}' محمي بالقفل (🔒). يرجى فتح قفل المخرج أولاً.")
     if getattr(sock, "is_pinned_state", False):
         raise HTTPException(status_code=409, detail=f"المخرج '{sock.name}' مثبّت على حالته الحالية (📌). ألغِ التثبيت أولاً.")
 
@@ -1446,7 +1607,7 @@ async def restart_socket_endpoint(
 
 @app.patch("/api/v1/strips/{mac}/protection", tags=["Protection & Settings"])
 async def update_strip_protection(mac: str, req: ProtectionUpdateReq, request: Request = None, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
 
@@ -1480,7 +1641,7 @@ async def update_strip_protection(mac: str, req: ProtectionUpdateReq, request: R
             try:
                 await session.set_child_lock(req.child_lock)
             except Exception as e:
-                print(f"[ChildLock Sync] Error setting hardware child lock on {strip.mac_address}: {e}")
+                print(f"[ChildLock Sync] Error setting hardware child lock on {mask_mac(strip.mac_address)}: {e}")
 
     await na7la_hub.broadcast_update(strip.mac_address, {
         "event": "protection_update",
@@ -1502,7 +1663,7 @@ async def update_strip_protection(mac: str, req: ProtectionUpdateReq, request: R
 @app.patch("/api/v1/strips/{mac}/sockets/{socket_index}", tags=["Protection & Settings"])
 @app.patch("/api/v1/strips/{mac}/sockets/{socket_index}/config", tags=["Protection & Settings"])
 def update_socket_config(mac: str, socket_index: int, req: SocketConfigReq, request: Request = None, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
 
@@ -1582,7 +1743,7 @@ def toggle_socket_lock(
     request: Request = None,
     db: Session = Depends(get_db)
 ):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
 
@@ -1597,42 +1758,40 @@ def toggle_socket_lock(
     target_lock = req.locked if req.locked is not None else req.is_locked
     next_state = not current_state if target_lock is None else target_lock
 
-    # If unlocking, verify user PIN or account password
-    if current_state and not next_state:
-        if req.pin:
-            user = db.query(User).filter(User.id == auth.get("user_id")).first() if auth else None
-            if not user:
-                user = db.query(User).filter(User.role == "ADMIN").first()
-            valid = False
-            if user:
-                if user.pin_code_hash and verify_password(req.pin, user.pin_code_hash):
-                    valid = True
-                elif user.password_hash and verify_password(req.pin, user.password_hash):
-                    valid = True
-            if not valid and req.pin in ["1234", "2026"]:
+    # If unlocking, verify user PIN or account password (zero hardcoded fallback PINs)
+    if current_state and not next_state and req.pin:
+        rl_key = f"{auth.get('user_id')}:{get_client_ip(request)}"
+        rate_limiter.check_or_raise("pin_verify", rl_key, max_attempts=5, window_sec=600)
+        user = db.query(User).filter(User.id == auth.get("user_id")).first()
+        valid = False
+        if user:
+            if user.pin_code_hash and verify_password(req.pin, user.pin_code_hash):
                 valid = True
-            if not valid:
-                raise HTTPException(status_code=401, detail="رمز الـ PIN أو كلمة المرور غير صحيحة")
-        elif not auth:
-            raise HTTPException(status_code=400, detail="يرجى كتابة رمز PIN لفك قفل المخرج")
+            elif user.password_hash and verify_password(req.pin, user.password_hash):
+                valid = True
+        if not valid:
+            rate_limiter.record_attempt("pin_verify", rl_key)
+            raise HTTPException(status_code=401, detail="رمز الـ PIN أو كلمة المرور غير صحيحة")
+        rate_limiter.reset("pin_verify", rl_key)
 
     sock.is_locked = next_state
     db.commit()
     return {"ok": True, "socket_index": socket_index, "is_locked": sock.is_locked}
 
 
-
 @app.post("/api/v1/strips/{mac}/sockets/{socket_index}/reset-energy", tags=["Analytics & Energy"])
-def reset_socket_energy(mac: str, socket_index: int, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+def reset_socket_energy(mac: str, socket_index: int, request: Request, db: Session = Depends(get_db)):
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    auth = get_current_user(request, db)
+    check_strip_access(strip, auth, db, require_control=True)
     sock = db.query(Socket).filter(Socket.strip_id == strip.id, Socket.socket_index == socket_index).first()
     if not sock:
         raise HTTPException(status_code=404, detail="المقبس غير موجود")
 
     sock.energy_baseline_kwh = sock.raw_energy_kwh
-    log_event(db, strip.id, socket_index, "ENERGY_RESET", "USER", f"تصفير عداد الطاقة عند القراءة {sock.raw_energy_kwh} kWh")
+    log_event(db, strip.id, socket_index, "ENERGY_RESET", auth.get("name", "USER"), f"تصفير عداد الطاقة عند القراءة {sock.raw_energy_kwh} kWh")
     db.commit()
     return {"ok": True, "new_baseline_kwh": sock.energy_baseline_kwh}
 
@@ -1641,10 +1800,12 @@ def reset_socket_energy(mac: str, socket_index: int, db: Session = Depends(get_d
 # 7. مسارات الجداول والمؤقتات الذكية (Schedules & Timers API)
 # ==============================================================================
 @app.get("/api/v1/strips/{mac}/schedules", tags=["Schedules & Automations"])
-def list_strip_schedules(mac: str, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+def list_strip_schedules(mac: str, request: Request, db: Session = Depends(get_db)):
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    auth = get_current_user(request, db)
+    check_strip_access(strip, auth, db, require_control=False)
     out = []
     for sock in sorted(strip.sockets, key=lambda x: x.socket_index):
         scheds = db.query(Schedule).filter(Schedule.socket_id == sock.id).order_by(Schedule.created_at.desc()).all()
@@ -1670,17 +1831,19 @@ def list_strip_schedules(mac: str, db: Session = Depends(get_db)):
 
 
 @app.get("/api/v1/strips/{mac}/sockets/{socket_index}/schedules", tags=["Schedules & Automations"])
-def list_socket_schedules(mac: str, socket_index: int, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+def list_socket_schedules(mac: str, socket_index: int, request: Request, db: Session = Depends(get_db)):
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    auth = get_current_user(request, db)
+    check_strip_access(strip, auth, db, require_control=False)
     sock = db.query(Socket).filter(Socket.strip_id == strip.id, Socket.socket_index == socket_index).first()
     if not sock:
         raise HTTPException(status_code=404, detail="المقبس غير موجود")
 
     schedules = db.query(Schedule).filter(Schedule.socket_id == sock.id).order_by(Schedule.created_at.desc()).all()
     return {
-        "mac": mac,
+        "mac": strip.mac_address,
         "socket_index": socket_index,
         "socket_name": sock.name,
         "schedules": [
@@ -1727,10 +1890,12 @@ def _compute_cron_next_run(cron_str: Optional[str], now: datetime) -> datetime:
 
 
 @app.post("/api/v1/strips/{mac}/sockets/{socket_index}/schedules", tags=["Schedules & Automations"])
-def create_socket_schedule(mac: str, socket_index: int, req: ScheduleCreateReq, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+def create_socket_schedule(mac: str, socket_index: int, req: ScheduleCreateReq, request: Request, db: Session = Depends(get_db)):
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    auth = get_current_user(request, db)
+    check_strip_access(strip, auth, db, require_control=True)
 
     indices = req.socket_indices if (req.socket_indices and len(req.socket_indices) > 0) else [socket_index]
     sched_type = req.schedule_type.upper().strip()
@@ -1830,20 +1995,26 @@ def create_socket_schedule(mac: str, socket_index: int, req: ScheduleCreateReq, 
 
 
 @app.delete("/api/v1/schedules/{schedule_id}", tags=["Schedules & Automations"])
-def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
+def delete_schedule(schedule_id: int, request: Request, db: Session = Depends(get_db)):
     sched = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not sched:
         raise HTTPException(status_code=404, detail="الجدولة غير موجودة")
+    auth = get_current_user(request, db)
+    if sched.socket and sched.socket.strip:
+        check_strip_access(sched.socket.strip, auth, db, require_control=True)
     db.delete(sched)
     db.commit()
     return {"ok": True, "message": "تم حذف الجدولة بنجاح"}
 
 
 @app.patch("/api/v1/schedules/{schedule_id}/toggle", tags=["Schedules & Automations"])
-def toggle_schedule(schedule_id: int, db: Session = Depends(get_db)):
+def toggle_schedule(schedule_id: int, request: Request, db: Session = Depends(get_db)):
     sched = db.query(Schedule).filter(Schedule.id == schedule_id).first()
     if not sched:
         raise HTTPException(status_code=404, detail="الجدولة غير موجودة")
+    auth = get_current_user(request, db)
+    if sched.socket and sched.socket.strip:
+        check_strip_access(sched.socket.strip, auth, db, require_control=True)
     sched.is_active = not sched.is_active
     if sched.is_active and sched.schedule_type == "TIMER":
         sched.next_run_at = utc_now() + timedelta(seconds=sched.duration_sec or 60)
@@ -1855,10 +2026,13 @@ def toggle_schedule(schedule_id: int, db: Session = Depends(get_db)):
 # 8. تصدير سجلات الطاقة إلى Excel (.csv)
 # ==============================================================================
 @app.get("/api/v1/strips/{mac}/export-energy", tags=["Analytics & Energy"])
-def export_energy_csv(mac: str, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+@app.get("/api/v1/strips/{mac}/export-csv", tags=["Analytics & Energy"])
+def export_energy_csv(mac: str, request: Request, db: Session = Depends(get_db)):
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    auth = get_current_user(request, db)
+    check_strip_access(strip, auth, db, require_control=False)
 
     socket_ids = [s.id for s in strip.sockets]
     logs = (
@@ -1899,11 +2073,12 @@ def get_strip_energy_stats(
     db: Session = Depends(get_db)
 ):
     """إحصائيات الاستهلاك الحقيقية (يوم / أسبوع / شهر) + حاسبة شرائح الكهرباء المصرية مقابل السعر الموحد + سجل التشغيل لآخر 30 يوماً"""
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
 
     auth = get_current_user(request, db) if request else None
+    check_strip_access(strip, auth, db, require_control=False)
     user = db.query(User).filter(User.id == auth.get("user_id")).first() if (auth and auth.get("user_id")) else strip.owner
 
     rate = flat_rate if (flat_rate is not None and flat_rate > 0) else (
@@ -2182,11 +2357,13 @@ def get_all_strips_energy_monitor(request: Request, db: Session = Depends(get_db
 
 
 @app.get("/api/v1/strips/{mac}/health", tags=["Diagnostics & Health"])
-def get_strip_health_diagnostics(mac: str, db: Session = Depends(get_db)):
-    """تقرير صحة المشترك الشامل (Strip Health) لآخر 24 ساعة و7 أيام من قاعدة البيانات الفعلية"""
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+def get_strip_health_diagnostics(mac: str, request: Request, db: Session = Depends(get_db)):
+    """تقرير صحة المشترك الشامل (Strip Health) لآخر 24 ساعة و7 أيام للمالك الفعلي فقط"""
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    auth = get_current_user(request, db)
+    check_strip_access(strip, auth, db, require_control=False)
 
     now = utc_now()
     is_live = (strip.mac_address in na7la_hub.sessions) or bool(strip.is_online)
@@ -2288,8 +2465,8 @@ def get_strip_health_diagnostics(mac: str, db: Session = Depends(get_db)):
         "firmware": strip.fw_version or "1.0.66",
         "fw_version": strip.fw_version or "1.0.66",
         "model": strip.model or "LGU+-TAP-HW002",
-        "ip": strip.ip_address or "-",
-        "ip_address": strip.ip_address or "-",
+        "ip": mask_ip(strip.ip_address) if strip.ip_address else "-",
+        "ip_address": mask_ip(strip.ip_address) if strip.ip_address else "-",
         "last_seen": strip.last_seen.isoformat() if strip.last_seen else None,
     }
 
@@ -2297,9 +2474,11 @@ def get_strip_health_diagnostics(mac: str, db: Session = Depends(get_db)):
 @app.post("/api/v1/strips/{mac}/ota-update", tags=["Diagnostics & Health"])
 async def check_or_trigger_strip_ota(mac: str, request: Request = None, db: Session = Depends(get_db)):
     """فحص وتحديث الفيرموير الهوائي للمشترك (OTA Firmware Check)"""
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    auth = get_current_user(request, db) if request else None
+    check_strip_access(strip, auth, db, require_control=True)
 
     session = na7la_hub.get_session(strip.mac_address)
     if session:
@@ -2308,13 +2487,16 @@ async def check_or_trigger_strip_ota(mac: str, request: Request = None, db: Sess
     log_event(db, strip.id, 0, "OTA_CHECK", "USER", f"فحص تحديثات الفيرموير الهوائية (النسخة الحالية: {strip.fw_version})")
     db.commit()
 
+    fw_ver = strip.fw_version or "1.0.66"
     return {
         "ok": True,
         "up_to_date": True,
-        "current_fw": strip.fw_version or "1.0.66",
-        "latest_fw": strip.fw_version or "1.0.66",
+        "current_fw": fw_ver,
+        "latest_fw": fw_ver,
+        "current_version": fw_ver,
+        "latest_version": fw_ver,
         "online": session is not None,
-        "message": f"عتاد المشترك يعمل بأحدث إصدار فيرموير مستقر ({strip.fw_version or '1.0.66'}) ولا توجد تحديثات مطلوبة حالياً.",
+        "message": f"عتاد المشترك يعمل بأحدث إصدار فيرموير مستقر ({fw_ver}) ولا توجد تحديثات مطلوبة حالياً.",
     }
 
 
@@ -2349,9 +2531,9 @@ def list_user_scenes(request: Request, db: Session = Depends(get_db)):
 @app.post("/api/v1/scenes", tags=["Scenes & Automation"])
 def create_user_scene(req: SceneCreateReq, request: Request, db: Session = Depends(get_db)):
     auth = get_current_user(request, db)
-    uid = (auth.get("user_id") if auth else None) or req.user_id
-    if not uid:
+    if not auth or not auth.get("user_id"):
         raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول لإنشاء مشهد جديد")
+    uid = auth.get("user_id")
 
     s_name = (req.scene_name or req.name or "مشهد ذكي").strip()
     sc = Scene(
@@ -2378,12 +2560,14 @@ def create_user_scene(req: SceneCreateReq, request: Request, db: Session = Depen
 
 @app.post("/api/v1/scenes/{scene_id}/execute", tags=["Scenes & Automation"])
 async def execute_user_scene(scene_id: int, request: Request, db: Session = Depends(get_db)):
-    """تنفيذ المشهد الذكي فعلياً على المخارج المحددة بتتابع زمني آمن"""
+    """تنفيذ المشهد الذكي فعلياً لمالك المشهد حصرياً بتتابع زمني آمن"""
     auth = get_current_user(request, db)
+    if not auth:
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
     sc = db.query(Scene).filter(Scene.id == scene_id).first()
     if not sc:
         raise HTTPException(status_code=404, detail="المشهد غير موجود")
-    if auth and sc.user_id != auth.get("user_id") and auth.get("role") != "ADMIN":
+    if sc.user_id != auth.get("user_id"):
         raise HTTPException(status_code=403, detail="لا تملك صلاحية تنفيذ هذا المشهد")
 
     try:
@@ -2395,13 +2579,13 @@ async def execute_user_scene(scene_id: int, request: Request, db: Session = Depe
     executed_count = 0
 
     for act in actions:
-        mac = (act.get("mac") or "").upper()
+        mac = normalize_mac(act.get("mac") or "")
         sock_idx = int(act.get("socket_index", 0))
         target_on = bool(act.get("state", True))
         if not mac or sock_idx not in (1, 2, 3, 4):
             continue
-        strip = db.query(Strip).filter(Strip.mac_address == mac).first()
-        if not strip:
+        strip = find_strip_by_mac(db, mac)
+        if not strip or strip.owner_id != auth.get("user_id"):
             continue
         sock = db.query(Socket).filter(Socket.strip_id == strip.id, Socket.socket_index == sock_idx).first()
         if not sock:
@@ -2433,10 +2617,12 @@ async def execute_user_scene(scene_id: int, request: Request, db: Session = Depe
 @app.delete("/api/v1/scenes/{scene_id}", tags=["Scenes & Automation"])
 def delete_user_scene(scene_id: int, request: Request, db: Session = Depends(get_db)):
     auth = get_current_user(request, db)
+    if not auth:
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
     sc = db.query(Scene).filter(Scene.id == scene_id).first()
     if not sc:
         raise HTTPException(status_code=404, detail="المشهد غير موجود")
-    if auth and sc.user_id != auth.get("user_id") and auth.get("role") != "ADMIN":
+    if sc.user_id != auth.get("user_id"):
         raise HTTPException(status_code=403, detail="لا تملك صلاحية حذف هذا المشهد")
     db.delete(sc)
     db.commit()
@@ -2444,26 +2630,32 @@ def delete_user_scene(scene_id: int, request: Request, db: Session = Depends(get
 
 
 # ==============================================================================
-# 8. البوابة المزدوجة لـ Samsung Modes & Routines (بروابط IP ديناميكية)
+# 8. البوابة المزدوجة لـ Samsung Modes & Routines (محمية بتوكن المالك الفعلي)
 # ==============================================================================
 @app.get("/api/v1/android/shortcuts-manifest", tags=["Samsung Routines"])
-def get_android_shortcuts_manifest(request: Request, user_id: Optional[int] = None, db: Session = Depends(get_db)):
+def get_android_shortcuts_manifest(request: Request, db: Session = Depends(get_db)):
+    auth = get_current_user(request, db)
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+    uid = auth.get("user_id")
     base_url = settings.SERVER_PUBLIC_URL.strip() or str(request.base_url).rstrip('/')
 
-    query = db.query(Strip)
-    if user_id:
-        query = query.filter((Strip.owner_id == user_id) | (Strip.owner_id == None))
-    strips = query.all()
+    user = db.query(User).filter(User.id == uid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+    if not user.webhook_token:
+        user.webhook_token = secrets.token_urlsafe(24)
+        db.commit()
+    token = user.webhook_token
 
+    strips = db.query(Strip).filter(Strip.owner_id == uid).all()
     shortcuts = []
-    user = db.query(User).filter(User.id == user_id).first() if user_id else None
-    token = user.webhook_token if (user and user.webhook_token) else "local_token"
 
     for st in strips:
         for s in sorted(st.sockets, key=lambda x: x.socket_index):
             for act, label_ar in [("on", "تشغيل"), ("off", "إيقاف"), ("toggle", "عكس حالة")]:
                 shortcuts.append({
-                    "shortcut_id": f"na7la_{st.mac_address}_{s.socket_index}_{act}",
+                    "shortcut_id": f"na7la_{st.id}_{s.socket_index}_{act}",
                     "short_label": f"{label_ar} {s.name}",
                     "long_label": f"{label_ar} {s.name} ({st.strip_name})",
                     "intent_uri": f"na7laiot://routine/switch?mac={st.mac_address}&socket={s.socket_index}&action={act}",
@@ -2486,22 +2678,40 @@ async def trigger_routine_webhook(
     action: str = Query("toggle"),
     db: Session = Depends(get_db),
 ):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
-    if not strip:
-        raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    strip = find_strip_by_mac(db, mac)
+    if not strip or not strip.owner or not strip.owner.webhook_token:
+        raise HTTPException(status_code=403, detail="رابط الـ Webhook غير صالح")
+    if not hmac.compare_digest(strip.owner.webhook_token, webhook_token.strip()):
+        raise HTTPException(status_code=403, detail="رمز الـ Webhook غير مصرح به")
 
-    req = SwitchCommandReq(action=action)
-    return await switch_socket(mac, socket, req, db)
+    sock = db.query(Socket).filter(Socket.strip_id == strip.id, Socket.socket_index == socket).first()
+    if not sock:
+        raise HTTPException(status_code=404, detail="المقبس غير موجود")
+    act = action.lower().strip()
+    target_state = not sock.reported_state if act == "toggle" else (act in ("on", "true", "1"))
+    if getattr(sock, "is_pinned_state", False) or (not target_state and (sock.is_router or getattr(sock, "is_locked", False))):
+        raise HTTPException(status_code=409, detail="المقبس محمي من التغيير")
+    sock.desired_state = target_state
+    sock.reported_state = target_state
+    _sync_run_session_on_switch(db, strip, sock, target_state)
+    log_event(db, strip.id, socket, "ON" if target_state else "OFF", "WEBHOOK", "أمر روتين سحابي موثق")
+    db.commit()
+    session = na7la_hub.get_session(strip.mac_address)
+    if session:
+        await session.set_outlets([socket], target_state, stagger_sec=0.15)
+    return {"ok": True, "desired_state": target_state}
 
 
 # ==============================================================================
-# 9. سجل الأحداث وقناة البث اللحظي (Audit Logs & WebSocket)
+# 9. سجل الأحداث وقناة البث اللحظي (Audit Logs & Authenticated WebSocket)
 # ==============================================================================
 @app.get("/api/v1/strips/{mac}/logs", tags=["Analytics & Energy"])
-def get_strip_audit_logs(mac: str, limit: int = 20, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+def get_strip_audit_logs(mac: str, request: Request, limit: int = 20, db: Session = Depends(get_db)):
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+    auth = get_current_user(request, db)
+    check_strip_access(strip, auth, db, require_control=False)
     logs = (
         db.query(AuditLog)
         .filter(AuditLog.strip_id == strip.id)
@@ -2531,12 +2741,28 @@ def get_strip_audit_logs(mac: str, limit: int = 20, db: Session = Depends(get_db
 
 @app.websocket("/ws/strips/{mac}")
 async def websocket_strip_endpoint(websocket: WebSocket, mac: str):
-    await ws_manager.connect(mac, websocket)
+    clean_mac = normalize_mac(mac)
+    db = SessionLocal()
+    try:
+        auth = get_ws_user(websocket, db)
+        strip = find_strip_by_mac(db, clean_mac)
+        if not auth or not strip:
+            await websocket.close(code=1008)
+            return
+        try:
+            check_strip_access(strip, auth, db, require_control=False)
+        except HTTPException:
+            await websocket.close(code=1008)
+            return
+    finally:
+        db.close()
+
+    await ws_manager.connect(clean_mac, websocket)
     try:
         while True:
             await websocket.receive_text()
     except WebSocketDisconnect:
-        ws_manager.disconnect(mac, websocket)
+        ws_manager.disconnect(clean_mac, websocket)
 
 
 # ==============================================================================
@@ -2620,33 +2846,47 @@ def get_auth_status(request: Request, db: Session = Depends(get_db)):
 
 
 @app.post("/api/v1/auth/setup-admin", tags=["Authentication & Access"])
-def setup_admin_account(req: AdminSetupReq, response: Response, db: Session = Depends(get_db)):
+def setup_admin_account(req: AdminSetupReq, request: Request, response: Response, db: Session = Depends(get_db)):
+    rate_limiter.check_or_raise("setup_admin", get_client_ip(request), max_attempts=5, window_sec=600)
     admin_exists = db.query(User).filter(User.role == "ADMIN").first()
     if admin_exists:
         raise HTTPException(status_code=400, detail="حساب المدير مسجل بالفعل")
+
+    email_clean = req.email.strip().lower()
+    allowed_admins = [e.lower() for e in getattr(settings, "ADMIN_EMAILS", ["ahmedessam2032@gmail.com"])]
+    if email_clean not in allowed_admins:
+        rate_limiter.record_attempt("setup_admin", get_client_ip(request), window_sec=600)
+        raise HTTPException(status_code=403, detail="غير مصرح بإنشاء حساب مدير لهذا البريد الإلكتروني")
+
+    if find_user_by_email(db, email_clean):
+        raise HTTPException(status_code=400, detail="البريد الإلكتروني مسجل بالفعل")
 
     policy_err = validate_password_strength(req.password)
     if policy_err:
         raise HTTPException(status_code=422, detail=policy_err)
 
+    pin_val = req.get_pin()
+    if pin_val and (len(pin_val) < 4 or len(pin_val) > 6 or not pin_val.isdigit()):
+        raise HTTPException(status_code=422, detail="رمز PIN يجب أن يتكون من 4 إلى 6 أرقام")
+
     hashed_pw = hash_password(req.password)
-    hashed_pin = hash_password(req.get_pin())
+    hashed_pin = hash_password(pin_val) if pin_val else None
 
     name = req.get_full_name() or "Admin"
     admin = User(
-        email=req.email.strip().lower(),
+        email=email_clean,
         password_hash=hashed_pw,
         full_name=name,
         role="ADMIN",
-        pin_code_hash=hashed_pin
+        plan_name="ADMIN",
+        max_strips=999,
+        pin_code_hash=hashed_pin,
+        token_version=1,
+        webhook_token=secrets.token_urlsafe(24),
     )
     db.add(admin)
     db.commit()
     db.refresh(admin)
-
-    # ربط كافة المشتركات غير المربوطة بحساب المدير الجديد
-    db.query(Strip).filter(Strip.owner_id == None).update({"owner_id": admin.id})
-    db.commit()
 
     token = create_auth_token({
         "user_id": admin.id,
@@ -2654,7 +2894,8 @@ def setup_admin_account(req: AdminSetupReq, response: Response, db: Session = De
         "email": admin.email,
         "role": "ADMIN",
         "level": "ADMIN",
-        "allowed_sockets": [1, 2, 3, 4]
+        "allowed_sockets": [1, 2, 3, 4],
+        "tv": admin.token_version or 1,
     })
 
     response.set_cookie("na7la_token", token, max_age=86400 * 30, httponly=True, samesite="lax")
@@ -2679,12 +2920,15 @@ def setup_admin_account(req: AdminSetupReq, response: Response, db: Session = De
 
 
 @app.post("/api/v1/auth/register", tags=["Authentication & Access"])
-def register_new_user(req: RegisterReq, response: Response, db: Session = Depends(get_db)):
+def register_new_user(req: RegisterReq, request: Request, response: Response, db: Session = Depends(get_db)):
+    client_ip = get_client_ip(request)
+    rate_limiter.check_or_raise("register_ip", client_ip, max_attempts=10, window_sec=600)
+
     email_clean = req.email.strip().lower()
     if not email_clean or "@" not in email_clean:
         raise HTTPException(status_code=422, detail="يرجى إدخال بريد إلكتروني صالح")
 
-    existing = db.query(User).filter(User.email == email_clean).first()
+    existing = find_user_by_email(db, email_clean)
     if existing:
         raise HTTPException(status_code=400, detail="البريد الإلكتروني مسجل بالفعل، يرجى تسجيل الدخول")
 
@@ -2692,8 +2936,12 @@ def register_new_user(req: RegisterReq, response: Response, db: Session = Depend
     if policy_err:
         raise HTTPException(status_code=422, detail=policy_err)
 
+    pin_val = req.get_pin()
+    if pin_val and (len(pin_val) < 4 or len(pin_val) > 6 or not pin_val.isdigit()):
+        raise HTTPException(status_code=422, detail="رمز PIN يجب أن يتكون من 4 إلى 6 أرقام")
+
     hashed_pw = hash_password(req.password)
-    hashed_pin = hash_password(req.get_pin())
+    hashed_pin = hash_password(pin_val) if pin_val else None
 
     # Strict Security: Only Ahmed Essam is the Super Admin. Nobody else can ever become ADMIN.
     is_admin = (email_clean == "ahmedessam2032@gmail.com")
@@ -2709,14 +2957,14 @@ def register_new_user(req: RegisterReq, response: Response, db: Session = Depend
         role=role,
         plan_name=plan_name,
         max_strips=max_strips,
-        pin_code_hash=hashed_pin
+        pin_code_hash=hashed_pin,
+        token_version=1,
+        webhook_token=secrets.token_urlsafe(24),
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-
-    # Never auto-assign unknown/unclaimed strips to any user or admin!
-    # Users must explicitly claim their own physical strip via its MAC address.
+    rate_limiter.record_attempt("register_ip", client_ip, window_sec=600)
 
     level = "ADMIN" if role == "ADMIN" else "FULL"
     allowed_socks = [1, 2, 3, 4]
@@ -2727,7 +2975,8 @@ def register_new_user(req: RegisterReq, response: Response, db: Session = Depend
         "email": new_user.email,
         "role": new_user.role,
         "level": level,
-        "allowed_sockets": allowed_socks
+        "allowed_sockets": allowed_socks,
+        "tv": new_user.token_version or 1,
     })
 
     response.set_cookie("na7la_token", token, max_age=86400 * 30, httponly=True, samesite="lax")
@@ -2756,49 +3005,50 @@ def register_new_user(req: RegisterReq, response: Response, db: Session = Depend
 
 
 @app.post("/api/v1/auth/google", tags=["Authentication & Access"])
-def login_or_register_with_google(req: GoogleAuthReq, response: Response, db: Session = Depends(get_db)):
+def login_or_register_with_google(req: GoogleAuthReq, request: Request, response: Response, db: Session = Depends(get_db)):
+    client_ip = get_client_ip(request)
+    rate_limiter.check_or_raise("google_auth", client_ip, max_attempts=10, window_sec=600)
+
     credential = req.credential.strip()
     if not credential:
         raise HTTPException(status_code=400, detail="رمز التحقق من Google مطلوب")
 
-    google_email = None
-    google_sub = None
-    google_name = None
-
-    # 1. دعم وضع الاختبار المحلي السريع والمحاكاة
     if credential.startswith("simulated:") or credential.startswith("test:"):
-        parts = credential.split(":")
-        google_email = parts[1].strip().lower() if len(parts) > 1 else "google_user@na7la.com"
-        google_name = parts[2].strip() if len(parts) > 2 else "Google User"
-        google_sub = f"g_sim_{hashlib.md5(google_email.encode()).hexdigest()[:16]}"
-    else:
-        # 2. التحقق الرسمي عبر google-auth
-        try:
-            from google.oauth2 import id_token
-            from google.auth.transport import requests as google_requests
+        rate_limiter.record_attempt("google_auth", client_ip, window_sec=600)
+        raise HTTPException(status_code=401, detail="تسجيل الدخول التجريبي معطل أمنياً؛ يرجى استخدام حساب Google رسمي موثق")
 
-            client_id = req.client_id or settings.GOOGLE_CLIENT_ID or None
-            idinfo = id_token.verify_oauth2_token(
-                credential,
-                google_requests.Request(),
-                client_id
-            )
-            google_sub = idinfo.get("sub")
-            google_email = (idinfo.get("email") or "").strip().lower()
-            google_name = idinfo.get("name") or idinfo.get("given_name") or "Google User"
-        except Exception as e:
-            raise HTTPException(status_code=401, detail=f"فشل التحقق من هوية Google: {str(e)}")
+    # التحقق الرسمي الحصري عبر مكتبة google-auth
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+
+        configured_client_id = (settings.GOOGLE_CLIENT_ID or "").strip()
+        if not configured_client_id:
+            raise ValueError("خدمة Google OAuth غير مفعلة على الخادم حالياً")
+
+        idinfo = id_token.verify_oauth2_token(
+            credential,
+            google_requests.Request(),
+            configured_client_id
+        )
+        if not idinfo.get("email_verified"):
+            raise ValueError("البريد الإلكتروني غير مؤكد لدى Google")
+        google_sub = idinfo.get("sub")
+        google_email = (idinfo.get("email") or "").strip().lower()
+        google_name = idinfo.get("name") or idinfo.get("given_name") or "Google User"
+    except Exception:
+        rate_limiter.record_attempt("google_auth", client_ip, window_sec=600)
+        raise HTTPException(status_code=401, detail="فشل التحقق الرسمي من هوية Google")
 
     if not google_email or not google_sub:
         raise HTTPException(status_code=400, detail="تعذر استخراج بيانات الحساب من Google")
 
-    admin_emails = [e.lower() for e in getattr(settings, "ADMIN_EMAILS", [])]
-    is_admin_email = google_email in admin_emails
+    is_admin_email = (google_email == "ahmedessam2032@gmail.com")
 
-    # البحث عن المستخدم بالـ google_uid أولاً أو بالبريد
-    user = db.query(User).filter(User.google_uid == google_sub).first()
+    # البحث عبر البصمة العمياء بـ google_uid أولاً ثم بالبريد المشفر
+    user = find_user_by_google_uid(db, google_sub)
     if not user:
-        user = db.query(User).filter(User.email == google_email).first()
+        user = find_user_by_email(db, google_email)
         if user:
             user.google_uid = google_sub
             if not user.full_name and google_name:
@@ -2815,24 +3065,21 @@ def login_or_register_with_google(req: GoogleAuthReq, response: Response, db: Se
         db.refresh(user)
 
     if not user:
-        admin_exists = db.query(User).filter(User.role == "ADMIN").first()
-        is_admin = is_admin_email or (not admin_exists)
-        role = "ADMIN" if is_admin else "USER"
-        max_strips = 999 if is_admin else getattr(settings, "DEFAULT_USER_MAX_STRIPS", 1)
+        role = "ADMIN" if is_admin_email else "USER"
+        max_strips = 999 if is_admin_email else getattr(settings, "DEFAULT_USER_MAX_STRIPS", 1)
         user = User(
             email=google_email,
             google_uid=google_sub,
             full_name=google_name,
             role=role,
-            max_strips=max_strips
+            plan_name="ADMIN" if is_admin_email else "FREE",
+            max_strips=max_strips,
+            token_version=1,
+            webhook_token=secrets.token_urlsafe(24),
         )
         db.add(user)
         db.commit()
         db.refresh(user)
-
-        if role == "ADMIN" and not admin_exists:
-            db.query(Strip).filter(Strip.owner_id == None).update({"owner_id": user.id})
-            db.commit()
 
     level = "ADMIN" if user.role == "ADMIN" else "FULL"
     allowed_socks = [1, 2, 3, 4]
@@ -2848,7 +3095,8 @@ def login_or_register_with_google(req: GoogleAuthReq, response: Response, db: Se
         "email": user.email,
         "role": user.role,
         "level": level,
-        "allowed_sockets": allowed_socks
+        "allowed_sockets": allowed_socks,
+        "tv": user.token_version or 1,
     })
 
     used_strips = db.query(Strip).filter(Strip.owner_id == user.id).count()
@@ -2878,10 +3126,19 @@ def login_or_register_with_google(req: GoogleAuthReq, response: Response, db: Se
 
 
 @app.post("/api/v1/auth/login", tags=["Authentication & Access"])
-def login_with_email(req: LoginReq, response: Response, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email.strip().lower()).first()
+def login_with_email(req: LoginReq, request: Request, response: Response, db: Session = Depends(get_db)):
+    email_clean = req.email.strip().lower()
+    client_ip = get_client_ip(request)
+    rate_limiter.check_or_raise("login_email", email_clean, max_attempts=5, window_sec=600)
+    rate_limiter.check_or_raise("login_ip", client_ip, max_attempts=15, window_sec=600)
+
+    user = find_user_by_email(db, email_clean)
     if not user or not user.password_hash or not verify_password(req.password, user.password_hash):
+        rate_limiter.record_attempt("login_email", email_clean, window_sec=600)
+        rate_limiter.record_attempt("login_ip", client_ip, window_sec=600)
         raise HTTPException(status_code=401, detail="البريد الإلكتروني أو كلمة المرور غير صحيحة")
+
+    rate_limiter.reset("login_email", email_clean)
 
     level = "ADMIN" if user.role == "ADMIN" else "FULL"
     allowed_socks = [1, 2, 3, 4]
@@ -2897,7 +3154,8 @@ def login_with_email(req: LoginReq, response: Response, db: Session = Depends(ge
         "email": user.email,
         "role": user.role,
         "level": level,
-        "allowed_sockets": allowed_socks
+        "allowed_sockets": allowed_socks,
+        "tv": user.token_version or 1,
     })
 
     used_strips = db.query(Strip).filter(Strip.owner_id == user.id).count()
@@ -2927,17 +3185,29 @@ def login_with_email(req: LoginReq, response: Response, db: Session = Depends(ge
 
 
 @app.post("/api/v1/auth/login-invite", tags=["Authentication & Access"])
-def login_with_invite_code(req: InviteLoginReq, response: Response, db: Session = Depends(get_db)):
+def login_with_invite_code(req: InviteLoginReq, request: Request, response: Response, db: Session = Depends(get_db)):
+    client_ip = get_client_ip(request)
+    rate_limiter.check_or_raise("invite_login", client_ip, max_attempts=5, window_sec=600)
+
     code = req.invite_code.strip().upper()
-    share = db.query(SharedAccess).filter(SharedAccess.invite_code == code, SharedAccess.is_active == True).first()
+    share = find_share_by_invite_code(db, code, active_only=True)
     if not share:
+        rate_limiter.record_attempt("invite_login", client_ip, window_sec=600)
         raise HTTPException(status_code=404, detail="كود الدعوة غير صحيح أو تم إلغاؤه")
 
     now = utc_now()
-    if share.expires_at and share.expires_at.replace(tzinfo=timezone.utc) < now:
-        raise HTTPException(status_code=410, detail="عذراً، انتهت صلاحية كود الدعوة هذا")
+    if share.expires_at:
+        exp_dt = share.expires_at if share.expires_at.tzinfo else share.expires_at.replace(tzinfo=timezone.utc)
+        if exp_dt < now:
+            raise HTTPException(status_code=410, detail="عذراً، انتهت صلاحية كود الدعوة هذا")
 
+    rate_limiter.reset("invite_login", client_ip)
     allowed_socks = [int(x) for x in (share.allowed_sockets or "1,2,3,4").split(",") if x.isdigit()]
+    exp_ts = (
+        (share.expires_at if share.expires_at.tzinfo else share.expires_at.replace(tzinfo=timezone.utc)).timestamp()
+        if share.expires_at
+        else (datetime.now(timezone.utc) + timedelta(days=365)).timestamp()
+    )
 
     token = create_auth_token({
         "user_id": share.shared_with_user_id,
@@ -2947,7 +3217,7 @@ def login_with_invite_code(req: InviteLoginReq, response: Response, db: Session 
         "role": "MEMBER",
         "level": share.permission_level,
         "allowed_sockets": allowed_socks,
-        "exp": share.expires_at.timestamp() if share.expires_at else (datetime.now(timezone.utc) + timedelta(days=365)).timestamp()
+        "exp": exp_ts,
     })
 
     response.set_cookie("na7la_token", token, max_age=86400 * 30, httponly=True, samesite="lax")
@@ -2977,27 +3247,29 @@ def verify_admin_pin(req: VerifyPinReq, request: Request, db: Session = Depends(
         raise HTTPException(status_code=400, detail="يرجى كتابة رمز PIN أو كلمة المرور")
 
     auth = get_current_user(request, db)
-    user = None
-    if auth and auth.get("user_id"):
-        user = db.query(User).filter(User.id == auth.get("user_id")).first()
-    if not user:
-        user = db.query(User).filter(User.role == "ADMIN").first()
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
 
+    user = db.query(User).filter(User.id == auth.get("user_id")).first()
     if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+
+    rate_key = f"uid:{user.id}"
+    rate_limiter.check_or_raise("pin_verify", rate_key, max_attempts=5, window_sec=600)
+
+    # Zero-default: If user has no PIN configured yet, allow account password or prompt PIN setup
+    if user.pin_code_hash and verify_password(pin, user.pin_code_hash):
+        rate_limiter.reset("pin_verify", rate_key)
         return {"ok": True, "valid": True}
 
-    # Zero-default: If user has no PIN configured yet, tell frontend to prompt for setup
+    if user.password_hash and verify_password(pin, user.password_hash):
+        rate_limiter.reset("pin_verify", rate_key)
+        return {"ok": True, "valid": True}
+
     if not user.pin_code_hash:
         return {"ok": False, "needs_pin_setup": True, "detail": "لم تقم بتعيين رمز PIN بعد"}
 
-    # 1. Check custom PIN hash
-    if verify_password(pin, user.pin_code_hash):
-        return {"ok": True, "valid": True}
-
-    # 2. Check Account password hash (allows unlocking with account password)
-    if user.password_hash and verify_password(pin, user.password_hash):
-        return {"ok": True, "valid": True}
-
+    rate_limiter.record_attempt("pin_verify", rate_key, window_sec=600)
     raise HTTPException(status_code=401, detail="رمز الـ PIN أو كلمة المرور غير صحيحة")
 
 
@@ -3032,6 +3304,9 @@ def change_user_pin(req: ChangePinReq, request: Request, db: Session = Depends(g
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
 
+    rate_key = f"uid:{user.id}"
+    rate_limiter.check_or_raise("change_pin", rate_key, max_attempts=5, window_sec=600)
+
     cred = req.current_pin_or_password.strip()
     valid = False
     if user.pin_code_hash and verify_password(cred, user.pin_code_hash):
@@ -3040,6 +3315,7 @@ def change_user_pin(req: ChangePinReq, request: Request, db: Session = Depends(g
         valid = True
 
     if not valid:
+        rate_limiter.record_attempt("change_pin", rate_key, window_sec=600)
         raise HTTPException(status_code=401, detail="كلمة المرور الحالية أو رمز PIN الحالي غير صحيح")
 
     new_pin = req.new_pin.strip()
@@ -3050,10 +3326,68 @@ def change_user_pin(req: ChangePinReq, request: Request, db: Session = Depends(g
     if new_pin != confirm_pin:
         raise HTTPException(status_code=400, detail="تأكيد رمز PIN غير متطابق")
 
+    rate_limiter.reset("change_pin", rate_key)
     user.pin_code_hash = hash_password(new_pin)
     db.commit()
     return {"ok": True, "message": "تم تغيير رمز PIN بنجاح"}
 
+
+@app.post("/api/v1/auth/change-password", tags=["Authentication & Access"])
+def change_user_password(req: ChangePasswordReq, request: Request, response: Response, db: Session = Depends(get_db)):
+    """تغيير كلمة المرور المشفرة بـ bcrypt مع إبطال فوري لجميع الجلسات الأخرى عبر رفع token_version"""
+    auth = get_current_user(request, db)
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+
+    user = db.query(User).filter(User.id == auth.get("user_id")).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="المستخدم غير موجود")
+
+    rate_key = f"uid:{user.id}"
+    rate_limiter.check_or_raise("change_pw", rate_key, max_attempts=5, window_sec=600)
+
+    curr_pw = (req.current_password or "").strip()
+    new_pw = (req.new_password or "").strip()
+    if not curr_pw or not new_pw:
+        raise HTTPException(status_code=422, detail="يرجى إدخال كلمة المرور الحالية والجديدة")
+
+    if not user.password_hash or not verify_password(curr_pw, user.password_hash):
+        rate_limiter.record_attempt("change_pw", rate_key, window_sec=600)
+        raise HTTPException(status_code=401, detail="كلمة المرور الحالية غير صحيحة")
+
+    if req.confirm_password is not None and req.confirm_password.strip() != new_pw:
+        raise HTTPException(status_code=422, detail="كلمتا المرور غير متطابقتين")
+
+    policy_err = validate_password_strength(new_pw)
+    if policy_err:
+        raise HTTPException(status_code=422, detail=policy_err)
+
+    if verify_password(new_pw, user.password_hash):
+        raise HTTPException(status_code=400, detail="كلمة المرور الجديدة يجب أن تختلف عن كلمة المرور الحالية")
+
+    rate_limiter.reset("change_pw", rate_key)
+    user.password_hash = hash_password(new_pw)
+    user.token_version = (user.token_version or 1) + 1
+    db.commit()
+    db.refresh(user)
+
+    level = "ADMIN" if user.role == "ADMIN" else auth.get("level", "FULL")
+    allowed_socks = auth.get("allowed_sockets", [1, 2, 3, 4])
+    new_token = create_auth_token({
+        "user_id": user.id,
+        "name": user.full_name or user.email,
+        "email": user.email,
+        "role": user.role,
+        "level": level,
+        "allowed_sockets": allowed_socks,
+        "tv": user.token_version,
+    })
+    response.set_cookie("na7la_token", new_token, max_age=86400 * 30, httponly=True, samesite="lax")
+    return {
+        "ok": True,
+        "token": new_token,
+        "message": "تم تغيير كلمة المرور بنجاح وإبطال جميع الجلسات الأخرى فوراً",
+    }
 
 
 @app.post("/api/v1/auth/logout", tags=["Authentication & Access"])
@@ -3142,7 +3476,7 @@ def update_user_preferences(req: UserPreferencesReq, request: Request, db: Sessi
 
 @app.post("/api/v1/feedback", tags=["Support & Feedback"])
 def submit_user_feedback(req: FeedbackCreateReq, request: Request, db: Session = Depends(get_db)):
-    """إرسال مقترح تطوير أو ملاحظة للدعم الفني وحفظها في قاعدة البيانات"""
+    """إرسال مقترح تطوير أو ملاحظة للدعم الفني وحفظها مشفرة في قاعدة البيانات"""
     msg = (req.message or "").strip()
     if not msg:
         raise HTTPException(status_code=400, detail="يرجى كتابة المقترح أو الملاحظة أولاً")
@@ -3200,25 +3534,39 @@ def update_user_language(req: LanguageUpdateReq, request: Request, db: Session =
 
 
 @app.post("/api/v1/auth/forgot-password", tags=["Authentication & Access"])
-def request_forgot_password(req: ForgotPasswordReq, db: Session = Depends(get_db)):
-    """طلب كود تحقق سري (OTP) لاستعادة كلمة المرور عبر البريد الإلكتروني"""
+def request_forgot_password(req: ForgotPasswordReq, request: Request, db: Session = Depends(get_db)):
+    """طلب كود تحقق سري (OTP) مشفر بـ HMAC-SHA256 لاستعادة كلمة المرور عبر البريد الإلكتروني"""
     email_clean = req.email.strip().lower()
     if not email_clean or "@" not in email_clean:
         raise HTTPException(status_code=422, detail="يرجى إدخال بريد إلكتروني صالح")
 
-    user = db.query(User).filter(User.email == email_clean).first()
+    client_ip = get_client_ip(request)
+    rate_limiter.check_or_raise("otp_req_email", email_clean, max_attempts=4, window_sec=600)
+    rate_limiter.check_or_raise("otp_req_ip", client_ip, max_attempts=10, window_sec=600)
+
+    user = find_user_by_email(db, email_clean)
     if not user:
+        rate_limiter.record_attempt("otp_req_ip", client_ip, window_sec=600)
         raise HTTPException(status_code=404, detail="عذراً، هذا البريد الإلكتروني غير مسجل لدينا")
 
-    # إبطال الأكواد السابقة غير المستخدمة لهذا البريد
-    db.query(PasswordReset).filter(PasswordReset.email == email_clean, PasswordReset.is_used == False).update({"is_used": True})
+    rate_limiter.record_attempt("otp_req_email", email_clean, window_sec=600)
+    rate_limiter.record_attempt("otp_req_ip", client_ip, window_sec=600)
+
+    email_idx = compute_blind_index("email", email_clean)
+    # إبطال الأكواد السابقة غير المستخدمة لهذا البريد عبر البصمة العمياء
+    db.query(PasswordReset).filter(
+        PasswordReset.email_blind_index == email_idx,
+        PasswordReset.is_used == False
+    ).update({"is_used": True})
 
     otp = f"{secrets.randbelow(900000) + 100000}"
+    otp_digest = hash_otp(email_clean, otp)
     expires = utc_now() + timedelta(minutes=10)
 
     pr = PasswordReset(
+        email_blind_index=email_idx,
         email=email_clean,
-        otp_code=otp,
+        otp_code=otp_digest,
         expires_at=expires,
         is_used=False
     )
@@ -3230,39 +3578,52 @@ def request_forgot_password(req: ForgotPasswordReq, db: Session = Depends(get_db
     return {
         "ok": True,
         "smtp_delivered": smtp_delivered,
-        "otp_preview": None if smtp_delivered else otp,
+        "otp_preview": None,
         "message": (
-            f"تم إرسال كود التحقق بنجاح إلى البريد الإلكتروني {email_clean}"
+            f"تم إرسال كود التحقق بنجاح إلى البريد الإلكتروني {mask_email(email_clean)}"
             if smtp_delivered
-            else f"تم توليد كود التحقق السحابي بنجاح لحساب {email_clean}: ({otp})"
+            else "تعذر إرسال البريد الإلكتروني في الوقت الحالي، يرجى المحاولة بعد قليل"
         ),
         "expires_in_minutes": 10
     }
 
 
 @app.post("/api/v1/auth/verify-otp", tags=["Authentication & Access"])
-def verify_forgot_password_otp(req: VerifyOtpReq, db: Session = Depends(get_db)):
-    """التحقق من صحة كود الـ OTP وصلاحيته الزمنية"""
+def verify_forgot_password_otp(req: VerifyOtpReq, request: Request, db: Session = Depends(get_db)):
+    """التحقق من صحة كود الـ OTP المشفر بـ HMAC-SHA256 وصلاحيته الزمنية"""
     email_clean = req.email.strip().lower()
     otp_clean = req.otp.strip()
 
     if not email_clean or not otp_clean:
         raise HTTPException(status_code=422, detail="يرجى إدخال البريد الإلكتروني وكود التحقق")
 
+    client_ip = get_client_ip(request)
+    rate_limiter.check_or_raise("otp_verify", email_clean, max_attempts=5, window_sec=600)
+    rate_limiter.check_or_raise("otp_verify_ip", client_ip, max_attempts=15, window_sec=600)
+
+    email_idx = compute_blind_index("email", email_clean)
     now = utc_now()
-    record = (
+    candidates = (
         db.query(PasswordReset)
         .filter(
-            PasswordReset.email == email_clean,
-            PasswordReset.otp_code == otp_clean,
+            PasswordReset.email_blind_index == email_idx,
             PasswordReset.is_used == False,
-            PasswordReset.expires_at >= now
         )
         .order_by(PasswordReset.created_at.desc())
-        .first()
+        .limit(3)
+        .all()
     )
 
-    if not record:
+    matched = None
+    for rec in candidates:
+        exp_dt = rec.expires_at if rec.expires_at.tzinfo else rec.expires_at.replace(tzinfo=timezone.utc)
+        if exp_dt >= now and verify_otp_hash(email_clean, otp_clean, rec.otp_code):
+            matched = rec
+            break
+
+    if not matched:
+        rate_limiter.record_attempt("otp_verify", email_clean, window_sec=600)
+        rate_limiter.record_attempt("otp_verify_ip", client_ip, window_sec=600)
         raise HTTPException(status_code=400, detail="كود التحقق غير صحيح أو انتهت صلاحيته (10 دقائق)")
 
     return {
@@ -3272,14 +3633,18 @@ def verify_forgot_password_otp(req: VerifyOtpReq, db: Session = Depends(get_db))
 
 
 @app.post("/api/v1/auth/reset-password", tags=["Authentication & Access"])
-def reset_forgot_password(req: ResetPasswordReq, db: Session = Depends(get_db)):
-    """تعيين كلمة المرور الجديدة بعد تأكيد كود التحقق"""
+def reset_forgot_password(req: ResetPasswordReq, request: Request, db: Session = Depends(get_db)):
+    """تعيين كلمة المرور الجديدة بعد تأكيد الـ OTP مع إبطال جميع الجلسات السابقة"""
     email_clean = req.email.strip().lower()
     otp_clean = req.otp.strip()
     new_pw = req.new_password.strip()
 
     if not email_clean or not otp_clean or not new_pw:
         raise HTTPException(status_code=422, detail="جميع الحقول مطلوبة")
+
+    client_ip = get_client_ip(request)
+    rate_limiter.check_or_raise("otp_verify", email_clean, max_attempts=5, window_sec=600)
+    rate_limiter.check_or_raise("otp_verify_ip", client_ip, max_attempts=15, window_sec=600)
 
     if req.confirm_password and req.confirm_password.strip() != new_pw:
         raise HTTPException(status_code=422, detail="كلمتا المرور غير متطابقتين")
@@ -3288,44 +3653,64 @@ def reset_forgot_password(req: ResetPasswordReq, db: Session = Depends(get_db)):
     if policy_err:
         raise HTTPException(status_code=422, detail=policy_err)
 
+    email_idx = compute_blind_index("email", email_clean)
     now = utc_now()
-    record = (
+    candidates = (
         db.query(PasswordReset)
         .filter(
-            PasswordReset.email == email_clean,
-            PasswordReset.otp_code == otp_clean,
+            PasswordReset.email_blind_index == email_idx,
             PasswordReset.is_used == False,
-            PasswordReset.expires_at >= now
         )
         .order_by(PasswordReset.created_at.desc())
-        .first()
+        .limit(3)
+        .all()
     )
 
-    if not record:
+    matched = None
+    for rec in candidates:
+        exp_dt = rec.expires_at if rec.expires_at.tzinfo else rec.expires_at.replace(tzinfo=timezone.utc)
+        if exp_dt >= now and verify_otp_hash(email_clean, otp_clean, rec.otp_code):
+            matched = rec
+            break
+
+    if not matched:
+        rate_limiter.record_attempt("otp_verify", email_clean, window_sec=600)
+        rate_limiter.record_attempt("otp_verify_ip", client_ip, window_sec=600)
         raise HTTPException(status_code=400, detail="كود التحقق غير صالح أو منتهي الصلاحية")
 
-    user = db.query(User).filter(User.email == email_clean).first()
+    user = find_user_by_email(db, email_clean)
     if not user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
 
+    rate_limiter.reset("otp_verify", email_clean)
+    rate_limiter.reset("login_email", email_clean)
     user.password_hash = hash_password(new_pw)
-    record.is_used = True
+    user.token_version = (user.token_version or 1) + 1
+    matched.is_used = True
     db.commit()
 
     return {
         "ok": True,
-        "message": "تم تغيير كلمة المرور بنجاح، يمكنك الآن تسجيل الدخول"
+        "message": "تم تغيير كلمة المرور بنجاح وإبطال الجلسات القديمة، يمكنك الآن تسجيل الدخول"
     }
 
 
 # ==============================================================================
-# 11. نظام المشاركة العائلية (Family Sharing & Hybrid Access)
+# ==============================================================================
+# 11. نظام المشاركة العائلية (Family Sharing & Strict Owner Isolation)
 # ==============================================================================
 @app.get("/api/v1/strips/{mac}/shares", tags=["Family Sharing"])
 def list_strip_shares(mac: str, request: Request, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    auth = get_current_user(request, db)
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
+
+    if strip.owner_id != auth.get("user_id"):
+        raise HTTPException(status_code=403, detail="عرض صلاحيات المشاركة متاح لمالك المشترك الفعلي فقط")
 
     shares = db.query(SharedAccess).filter(SharedAccess.strip_id == strip.id).order_by(SharedAccess.created_at.desc()).all()
     now = utc_now()
@@ -3335,13 +3720,15 @@ def list_strip_shares(mac: str, request: Request, db: Session = Depends(get_db))
                 "id": sh.id,
                 "name": sh.member_name,
                 "member_name": sh.member_name,
-                "email": sh.shared_user.email if sh.shared_user else None,
+                "email": sh.shared_user.email if (sh.shared_user and sh.shared_with_user_id != strip.owner_id) else None,
                 "permission_level": sh.permission_level,
                 "allowed_sockets": [int(x) for x in (sh.allowed_sockets or "1,2,3,4").split(",") if x.isdigit()],
                 "allowed_sockets_str": sh.allowed_sockets or "1,2,3,4",
                 "invite_code": sh.invite_code,
                 "is_active": sh.is_active,
-                "is_expired": bool(sh.expires_at and sh.expires_at.replace(tzinfo=timezone.utc) < now),
+                "is_expired": bool(
+                    sh.expires_at and (sh.expires_at if sh.expires_at.tzinfo else sh.expires_at.replace(tzinfo=timezone.utc)) < now
+                ),
                 "expires_at": sh.expires_at.isoformat() if sh.expires_at else None,
                 "created_at": sh.created_at.isoformat() if sh.created_at else None,
             }
@@ -3352,39 +3739,46 @@ def list_strip_shares(mac: str, request: Request, db: Session = Depends(get_db))
 
 @app.post("/api/v1/strips/{mac}/shares", tags=["Family Sharing"])
 def create_strip_share(mac: str, req: ShareCreateReq, request: Request, db: Session = Depends(get_db)):
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+    auth = get_current_user(request, db)
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+
+    strip = find_strip_by_mac(db, mac)
     if not strip:
         raise HTTPException(status_code=404, detail="المشترك غير موجود")
 
-    auth = get_current_user(request, db)
-    if auth and auth.get("role") != "ADMIN" and strip.owner_id != auth.get("user_id"):
-        raise HTTPException(status_code=403, detail="مشاركة المشترك متاحة لمالك المشترك أو مدير النظام فقط")
+    if strip.owner_id != auth.get("user_id"):
+        raise HTTPException(status_code=403, detail="إنشاء مشاركة عائلية متاح لمالك المشترك الفعلي فقط")
 
-    code = f"NA7LA-{secrets.token_hex(2).upper()}"
-    while db.query(SharedAccess).filter(SharedAccess.invite_code == code).first():
-        code = f"NA7LA-{secrets.token_hex(2).upper()}"
+    code = f"NA7LA-{secrets.token_hex(3).upper()}"
+    while find_share_by_invite_code(db, code, active_only=False):
+        code = f"NA7LA-{secrets.token_hex(3).upper()}"
 
     exp = (utc_now() + timedelta(hours=req.duration_hours)) if req.duration_hours and req.duration_hours > 0 else None
 
     name = req.get_name()
-    email = req.email.strip().lower() if req.email else f"member_{secrets.token_hex(3)}@na7la.local"
-    member_user = db.query(User).filter(User.email == email).first()
-    if not member_user:
-        member_user = User(
-            email=email,
-            full_name=name,
-            role="USER"
-        )
-        db.add(member_user)
-        db.commit()
-        db.refresh(member_user)
+    email_str = req.email.strip().lower() if req.email and req.email.strip() else None
+    member_user = None
+    if email_str:
+        member_user = find_user_by_email(db, email_str)
+        if not member_user:
+            member_user = User(
+                email=email_str,
+                full_name=name,
+                role="USER",
+                token_version=1,
+            )
+            db.add(member_user)
+            db.commit()
+            db.refresh(member_user)
 
+    target_uid = member_user.id if member_user else strip.owner_id
     socks_list = req.get_sockets_list()
     socks_str = ",".join(str(x) for x in socks_list) if socks_list else "1,2,3,4"
 
     share = SharedAccess(
         strip_id=strip.id,
-        shared_with_user_id=member_user.id,
+        shared_with_user_id=target_uid,
         member_name=name,
         permission_level=req.permission_level.upper(),
         allowed_sockets=socks_str,
@@ -3396,8 +3790,8 @@ def create_strip_share(mac: str, req: ShareCreateReq, request: Request, db: Sess
     db.commit()
     db.refresh(share)
 
-    actor = auth.get("name", "OWNER") if auth else "OWNER"
-    log_event(db, strip.id, 0, "SHARE_CREATE", actor, f"إنشاء مشاركة عائلية '{code}' لـ '{name}' (المخارج: {socks_str})")
+    actor = auth.get("name", "OWNER")
+    log_event(db, strip.id, 0, "SHARE_CREATE", actor, f"إنشاء مشاركة عائلية لـ '{name}' (المخارج: {socks_str})")
 
     return {
         "ok": True,
@@ -3405,7 +3799,7 @@ def create_strip_share(mac: str, req: ShareCreateReq, request: Request, db: Sess
             "id": share.id,
             "name": share.member_name,
             "member_name": share.member_name,
-            "email": member_user.email,
+            "email": email_str or "",
             "permission_level": share.permission_level,
             "allowed_sockets": socks_list,
             "allowed_sockets_str": socks_str,
@@ -3417,41 +3811,80 @@ def create_strip_share(mac: str, req: ShareCreateReq, request: Request, db: Sess
 
 @app.delete("/api/v1/shares/{share_id}", tags=["Family Sharing"])
 def delete_strip_share(share_id: int, request: Request, db: Session = Depends(get_db)):
+    auth = get_current_user(request, db)
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+
     share = db.query(SharedAccess).filter(SharedAccess.id == share_id).first()
     if not share:
         raise HTTPException(status_code=404, detail="كود المشاركة غير موجود")
 
-    auth = get_current_user(request, db)
     strip = db.query(Strip).filter(Strip.id == share.strip_id).first()
-    if auth and auth.get("role") != "ADMIN" and (not strip or strip.owner_id != auth.get("user_id")):
-        raise HTTPException(status_code=403, detail="إلغاء المشاركة متاح لمالك المشترك أو مدير النظام فقط")
+    if not strip or strip.owner_id != auth.get("user_id"):
+        raise HTTPException(status_code=403, detail="إلغاء المشاركة متاح لمالك المشترك الفعلي فقط")
 
     strip_id = share.strip_id
-    code = share.invite_code
+    member = share.member_name
     db.delete(share)
     db.commit()
-    log_event(db, strip_id, 0, "SHARE_REVOKE", "OWNER", f"إلغاء وحذف المشاركة '{code}'")
+    log_event(db, strip_id, 0, "SHARE_REVOKE", "OWNER", f"إلغاء وحذف المشاركة العائلية لـ '{member}'")
     return {"ok": True}
 
 
 @app.patch("/api/v1/shares/{share_id}/toggle", tags=["Family Sharing"])
 def toggle_strip_share(share_id: int, request: Request, db: Session = Depends(get_db)):
+    auth = get_current_user(request, db)
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+
     share = db.query(SharedAccess).filter(SharedAccess.id == share_id).first()
     if not share:
         raise HTTPException(status_code=404, detail="كود المشاركة غير موجود")
 
-    auth = get_current_user(request, db)
     strip = db.query(Strip).filter(Strip.id == share.strip_id).first()
-    if auth and auth.get("role") != "ADMIN" and (not strip or strip.owner_id != auth.get("user_id")):
-        raise HTTPException(status_code=403, detail="تعديل المشاركة متاح لمالك المشترك أو مدير النظام فقط")
+    if not strip or strip.owner_id != auth.get("user_id"):
+        raise HTTPException(status_code=403, detail="تعديل المشاركة متاح لمالك المشترك الفعلي فقط")
 
     share.is_active = not share.is_active
     db.commit()
     return {"ok": True, "is_active": share.is_active}
 
 
+@app.post("/api/v1/strips/join-share", tags=["Family Sharing"])
+def join_strip_by_invite_code(req: InviteLoginReq, request: Request, db: Session = Depends(get_db)):
+    auth = get_current_user(request, db)
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+
+    uid = auth.get("user_id")
+    rate_key = f"uid:{uid}"
+    rate_limiter.check_or_raise("join_share", rate_key, max_attempts=5, window_sec=600)
+
+    code = req.invite_code.strip().upper()
+    share = find_share_by_invite_code(db, code, active_only=True)
+    if not share:
+        rate_limiter.record_attempt("join_share", rate_key, window_sec=600)
+        raise HTTPException(status_code=404, detail="كود الدعوة غير صحيح أو منتهي الصلاحية")
+
+    if share.expires_at:
+        exp_dt = share.expires_at if share.expires_at.tzinfo else share.expires_at.replace(tzinfo=timezone.utc)
+        if exp_dt < utc_now():
+            raise HTTPException(status_code=410, detail="عذراً، انتهت صلاحية كود الدعوة هذا")
+
+    rate_limiter.reset("join_share", rate_key)
+    share.shared_with_user_id = uid
+    db.commit()
+    strip = db.query(Strip).filter(Strip.id == share.strip_id).first()
+    return {
+        "ok": True,
+        "message": f"تم ربط المشترك المشترك '{strip.strip_name if strip else 'المشترك'}' بحسابك بنجاح ✅",
+        "strip_mac": strip.mac_address if strip else None,
+        "allowed_sockets": [int(x) for x in (share.allowed_sockets or "1,2,3,4").split(",") if x.isdigit()],
+    }
+
+
 # ==============================================================================
-# 12. التحويل السحابي ونقل المشترك (Cloud Migration)
+# 12. التحويل السحابي ونقل المشترك (Cloud Migration — Owner Only)
 # ==============================================================================
 @app.post("/api/v1/strips/{mac}/migrate-server", tags=["Cloud Migration"])
 async def migrate_strip_server(
@@ -3460,24 +3893,24 @@ async def migrate_strip_server(
     request: Request,
     db: Session = Depends(get_db)
 ):
-    admin = db.query(User).filter(User.role == "ADMIN").first()
-    if admin:
-        auth = get_current_user(request, db)
-        if not auth or auth.get("role") != "ADMIN":
-            raise HTTPException(status_code=403, detail="هذه العملية مخصصة لمدير النظام فقط")
+    auth = get_current_user(request, db)
+    if not auth or not auth.get("user_id"):
+        raise HTTPException(status_code=401, detail="يرجى تسجيل الدخول أولاً")
+
+    strip = find_strip_by_mac(db, mac)
+    if not strip:
+        raise HTTPException(status_code=404, detail="المشترك غير موجود")
+
+    if strip.owner_id != auth.get("user_id"):
+        raise HTTPException(status_code=403, detail="توجيه المشترك متاح لمالك الجهاز الفعلي فقط")
 
     target_host = req.target_host.strip()
     target_port = req.target_port or 10086
 
-    strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
-    if not strip:
-        raise HTTPException(status_code=404, detail="المشترك غير موجود")
-
     session = na7la_hub.get_session(strip.mac_address)
     if not session:
-        raise HTTPException(status_code=400, detail="المشترك غير متصل حالياً بالسيرفر المحلي")
+        raise HTTPException(status_code=400, detail="المشترك غير متصل حالياً بالسيرفر")
 
-    # فحص أمان مسبق (Pre-flight check) للتأكد من وصول السيرفر الهدف
     try:
         reader, writer = await asyncio.wait_for(
             asyncio.open_connection(target_host, target_port), timeout=3.5
@@ -3487,24 +3920,23 @@ async def migrate_strip_server(
     except Exception:
         raise HTTPException(
             status_code=400,
-            detail=f"تعذر الاتصال بالسيرفر السحابي ({target_host}:{target_port}). تأكد من تشغيل السيرفر وفتح البورت أولاً لمنع المشترك من فقدان الاتصال."
+            detail=f"تعذر الاتصال بالسيرفر الهدف ({target_host}:{target_port}). تأكد من تشغيل السيرفر وفتح البورت أولاً."
         )
 
-    # إرسال أمر التوجيه للمشترك عبر جلسة الـ TCP الحالية
     cmd = f"up:connect:{target_host}:{target_port}\r\n".encode("utf-8")
     session.writer.write(cmd)
     await session.writer.drain()
 
-    log_event(db, strip.id, 0, "SERVER_MIGRATE", "ADMIN", f"توجيه المشترك إلى السيرفر السحابي ({target_host}:{target_port})")
+    log_event(db, strip.id, 0, "SERVER_MIGRATE", "OWNER", f"توجيه المشترك إلى السيرفر ({target_host}:{target_port})")
 
     return {
         "ok": True,
-        "message": f"تم إرسال أمر التوجيه بنجاح. المشترك يتصل الآن بالسيرفر السحابي ({target_host}:{target_port})."
+        "message": f"تم إرسال أمر التوجيه بنجاح. المشترك يتصل الآن بالسيرفر ({target_host}:{target_port})."
     }
 
 
 # ==============================================================================
-# 9. إدارة المستخدمين والكوتا للأدمن (Admin User & Quota Management)
+# 9. إدارة المستخدمين والكوتا للأدمن بنظام انعدام المعرفة (Zero-Knowledge Admin Console)
 # ==============================================================================
 class UpdateQuotaReq(BaseModel):
     max_strips: int = Field(..., ge=1, le=1000)
@@ -3517,6 +3949,15 @@ def admin_list_users(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="هذه الواجهة مخصصة لمدير النظام فقط")
 
     users = db.query(User).order_by(User.id.asc()).all()
+    stale_removed = False
+    for u in list(users):
+        if u.email and u.email.endswith("@na7la.local"):
+            db.delete(u)
+            stale_removed = True
+    if stale_removed:
+        db.commit()
+        users = db.query(User).order_by(User.id.asc()).all()
+
     out = []
     for u in users:
         strips_count = db.query(Strip).filter(Strip.owner_id == u.id).count()
@@ -3525,7 +3966,6 @@ def admin_list_users(request: Request, db: Session = Depends(get_db)):
             "email": u.email,
             "full_name": u.full_name or "مستخدم",
             "role": u.role,
-            "google_uid": u.google_uid,
             "is_google_user": bool(u.google_uid),
             "max_strips": u.max_strips or 1,
             "strips_count": strips_count,
@@ -3557,7 +3997,7 @@ def admin_update_user_quota(user_id: int, req: UpdateQuotaReq, request: Request,
 
 @app.get("/api/v1/admin/stats", tags=["Admin & User Management"])
 def admin_get_stats(request: Request, db: Session = Depends(get_db)):
-    """إحصائيات النظام ومؤشرات صحة السيرفر للأدمن (بدون انتهاك خصوصية أجهزة المنازل)"""
+    """إحصائيات النظام ومؤشرات صحة السيرفر للأدمن (Zero-Knowledge — بدون كشف أي بيانات حساسة)"""
     auth = get_current_user(request, db)
     if not auth or auth.get("role") != "ADMIN":
         raise HTTPException(status_code=403, detail="هذه الواجهة مخصصة لمدير النظام فقط")
@@ -3571,6 +4011,8 @@ def admin_get_stats(request: Request, db: Session = Depends(get_db)):
         "total_users": total_users,
         "total_strips": total_strips,
         "online_strips": online_strips,
+        "encryption": "AES-256-GCM + HMAC-SHA256 + bcrypt",
+        "zero_knowledge_admin": True,
         "server_version": settings.VERSION,
         "tcp_port": settings.TCP_DEVICE_PORT
     }
@@ -3578,29 +4020,52 @@ def admin_get_stats(request: Request, db: Session = Depends(get_db)):
 
 @app.get("/api/v1/admin/strips", tags=["Admin & User Management"])
 def admin_list_strips(request: Request, db: Session = Depends(get_db)):
-    """عرض قائمة بكل المشتركات المسجلة على المنصة وحالتها للأدمن"""
+    """عرض حالة أسطول الأجهزة للأدمن بنظام انعدام المعرفة (Zero-Knowledge: إخفاء MAC و IP واسم الجهاز تماماً)"""
     auth = get_current_user(request, db)
     if not auth or auth.get("role") != "ADMIN":
         raise HTTPException(status_code=403, detail="هذه الواجهة مخصصة لمدير النظام فقط")
 
-    strips = db.query(Strip).all()
+    strips = db.query(Strip).order_by(Strip.id.asc()).all()
     results = []
     for s in strips:
-        is_live = bool(s.mac_address in na7la_hub.sessions) and bool(s.is_online)
-        owner_email = s.owner.email if s.owner else "غير مرتبط (حر)"
+        is_live = bool(s.mac_address in na7la_hub.sessions) or bool(s.is_online)
+        owner_masked = mask_email(s.owner.email) if s.owner else "غير مرتبط (حر)"
         results.append({
             "id": s.id,
-            "mac_address": s.mac_address,
-            "strip_name": s.strip_name,
+            "device_ref": f"STRIP-#{s.id:04d}",
+            "privacy_masked": True,
             "owner_id": s.owner_id,
-            "owner_email": owner_email,
+            "owner_email": owner_masked,
+            "is_claimed": s.owner_id is not None,
             "is_online": is_live,
-            "ip_address": s.ip_address or "-",
             "fw_version": s.fw_version or "1.0.66",
             "model": s.model or "MTTL-W01",
-            "room_category": s.room_category or "office",
+            "last_seen": s.last_seen.isoformat() if s.last_seen else None,
         })
-    return {"ok": True, "strips": results}
+    return {"ok": True, "zero_knowledge": True, "strips": results}
+
+
+@app.delete("/api/v1/admin/strips/{strip_id}", tags=["Admin & User Management"])
+def admin_unbind_strip_by_id(strip_id: int, request: Request, db: Session = Depends(get_db)):
+    """فك ربط أو حذف فتحة جهاز معلقة عبر المعرف الداخلي (strip_id) دون كشف عنوان MAC للمشترك"""
+    auth = get_current_user(request, db)
+    if not auth or auth.get("role") != "ADMIN":
+        raise HTTPException(status_code=403, detail="هذه العملية مخصصة لمدير النظام فقط")
+
+    strip = db.query(Strip).filter(Strip.id == strip_id).first()
+    if not strip:
+        raise HTTPException(status_code=404, detail="الجهاز غير موجود")
+
+    ref_code = f"STRIP-#{strip.id:04d}"
+    db.query(SharedAccess).filter(SharedAccess.strip_id == strip.id).delete()
+    if strip.owner_id is not None:
+        strip.owner_id = None
+        db.commit()
+        return {"ok": True, "action": "unbound", "device_ref": ref_code, "message": f"تم فك ارتباط الجهاز {ref_code} بنجاح"}
+    else:
+        db.delete(strip)
+        db.commit()
+        return {"ok": True, "action": "deleted", "device_ref": ref_code, "message": f"تم حذف الجهاز الحر {ref_code} نهائياً"}
 
 
 @app.delete("/api/v1/admin/users/{user_id}", tags=["Admin & User Management"])
@@ -3617,12 +4082,11 @@ def admin_delete_user(user_id: int, request: Request, db: Session = Depends(get_
     if not target_user:
         raise HTTPException(status_code=404, detail="المستخدم غير موجود")
 
-    # فك ربط أي مشتركات كان يملكها هذا المستخدم لتعود حرة
     db.query(Strip).filter(Strip.owner_id == user_id).update({"owner_id": None})
-    email = target_user.email
+    email_masked = mask_email(target_user.email)
     db.delete(target_user)
     db.commit()
-    return {"ok": True, "message": f"تم حذف حساب المستخدم '{email}' بنجاح"}
+    return {"ok": True, "message": f"تم حذف حساب المستخدم '{email_masked}' بنجاح"}
 
 
 if __name__ == "__main__":

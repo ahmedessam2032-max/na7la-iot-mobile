@@ -164,15 +164,12 @@ class _WizardScreenState extends State<WizardScreen> {
       final typedCode = _apCodeController.text.trim().toUpperCase();
       if (typedCode.isNotEmpty) {
         _selectedStripSsid = typedCode.startsWith('TONLY_TAP_') ? typedCode : 'TONLY_TAP_$typedCode';
-      } else if (isManualSocketDirect) {
-        // Fallback for direct PyDroid style: target the currently registered strip or prompt
-        _selectedStripSsid = 'TONLY_TAP_88D039394B53';
       }
     }
 
     if (_selectedStripSsid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ يرجى اختيار المشترك الذكي المكتشف أو إدخال كود المشترك (مثل 4B53)')),
+        const SnackBar(content: Text('⚠️ يرجى اختيار المشترك الذكي المكتشف أو إدخال كود شبكة المشترك (مثال: A1B2)')),
       );
       return;
     }
@@ -647,7 +644,7 @@ class _WizardScreenState extends State<WizardScreen> {
                         });
                       },
                       decoration: InputDecoration(
-                        hintText: 'مثال: 4B53 أو TONLY_TAP_4B53',
+                        hintText: 'مثال: A1B2 أو TONLY_TAP_A1B2',
                         prefixIcon: const Icon(Icons.wifi_tethering_rounded, size: 18),
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -711,7 +708,7 @@ class _WizardScreenState extends State<WizardScreen> {
           TextField(
             controller: _manualMacController,
             decoration: InputDecoration(
-              hintText: 'مثال: 88D039394B53',
+              hintText: 'مثال: A1B2C3D4E5F6',
               prefixIcon: const Icon(Icons.tag_rounded),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),

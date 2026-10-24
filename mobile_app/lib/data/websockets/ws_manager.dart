@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/storage/secure_storage.dart';
 
 class WebSocketManager {
   WebSocketChannel? _channel;
@@ -24,11 +25,16 @@ class WebSocketManager {
     return _controller!.stream;
   }
 
-  void _initConnection() {
+  Future<void> _initConnection() async {
     if (_isDisposed || _currentMac == null) return;
 
     try {
-      final uri = Uri.parse('${ApiConstants.wsBaseUrl}/$_currentMac');
+      final token = await SecureStorageService.getToken();
+      if (_isDisposed || _currentMac == null) return;
+      final tokenParam = (token != null && token.isNotEmpty)
+          ? '?token=${Uri.encodeComponent(token)}'
+          : '';
+      final uri = Uri.parse('${ApiConstants.wsBaseUrl}/$_currentMac$tokenParam');
       _channel = WebSocketChannel.connect(uri);
 
       _channel!.stream.listen(

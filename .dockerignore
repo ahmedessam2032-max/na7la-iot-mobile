@@ -1,5 +1,6 @@
 # Git & System
 .git
+.github
 .gitignore
 .gemini
 __pycache__
@@ -8,9 +9,21 @@ __pycache__
 *.pyd
 .pytest_cache
 
-# Large media files & artifacts
+# Secrets & Databases (NEVER bake into image layers!)
+.env
+.env.*
+.encryption_keys.json
+brevo_key.txt
+*.db
+*.db-shm
+*.db-wal
+data/
+
+# Mobile source & large media artifacts
+mobile_app/
 *.mp4
 *.apk
+*.zip
 *.jpg
 *.png
 *.log
@@ -19,7 +32,3 @@ __pycache__
 .venv
 venv
 env
-
-# SQLite runtime locks
-*.db-shm
-*.db-wal

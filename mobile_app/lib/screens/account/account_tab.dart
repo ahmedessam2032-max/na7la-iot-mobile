@@ -22,6 +22,119 @@ class AccountTab extends StatelessWidget {
     required this.onLogout,
   });
 
+  Future<void> _openChangePasswordDialog(BuildContext context) async {
+    final currCtrl = TextEditingController();
+    final newCtrl = TextEditingController();
+    final confCtrl = TextEditingController();
+    bool obscure = true;
+    bool saving = false;
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          backgroundColor: isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(
+            '🔐 تغيير كلمة المرور المشفرة',
+            style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'تُشفر كلمة المرور بـ bcrypt مع إبطال فوري لكافة الجلسات المفتوحة على أي أجهزة أخرى.',
+                  style: GoogleFonts.cairo(fontSize: 11, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: currCtrl,
+                  obscureText: obscure,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور الحالية',
+                    prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.emeraldPrimary),
+                    suffixIcon: IconButton(
+                      icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                      onPressed: () => setModalState(() => obscure = !obscure),
+                    ),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: newCtrl,
+                  obscureText: obscure,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور الجديدة (8+ خانات وحروف وأرقام)',
+                    prefixIcon: const Icon(Icons.vpn_key_rounded, color: AppColors.emeraldPrimary),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: confCtrl,
+                  obscureText: obscure,
+                  decoration: InputDecoration(
+                    labelText: 'تأكيد كلمة المرور الجديدة',
+                    prefixIcon: const Icon(Icons.verified_user_rounded, color: AppColors.emeraldPrimary),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: saving ? null : () => Navigator.pop(ctx),
+              child: Text('إلغاء', style: GoogleFonts.cairo(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.emeraldPrimary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: saving
+                  ? null
+                  : () async {
+                      setModalState(() => saving = true);
+                      final repo = StripRepository();
+                      final res = await repo.changePassword(
+                        currentPassword: currCtrl.text,
+                        newPassword: newCtrl.text,
+                        confirmPassword: confCtrl.text,
+                      );
+                      setModalState(() => saving = false);
+                      if (res['success'] == true && ctx.mounted) {
+                        Navigator.pop(ctx);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(res['message'] ?? 'تم تغيير كلمة المرور بنجاح'),
+                              backgroundColor: AppColors.emeraldPrimary,
+                            ),
+                          );
+                        }
+                      } else if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(res['message'] ?? 'تعذر تغيير كلمة المرور'),
+                            backgroundColor: AppColors.dangerRed,
+                          ),
+                        );
+                      }
+                    },
+              child: Text(
+                saving ? 'جارٍ التشفير...' : 'حفظ كلمة المرور',
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _openJoinShareDialog(BuildContext context) async {
     final codeCtrl = TextEditingController();
     await showDialog(
@@ -217,6 +330,49 @@ class AccountTab extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                       color: AppColors.emeraldPrimary,
                     ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // Change Password & Session Revocation Card
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: cardBg,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: borderColor, width: 1.2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'تغيير كلمة المرور وحماية الجلسات 🔐',
+                        style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w900, color: textPrimary),
+                      ),
+                      Text(
+                        'تشفير bcrypt + إبطال فوري لأي جلسة مفتوحة على جهاز آخر',
+                        style: GoogleFonts.cairo(fontSize: 10, color: textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _openChangePasswordDialog(context),
+                  icon: const Icon(Icons.lock_reset_rounded, size: 15),
+                  label: Text('تغيير', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w900)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.emeraldPrimary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
               ],

@@ -1,11 +1,12 @@
 import os
+from crypto_utils import MASTER_SECRET_KEY
 
 class Settings:
     PROJECT_NAME: str = "Na7la IoT"
-    VERSION: str = "1.0.0"
+    VERSION: str = "2.1.0"
 
-    # مفتاح التوقيع المشفر للجلسات والتوكنات
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "na7la_iot_super_secret_master_key_2026")
+    # مفتاح التوقيع المشفر للجلسات والتوكنات (256-bit CSPRNG)
+    SECRET_KEY: str = MASTER_SECRET_KEY
 
     # إعدادات قاعدة البيانات (SQLite محلياً أو PostgreSQL على AWS)
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./na7la_iot.db")
@@ -32,19 +33,20 @@ class Settings:
     EMERGENCY_MAX_WATT: float = 3300.0
     EMERGENCY_MAX_AMP: float = 17.5
 
-    # مدراء النظام وقوائم الصلاحيات والكوتا
-    SUPERADMIN_EMAIL: str = os.getenv("SUPERADMIN_EMAIL", "ahmedessam2032@gmail.com")
+    # مدراء النظام وقوائم الصلاحيات والكوتا (المالك الرئيسي فقط)
+    SUPERADMIN_EMAIL: str = os.getenv("SUPERADMIN_EMAIL", "ahmedessam2032@gmail.com").strip().lower()
     ADMIN_EMAILS: list[str] = [
-        e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "ahmedessam2032@gmail.com,ahmed@na7la.local").split(",") if e.strip()
+        e.strip().lower() for e in os.getenv("ADMIN_EMAILS", "ahmedessam2032@gmail.com").split(",") if e.strip()
     ]
     DEFAULT_USER_MAX_STRIPS: int = int(os.getenv("DEFAULT_USER_MAX_STRIPS", 1))
 
-    # إعدادات خادم البريد الإلكتروني السحابي (AWS SES / SMTP)
+    # إعدادات خادم البريد الإلكتروني السحابي (Brevo API / AWS SES / SMTP)
+    BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
     SMTP_HOST: str = os.getenv("SMTP_HOST", "")
     SMTP_PORT: int = int(os.getenv("SMTP_PORT", 587))
     SMTP_USER: str = os.getenv("SMTP_USER", "")
     SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "noreply@na7la-iot.com")
-    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Na7la IoT Cloud")
+    SMTP_FROM_EMAIL: str = os.getenv("SMTP_FROM_EMAIL", "ahmedessam2032@gmail.com")
+    SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Na7la IOT")
 
 settings = Settings()

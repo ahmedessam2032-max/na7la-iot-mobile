@@ -40,22 +40,35 @@ def main():
         s.connect((AP_IP, AP_PORT))
         print("✅ تم الاتصال بنجاح بنقطة وصول المشترك الداخلي!")
 
-        # 1. إرسال أمر تعيين السيرفر السحابي (مثل كود درويش بالضبط: up:ip:<server_ip>)
+        # 1. إرسال أمر تعيين السيرفر السحابي (up:ip:<server_ip>)
         cmd_ip = f"up:ip:{server_ip}\r\n".encode("utf-8")
         print(f"📡 جاري تعيين سيرفر السحابة: up:ip:{server_ip}")
         s.sendall(cmd_ip)
         time.sleep(0.8)
+        try:
+            resp1 = s.recv(1024).decode("utf-8", "ignore")
+            if resp1:
+                print(f"📩 رد المشترك (IP): {resp1.strip()}")
+        except Exception:
+            pass
 
-        # 2. إرسال أمر ربط واي فاي المنزل (مثل كود درويش بالضبط: up:connect:<ssid>:<password>)
+        # 2. إرسال أمر ربط واي فاي المنزل (up:connect:<ssid>:<password>)
         cmd_connect = f"up:connect:{ssid}:{password}\r\n".encode("utf-8")
         print(f"📶 جاري إرسال بيانات الواي فاي: up:connect:{ssid}:******")
         s.sendall(cmd_connect)
         time.sleep(1.0)
-
         try:
-            resp = s.recv(1024).decode("utf-8", "ignore")
-            if resp:
-                print(f"📩 استجابة المشترك: {resp.strip()}")
+            resp2 = s.recv(1024).decode("utf-8", "ignore")
+            if resp2:
+                print(f"📩 رد المشترك (Wi-Fi): {resp2.strip()}")
+        except Exception:
+            pass
+
+        # 3. إرسال أمر إعادة التشغيل الإلزامي للخروج من وضع AP والاتصال بالراوتر (up:reboot:0)
+        print("🔄 جاري إرسال أمر إعادة تشغيل الواي فاي للاتصال بالسيرفر: up:reboot:0")
+        try:
+            s.sendall(b"up:reboot:0\r\n")
+            time.sleep(0.5)
         except Exception:
             pass
 

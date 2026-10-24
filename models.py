@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
+from typing import Optional
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, UniqueConstraint
+    Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text, UniqueConstraint, event
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, Session
 from database import Base
+from crypto_utils import EncryptedText, compute_blind_index, normalize_mac
 
 
 def utc_now():
@@ -11,14 +13,16 @@ def utc_now():
 
 
 class User(Base):
-    """جدول المستخدمين وإعدادات الأمان والتعرفة الإقليمية"""
+    """جدول المستخدمين وإعدادات الأمان والتعرفة الإقليمية (تشفير AES-256-GCM للبيانات الشخصية)"""
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    google_uid = Column(String(128), unique=True, index=True, nullable=True)
-    email = Column(String(255), unique=True, index=True, nullable=False)
+    google_uid = Column(EncryptedText, nullable=True)
+    google_blind_index = Column(String(64), unique=True, index=True, nullable=True)
+    email = Column(EncryptedText, nullable=False)
+    email_blind_index = Column(String(64), unique=True, index=True, nullable=True)
     password_hash = Column(String(255), nullable=True)
-    full_name = Column(String(150), nullable=True)
+    full_name = Column(EncryptedText, nullable=True)
     role = Column(String(20), default="USER")  # ADMIN / USER
     plan_name = Column(String(20), default="FREE")  # FREE (1 strip) / PRO (15 strips) / ADMIN
     max_strips = Column(Integer, default=1)  # الحد الأقصى للمشتركات المسموح بربطها
@@ -34,12 +38,13 @@ class User(Base):
     currency = Column(String(10), default="EGP")
     electricity_rate_egp = Column(Float, default=1.45)
     tariff_mode = Column(String(20), default="TIERS")  # TIERS (شرائح الكهرباء المصرية) / FLAT (سعر موحد)
-    notif_prefs_json = Column(Text, nullable=True)  # تفضيلات الإشعارات بصيغة JSON
+    notif_prefs_json = Column(EncryptedText, nullable=True)  # تفضيلات الإشعارات مشفرة
 
-    # قنوات الإشعارات والتكامل الخارجي
-    fcm_token = Column(String(512), nullable=True)
-    telegram_chat_id = Column(String(100), nullable=True)
-    webhook_token = Column(String(128), unique=True, index=True, nullable=True)
+    # قنوات الإشعارات والتكامل الخارجي (مشفرة بالكامل)
+    fcm_token = Column(EncryptedText, nullable=True)
+    telegram_chat_id = Column(EncryptedText, nullable=True)
+    webhook_token = Column(EncryptedText, nullable=True)
+    webhook_blind_index = Column(String(64), unique=True, index=True, nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
@@ -49,20 +54,21 @@ class User(Base):
 
 
 class Strip(Base):
-    """جدول المشتركات الذكية (MTTL-W01) وإعدادات الحماية الشاملة الديناميكية"""
+    """جدول المشتركات الذكية (MTTL-W01) مع تشفير الـ MAC والـ IP والاسم وعزل الهوية بـ Blind Index"""
     __tablename__ = "strips"
 
     id = Column(Integer, primary_key=True, index=True)
-    mac_address = Column(String(12), unique=True, index=True, nullable=False)
+    mac_blind_index = Column(String(64), unique=True, index=True, nullable=False)
+    mac_address = Column(EncryptedText, nullable=False)
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    strip_name = Column(String(100), default="مشترك ذكي")
+    strip_name = Column(EncryptedText, default="مشترك ذكي")
     icon = Column(String(20), default="💻")
-    room_category = Column(String(50), default="office")
+    room_category = Column(EncryptedText, default="office")
 
     # بيانات الهاردوير المستلمة من حزمة up:bootinfo
     model = Column(String(50), default="LGU+-TAP-HW002")
     fw_version = Column(String(20), default="1.0.66")
-    ip_address = Column(String(45), nullable=True)
+    ip_address = Column(EncryptedText, nullable=True)
     wifi_rssi = Column(Integer, nullable=True)
 
     # حالة الاتصال اللحظية
@@ -75,20 +81,20 @@ class Strip(Base):
     max_voltage = Column(Float, default=245.0)
     voltage_protect_enabled = Column(Boolean, default=True)
     auto_recover_voltage = Column(Boolean, default=True)
-    voltage_exempt_sockets = Column(String(50), default="2,4")  # المخارج المستثناة من فصل الفولت (مثل الراوتر)
-    voltage_recover_delay_sec = Column(Integer, default=180)  # مهلة الاسترجاع بعد استقرار الفولت بالثواني
-    voltage_breach_count = Column(Integer, default=0)  # عدد مرات تجاوز الفولت
-    disconnect_count = Column(Integer, default=0)  # عدد مرات انقطاع اتصال المشترك
-    last_disconnect_at = Column(DateTime(timezone=True), nullable=True)  # آخر وقت انقطاع
-    power_return_state = Column(String(20), default="LAST")  # LAST / ON / OFF (حالة العودة بعد انقطاع الكهرباء)
-    biometric_control = Column(Boolean, default=False)  # قفل تحكم المشترك بالبصمة
+    voltage_exempt_sockets = Column(String(50), default="2,4")
+    voltage_recover_delay_sec = Column(Integer, default=180)
+    voltage_breach_count = Column(Integer, default=0)
+    disconnect_count = Column(Integer, default=0)
+    last_disconnect_at = Column(DateTime(timezone=True), nullable=True)
+    power_return_state = Column(String(20), default="LAST")
+    biometric_control = Column(Boolean, default=False)
     max_temp_c = Column(Integer, default=65)
     max_total_watt = Column(Float, default=3000.0)
     max_total_amp = Column(Float, default=16.0)
 
     # إسقاط الأحمال الذكي وحفظ حالة ما قبل أزمة الفولت
     auto_shedding_enabled = Column(Boolean, default=True)
-    pre_trip_state = Column(Text, nullable=True)  # مصفوفة JSON للفيش التي كانت تعمل قبل الفصل
+    pre_trip_state = Column(EncryptedText, nullable=True)
 
     # أوضاع التشغيل والأمان الإضافي
     child_lock = Column(Boolean, default=False)
@@ -97,7 +103,7 @@ class Strip(Base):
     pin_code_hash = Column(String(255), nullable=True)
 
     # نافذة الاقتران الآمن
-    pairing_code = Column(String(32), nullable=True)
+    pairing_code = Column(EncryptedText, nullable=True)
     pairing_expires_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=utc_now)
@@ -110,7 +116,7 @@ class Strip(Base):
 
 
 class Socket(Base):
-    """جدول المخارج الأربعة لكل مشترك وخصائص الحماية والترابط الشرطي وحماية الراوتر"""
+    """جدول المخارج الأربعة لكل مشترك (أسماء المخارج مشفرة بـ AES-256-GCM)"""
     __tablename__ = "sockets"
     __table_args__ = (UniqueConstraint("strip_id", "socket_index", name="uq_strip_socket_idx"),)
 
@@ -118,28 +124,27 @@ class Socket(Base):
     strip_id = Column(Integer, ForeignKey("strips.id", ondelete="CASCADE"), nullable=False)
     socket_index = Column(Integer, nullable=False)  # 1, 2, 3, 4
 
-    name = Column(String(50), default="مقبس")
+    name = Column(EncryptedText, default="مقبس")
     icon = Column(String(50), default="power_plug")
     is_favorite = Column(Boolean, default=False)
-    color_hex = Column(String(20), default="#10B981")  # لون المخرج من الـ 6 ألوان المخصصة
+    color_hex = Column(String(20), default="#10B981")
 
     # خصائص التحكم الذكي المتقدمة (WattQ + Na7la Exclusive)
-    link_group = Column(Integer, default=0)  # 0=بدون ربط، 1..4=مجموعة ربط مخارج
-    doorbell_mode = Column(Boolean, default=False)  # وضع الجرس اللحظي
-    doorbell_pulse_sec = Column(Integer, default=3)  # مدة نبضة الجرس بالثواني
-    is_pinned_state = Column(Boolean, default=False)  # تثبيت الحالة الحالية ومنع التغيير
-    alert_watt_threshold = Column(Float, nullable=True)  # تنبيه عند تجاوز واط معين بدون فصل
-    auto_off_delay_sec = Column(Integer, nullable=True)  # إطفاء تلقائي بعد مدة تشغيل بالثواني
+    link_group = Column(Integer, default=0)
+    doorbell_mode = Column(Boolean, default=False)
+    doorbell_pulse_sec = Column(Integer, default=3)
+    is_pinned_state = Column(Boolean, default=False)
+    alert_watt_threshold = Column(Float, nullable=True)
+    auto_off_delay_sec = Column(Integer, nullable=True)
 
     # حماية الراوتر والأجهزة الحيوية من الإطفاء بالخطأ
     is_router = Column(Boolean, default=False)
     is_locked = Column(Boolean, default=False)
 
-
     # توأم الحالة (Device Shadow)
     reported_state = Column(Boolean, default=False)
     desired_state = Column(Boolean, default=False)
-    power_on_behavior = Column(String(10), default="LAST")  # ON / OFF / LAST
+    power_on_behavior = Column(String(10), default="LAST")
 
     # القراءات اللحظية
     current_watt = Column(Float, default=0.0)
@@ -155,10 +160,10 @@ class Socket(Base):
 
     # حدود الحماية الخاصة بالمخرج
     max_watt_limit = Column(Float, default=2500.0)
-    min_watt_cutoff = Column(Float, nullable=True)  # حد فصل الشواحن واكتمال الشحن
-    cutoff_delay_sec = Column(Integer, default=600)  # مهلة فحص الخمول (ثوانٍ)
+    min_watt_cutoff = Column(Float, nullable=True)
+    cutoff_delay_sec = Column(Integer, default=600)
     compressor_protect = Column(Boolean, default=False)
-    compressor_delay_sec = Column(Integer, default=180)  # مهلة أمان مواتير التبريد (ثوانٍ)
+    compressor_delay_sec = Column(Integer, default=180)
     last_off_timestamp = Column(DateTime(timezone=True), nullable=True)
 
     # الترابط الشرطي (Master-Slave) وأوقات الحظر
@@ -188,7 +193,7 @@ class Schedule(Base):
     auto_off_delay_sec = Column(Integer, nullable=True)
 
     target_state = Column(Boolean, nullable=False)
-    hold_state = Column(Boolean, default=False)  # تثبيت حالة الجدولة ومنع التغيير اليدوي أثناءها
+    hold_state = Column(Boolean, default=False)
     is_active = Column(Boolean, default=True)
     next_run_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now)
@@ -197,32 +202,33 @@ class Schedule(Base):
 
 
 class Scene(Base):
-    """جدول المشاهد المجمعة مع التأخير المتتابع لمنع الشرارة"""
+    """جدول المشاهد المجمعة (الاسم والأوامر وعناوين MAC مشفرة بالكامل بـ AES-256-GCM)"""
     __tablename__ = "scenes"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    scene_name = Column(String(100), nullable=False)
+    scene_name = Column(EncryptedText, nullable=False)
     icon = Column(String(50), default="sparkles")
     stagger_delay_ms = Column(Integer, default=1500)
-    actions_json = Column(Text, nullable=False)
+    actions_json = Column(EncryptedText, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
     user = relationship("User", back_populates="scenes")
 
 
 class SharedAccess(Base):
-    """جدول مشاركة المشترك مع أفراد العائلة بأكواد دعوة وصلاحيات محددة"""
+    """جدول مشاركة المشترك مع أفراد العائلة بأكواد دعوة مشفرة مع بصمة بحث عمياء"""
     __tablename__ = "shared_access"
 
     id = Column(Integer, primary_key=True, index=True)
     strip_id = Column(Integer, ForeignKey("strips.id", ondelete="CASCADE"), nullable=False)
     shared_with_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    member_name = Column(String(100), default="فرد عائلة")
+    member_name = Column(EncryptedText, default="فرد عائلة")
     permission_level = Column(String(20), default="FULL")  # FULL / PARTIAL / VIEW
-    allowed_sockets = Column(String(50), default="1,2,3,4")  # comma-separated e.g. "1" or "1,2"
+    allowed_sockets = Column(String(50), default="1,2,3,4")
     is_active = Column(Boolean, default=True)
-    invite_code = Column(String(32), unique=True, index=True, nullable=True)
+    invite_code = Column(EncryptedText, nullable=True)
+    invite_blind_index = Column(String(64), unique=True, index=True, nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
@@ -247,16 +253,16 @@ class EnergyLog(Base):
 
 
 class AuditLog(Base):
-    """الصندوق الأسود لتوثيق كافة الأوامر وأسباب الفصل ومحاولات قفل الأطفال"""
+    """الصندوق الأسود لتوثيق الأوامر (التفاصيل والمنفذ مشفرون بـ AES-256-GCM)"""
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
     strip_id = Column(Integer, ForeignKey("strips.id", ondelete="CASCADE"), nullable=False)
     socket_index = Column(Integer, nullable=True)
     action = Column(String(30), nullable=False)
-    triggered_by = Column(String(30), nullable=False)
+    triggered_by = Column(EncryptedText, nullable=False)
     actor_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    reason_details = Column(String(255), nullable=True)
+    reason_details = Column(EncryptedText, nullable=True)
     timestamp = Column(DateTime(timezone=True), index=True, default=utc_now)
 
     strip = relationship("Strip", back_populates="audit_logs")
@@ -277,26 +283,27 @@ class FirmwareRelease(Base):
 
 
 class PasswordReset(Base):
-    """جدول أكواد التحقق السحابية لاستعادة كلمة المرور (Email OTP)"""
+    """جدول أكواد التحقق السحابية (البريد مشفر + كود OTP مشفر باتجاه واحد HMAC-SHA256)"""
     __tablename__ = "password_resets"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String(255), index=True, nullable=False)
-    otp_code = Column(String(10), nullable=False)
+    email_blind_index = Column(String(64), index=True, nullable=False)
+    email = Column(EncryptedText, nullable=False)
+    otp_code = Column(String(64), nullable=False)  # HMAC-SHA256 irreversible hash
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_used = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), default=utc_now)
 
 
 class OutletRunSession(Base):
-    """جدول سجل جلسات التشغيل التفصيلي (Run log — last 30 days) لكل مخرج"""
+    """جدول سجل جلسات التشغيل التفصيلي لكل مخرج"""
     __tablename__ = "outlet_run_sessions"
 
     id = Column(Integer, primary_key=True, index=True)
     strip_id = Column(Integer, ForeignKey("strips.id", ondelete="CASCADE"), index=True, nullable=False)
     socket_id = Column(Integer, ForeignKey("sockets.id", ondelete="CASCADE"), index=True, nullable=False)
     socket_index = Column(Integer, nullable=False)
-    socket_name = Column(String(50), default="مقبس")
+    socket_name = Column(EncryptedText, default="مقبس")
     started_at = Column(DateTime(timezone=True), index=True, default=utc_now)
     ended_at = Column(DateTime(timezone=True), nullable=True)
     duration_sec = Column(Integer, default=0)
@@ -312,11 +319,95 @@ class OutletRunSession(Base):
 
 
 class FeedbackSuggestion(Base):
-    """جدول مقترحات المستخدمين وملاحظات الدعم الفني"""
+    """جدول مقترحات المستخدمين وملاحظات الدعم الفني (مشفر بالكامل)"""
     __tablename__ = "feedback_suggestions"
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    email = Column(String(255), nullable=True)
-    message = Column(Text, nullable=False)
+    email = Column(EncryptedText, nullable=True)
+    message = Column(EncryptedText, nullable=False)
     created_at = Column(DateTime(timezone=True), default=utc_now)
+
+
+# ==============================================================================
+# مزامنة البصمات العمياء تلقائياً (Automatic Blind-Index Lifecycle Hooks)
+# ==============================================================================
+def _sync_user_blind_indexes(mapper, connection, target: User):
+    if target.email:
+        target.email = target.email.strip().lower()
+        target.email_blind_index = compute_blind_index("email", target.email)
+    if target.google_uid:
+        target.google_blind_index = compute_blind_index("google", target.google_uid)
+    else:
+        target.google_blind_index = None
+    if target.webhook_token:
+        target.webhook_blind_index = compute_blind_index("webhook", target.webhook_token)
+    else:
+        target.webhook_blind_index = None
+
+
+def _sync_strip_blind_indexes(mapper, connection, target: Strip):
+    if target.mac_address:
+        clean = normalize_mac(target.mac_address)
+        target.mac_address = clean
+        target.mac_blind_index = compute_blind_index("mac", clean)
+
+
+def _sync_share_blind_indexes(mapper, connection, target: SharedAccess):
+    if target.invite_code:
+        clean = target.invite_code.strip().upper()
+        target.invite_code = clean
+        target.invite_blind_index = compute_blind_index("invite", clean)
+    else:
+        target.invite_blind_index = None
+
+
+def _sync_pwreset_blind_indexes(mapper, connection, target: PasswordReset):
+    if target.email:
+        clean = target.email.strip().lower()
+        target.email = clean
+        target.email_blind_index = compute_blind_index("email", clean)
+
+
+event.listen(User, "before_insert", _sync_user_blind_indexes)
+event.listen(User, "before_update", _sync_user_blind_indexes)
+event.listen(Strip, "before_insert", _sync_strip_blind_indexes)
+event.listen(Strip, "before_update", _sync_strip_blind_indexes)
+event.listen(SharedAccess, "before_insert", _sync_share_blind_indexes)
+event.listen(SharedAccess, "before_update", _sync_share_blind_indexes)
+event.listen(PasswordReset, "before_insert", _sync_pwreset_blind_indexes)
+event.listen(PasswordReset, "before_update", _sync_pwreset_blind_indexes)
+
+
+# ==============================================================================
+# دوال البحث الآمن عبر البصمات العمياء (Blind-Index Query Helpers)
+# ==============================================================================
+def find_user_by_email(db: Session, email: Optional[str]) -> Optional[User]:
+    idx = compute_blind_index("email", email)
+    if not idx:
+        return None
+    return db.query(User).filter(User.email_blind_index == idx).first()
+
+
+def find_user_by_google_uid(db: Session, google_uid: Optional[str]) -> Optional[User]:
+    idx = compute_blind_index("google", google_uid)
+    if not idx:
+        return None
+    return db.query(User).filter(User.google_blind_index == idx).first()
+
+
+def find_strip_by_mac(db: Session, mac: Optional[str]) -> Optional[Strip]:
+    idx = compute_blind_index("mac", mac)
+    if not idx:
+        return None
+    return db.query(Strip).filter(Strip.mac_blind_index == idx).first()
+
+
+def find_share_by_invite_code(db: Session, invite_code: Optional[str], active_only: bool = True) -> Optional[SharedAccess]:
+    idx = compute_blind_index("invite", invite_code)
+    if not idx:
+        return None
+    q = db.query(SharedAccess).filter(SharedAccess.invite_blind_index == idx)
+    if active_only:
+        q = q.filter(SharedAccess.is_active == True)
+    return q.first()

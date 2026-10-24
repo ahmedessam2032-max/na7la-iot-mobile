@@ -7,8 +7,9 @@ from datetime import datetime, timezone
 from typing import Callable, Coroutine, Any, Optional
 
 from config import settings
+from crypto_utils import mask_mac, mask_ip
 from database import SessionLocal
-from models import Strip, Socket, AuditLog, EnergyLog, OutletRunSession
+from models import Strip, Socket, AuditLog, EnergyLog, OutletRunSession, find_strip_by_mac
 from plugins import PROTECTION_AND_AUTOMATION_RULES, log_event
 
 # التعبيرات النمطية لبروتوكول المشترك (Stock 0.1.54-1.0.66)
@@ -94,6 +95,8 @@ class StripSession:
 
         self.mac: Optional[str] = None
         self.strip_id: Optional[int] = None
+        self.model: str = "lgutap"
+        self.fw_version: str = "0.1.55"
         self.last_cmd = ""
         self.last_rx = ""
 
@@ -202,7 +205,7 @@ class Na7laTCPHub:
         session = self.get_session(mac)
         db = SessionLocal()
         try:
-            strip = db.query(Strip).filter(Strip.mac_address == mac.upper()).first()
+            strip = find_strip_by_mac(db, mac)
             if not strip:
                 return
             sock = next((s for s in strip.sockets if s.socket_index == socket_index), None)
@@ -237,7 +240,7 @@ class Na7laTCPHub:
             return
         db = SessionLocal()
         try:
-            strip = db.query(Strip).filter(Strip.mac_address == session.mac).first()
+            strip = find_strip_by_mac(db, session.mac)
             if not strip:
                 return
 
@@ -415,7 +418,7 @@ class Na7laTCPHub:
             return
         db = SessionLocal()
         try:
-            strip = db.query(Strip).filter(Strip.mac_address == session.mac).first()
+            strip = find_strip_by_mac(db, session.mac)
             if not strip:
                 return
 
@@ -508,7 +511,7 @@ class Na7laTCPHub:
             return
         db = SessionLocal()
         try:
-            strip = db.query(Strip).filter(Strip.mac_address == session.mac).first()
+            strip = find_strip_by_mac(db, session.mac)
             if not strip:
                 return
 
@@ -582,7 +585,7 @@ class Na7laTCPHub:
         peer = writer.get_extra_info("peername")
         ip = peer[0] if peer else "?"
         session = StripSession(ip, reader, writer)
-        print(f"[{settings.PROJECT_NAME} TCP] New connection from {ip}")
+        print(f"[{settings.PROJECT_NAME} TCP] New connection from {mask_ip(ip)}")
 
         try:
             while True:
@@ -599,6 +602,8 @@ class Na7laTCPHub:
                 if m:
                     model, mac, _, fw = m.group(1), m.group(2).upper(), m.group(3), m.group(4)
                     session.mac = mac
+                    session.model = model
+                    session.fw_version = fw
 
                     old = self.sessions.get(mac)
                     if old and old is not session:
@@ -607,9 +612,9 @@ class Na7laTCPHub:
 
                     db = SessionLocal()
                     try:
-                        strip = db.query(Strip).filter(Strip.mac_address == mac).first()
-                        if not strip or strip.owner_id is None:
-                            print(f"[{settings.PROJECT_NAME} TCP] ℹ️ Device {mac} from {ip} is not claimed by any user. Skipping auto-provision.")
+                        strip = find_strip_by_mac(db, mac)
+                        if not strip:
+                            print(f"[{settings.PROJECT_NAME} TCP] ℹ️ Device {mask_mac(mac)} from {mask_ip(ip)} is not claimed by any user yet (ready in memory).")
                         else:
                             strip.model, strip.fw_version, strip.ip_address = model, fw, ip
                             strip.is_online = True
@@ -619,12 +624,12 @@ class Na7laTCPHub:
                     finally:
                         db.close()
 
-                    print(f"[{settings.PROJECT_NAME} TCP] ✅ Client {mac} securely connected (fw={fw})")
+                    print(f"[{settings.PROJECT_NAME} TCP] ✅ Client {mask_mac(mac)} securely connected (fw={fw})")
                     asyncio.create_task(session.refresh())
                     asyncio.create_task(session.query_diagnostics())
                     db_check = SessionLocal()
                     try:
-                        st = db_check.query(Strip).filter(Strip.mac_address == mac).first()
+                        st = find_strip_by_mac(db_check, mac)
                         if st and st.child_lock:
                             asyncio.create_task(session.set_child_lock(True))
                         elif st and not st.child_lock:
@@ -653,7 +658,7 @@ class Na7laTCPHub:
                 if m:
                     db = SessionLocal()
                     try:
-                        strip = db.query(Strip).filter(Strip.mac_address == session.mac).first()
+                        strip = find_strip_by_mac(db, session.mac)
                         if strip:
                             strip.wifi_rssi = int(m.group(1))
                             db.commit()
@@ -671,10 +676,10 @@ class Na7laTCPHub:
                     session.last_childlock_mask = cl_mask
                     session.got_childlock.set()
                     is_locked = (cl_mask == 31)
-                    print(f"[{settings.PROJECT_NAME} TCP] 🔒 Child lock hardware state confirmed for {session.mac}: mask={cl_mask} (locked={is_locked})")
+                    print(f"[{settings.PROJECT_NAME} TCP] 🔒 Child lock hardware state confirmed for {mask_mac(session.mac)}: mask={cl_mask} (locked={is_locked})")
                     db = SessionLocal()
                     try:
-                        strip = db.query(Strip).filter(Strip.mac_address == session.mac).first()
+                        strip = find_strip_by_mac(db, session.mac)
                         if strip and strip.child_lock != is_locked:
                             strip.child_lock = is_locked
                             db.commit()
@@ -694,13 +699,13 @@ class Na7laTCPHub:
         except (ConnectionResetError, BrokenPipeError, asyncio.IncompleteReadError):
             pass
         except Exception as err:
-            print(f"[{settings.PROJECT_NAME} TCP] خطأ جلسة {ip}: {err!r}")
+            print(f"[{settings.PROJECT_NAME} TCP] خطأ جلسة {mask_ip(ip)}: {err!r}")
         finally:
             if session.mac and self.sessions.get(session.mac) is session:
                 self.sessions.pop(session.mac, None)
                 db = SessionLocal()
                 try:
-                    strip = db.query(Strip).filter(Strip.mac_address == session.mac).first()
+                    strip = find_strip_by_mac(db, session.mac)
                     if strip:
                         strip.is_online = False
                         strip.disconnect_count = (getattr(strip, "disconnect_count", 0) or 0) + 1
@@ -708,7 +713,7 @@ class Na7laTCPHub:
                         db.commit()
                 finally:
                     db.close()
-                print(f"[{settings.PROJECT_NAME} TCP] Client {session.mac} is offline")
+                print(f"[{settings.PROJECT_NAME} TCP] Client {mask_mac(session.mac)} is offline")
                 await self.broadcast_update(session.mac, {"event": "status_change", "mac": session.mac, "online": False})
 
             writer.close()
@@ -762,7 +767,7 @@ class Na7laTCPHub:
                     st.is_online = False
                     st.disconnect_count = (getattr(st, "disconnect_count", 0) or 0) + 1
                     st.last_disconnect_at = utc_now()
-                    print(f"[{settings.PROJECT_NAME} TCP] ⚠️ Marked stale strip {st.mac_address} as offline (timeout > 90s)")
+                    print(f"[{settings.PROJECT_NAME} TCP] ⚠️ Marked stale strip {mask_mac(st.mac_address)} as offline (timeout > 90s)")
             if stale_strips:
                 db.commit()
         except Exception as e:

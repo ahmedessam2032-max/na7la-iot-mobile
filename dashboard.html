@@ -2050,7 +2050,10 @@
       if (!list) return;
       list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 12px;">${currentLang === "ar" ? "جارٍ البحث عن أجهزة غير مقترنة على الشبكة..." : "Scanning network for unclaimed power strips..."}</div>`;
       try {
-        const res = await fetch("/api/v1/strips/unclaimed");
+        const savedTok = localStorage.getItem("na7la_auth_token") || "";
+        const res = await fetch("/api/v1/strips/unclaimed", {
+          headers: savedTok ? { "X-Na7la-Token": savedTok } : {}
+        });
         if (!res.ok) return;
         const data = await res.json();
         const unclaimed = data.unclaimed || [];
@@ -2950,7 +2953,10 @@
       if (!mac) return;
       if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      ws = new WebSocket(`${proto}//${location.host}/ws/strips/${mac}`);
+      const urlParams = new URLSearchParams(window.location.search);
+      const qTok = urlParams.get("token") || localStorage.getItem("na7la_auth_token") || "";
+      const tokSuffix = qTok ? `?token=${encodeURIComponent(qTok)}` : "";
+      ws = new WebSocket(`${proto}//${location.host}/ws/strips/${mac}${tokSuffix}`);
 
       ws.onmessage = (event) => {
         try {
@@ -3182,6 +3188,7 @@
         });
         const data = await res.json();
         if (res.ok) {
+          if (data.token) localStorage.setItem("na7la_auth_token", data.token);
           showToast(`${currentLang === "ar" ? "مرحباً بعودتك" : "Welcome back"}, ${data.name}!`);
           closeModal("modal-login");
           await checkAuthStatus();
@@ -3196,6 +3203,7 @@
 
     async function logoutUser() {
       try {
+        localStorage.removeItem("na7la_auth_token");
         await fetch("/api/v1/auth/logout", { method: "POST" });
         currentUser = null;
         showToast(currentLang === "ar" ? "تم تسجيل الخروج" : "Logged out");
