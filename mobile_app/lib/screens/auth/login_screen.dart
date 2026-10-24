@@ -184,12 +184,23 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: AppLocaleController.instance,
+      animation: Listenable.merge([
+        AppLocaleController.instance,
+        AppThemeController.instance,
+      ]),
       builder: (context, _) {
+        final isDark = AppThemeController.instance.isDark;
+        final bg = isDark ? AppColors.darkBg : AppColors.lightBg;
+        final cardBg = isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;
+        final inputFill = isDark ? const Color(0xFF0F172A) : AppColors.cardMutedLight;
+        final borderCol = isDark ? AppColors.darkBorder : AppColors.borderLight;
+        final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+        final textSecondary = isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+
         return Directionality(
           textDirection: AppLocaleController.instance.textDirection,
           child: Scaffold(
-            backgroundColor: AppColors.darkBg,
+            backgroundColor: bg,
             body: SafeArea(
               child: Center(
                 child: SingleChildScrollView(
@@ -197,7 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // --- Top Header with Language Switcher Pill ---
+                      // --- Top Header with Language & Theme Switcher Pills ---
                       Container(
                         padding: const EdgeInsets.only(bottom: 16),
                         child: Row(
@@ -208,37 +219,82 @@ class _LoginScreenState extends State<LoginScreen> {
                               style: GoogleFonts.cairo(
                                 fontSize: 11.5,
                                 fontWeight: FontWeight.w700,
-                                color: Colors.white60,
+                                color: textSecondary,
                               ),
                             ),
-                            GestureDetector(
-                              onTap: () => AppLocaleController.instance.toggleLanguage(),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: AppColors.emeraldActive.withOpacity(0.12),
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                    color: AppColors.emeraldActive.withOpacity(0.5),
-                                    width: 1.4,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.language_rounded, size: 14, color: AppColors.emeraldActive),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      _tr('quick_switch_target'),
-                                      style: GoogleFonts.cairo(
-                                        fontSize: 11.5,
-                                        fontWeight: FontWeight.w900,
-                                        color: AppColors.emeraldActive,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                GestureDetector(
+                                  onTap: () => AppThemeController.instance.toggleTheme(),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.amber.withOpacity(0.12)
+                                          : AppColors.emeraldActive.withOpacity(0.10),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: isDark
+                                            ? Colors.amber.withOpacity(0.5)
+                                            : AppColors.emeraldActive.withOpacity(0.45),
+                                        width: 1.4,
                                       ),
                                     ),
-                                  ],
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          isDark ? Icons.wb_sunny_rounded : Icons.nightlight_round,
+                                          size: 14,
+                                          color: isDark ? Colors.amber : AppColors.emeraldActive,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          isDark
+                                              ? trBi('نهاري', 'Light')
+                                              : trBi('ليلي', 'Dark'),
+                                          style: GoogleFonts.cairo(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w900,
+                                            color: isDark ? Colors.amber : AppColors.emeraldActive,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                                GestureDetector(
+                                  onTap: () => AppLocaleController.instance.toggleLanguage(),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.emeraldActive.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: AppColors.emeraldActive.withOpacity(0.5),
+                                        width: 1.4,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.language_rounded, size: 14, color: AppColors.emeraldActive),
+                                        const SizedBox(width: 5),
+                                        Text(
+                                          _tr('quick_switch_target'),
+                                          style: GoogleFonts.cairo(
+                                            fontSize: 11.5,
+                                            fontWeight: FontWeight.w900,
+                                            color: AppColors.emeraldActive,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -248,7 +304,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       Container(
                         padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: AppColors.cardSurfaceDark,
+                          color: cardBg,
                           shape: BoxShape.circle,
                           border: Border.all(color: AppColors.emeraldActive, width: 2),
                           boxShadow: [
@@ -271,7 +327,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: GoogleFonts.cairo(
                           fontSize: 26,
                           fontWeight: FontWeight.w900,
-                          color: Colors.white,
+                          color: textPrimary,
                         ),
                       ),
                       Text(
@@ -280,7 +336,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: GoogleFonts.cairo(
                           fontSize: 11.5,
                           fontWeight: FontWeight.w700,
-                          color: Colors.white70,
+                          color: textSecondary,
                         ),
                       ),
                       const SizedBox(height: 22),
@@ -289,12 +345,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       Container(
                         padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
-                          color: AppColors.cardSurfaceDark,
+                          color: cardBg,
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: AppColors.darkBorder, width: 1.2),
+                          border: Border.all(color: borderCol, width: 1.2),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.35),
+                              color: Colors.black.withOpacity(isDark ? 0.35 : 0.08),
                               blurRadius: 24,
                               offset: const Offset(0, 8),
                             ),
@@ -307,14 +363,14 @@ class _LoginScreenState extends State<LoginScreen> {
                             Container(
                               padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF0F172A),
+                                color: inputFill,
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: Row(
                                 children: [
-                                  _buildModeTab(_tr('tab_login'), 0),
-                                  _buildModeTab(_tr('tab_register'), 1),
-                                  _buildModeTab(_tr('tab_invite'), 2),
+                                  _buildModeTab(_tr('tab_login'), 0, isDark),
+                                  _buildModeTab(_tr('tab_register'), 1, isDark),
+                                  _buildModeTab(_tr('tab_invite'), 2, isDark),
                                 ],
                               ),
                             ),
@@ -325,7 +381,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                                 decoration: BoxDecoration(
-                                  color: Colors.red.shade900.withOpacity(0.3),
+                                  color: Colors.red.shade900.withOpacity(isDark ? 0.3 : 0.12),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(color: Colors.redAccent.shade200),
                                 ),
@@ -339,7 +395,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         style: GoogleFonts.cairo(
                                           fontSize: 11,
                                           fontWeight: FontWeight.w800,
-                                          color: Colors.white,
+                                          color: isDark ? Colors.white : Colors.red.shade900,
                                         ),
                                       ),
                                     ),
@@ -357,6 +413,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
                                 prefixIcon: Icons.email_outlined,
+                                isDark: isDark,
                               ),
                               const SizedBox(height: 12),
                               Row(
@@ -367,7 +424,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     style: GoogleFonts.cairo(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w800,
-                                      color: Colors.white,
+                                      color: textPrimary,
                                     ),
                                   ),
                                   GestureDetector(
@@ -389,6 +446,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 controller: _passwordController,
                                 obscureText: _obscurePassword,
                                 onToggle: () => setState(() => _obscurePassword = !_obscurePassword),
+                                isDark: isDark,
                               ),
                             ] else if (_authMode == 1) ...[
                               _buildInputField(
@@ -396,6 +454,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 hint: _tr('placeholder_name'),
                                 controller: _fullNameController,
                                 prefixIcon: Icons.person_outline_rounded,
+                                isDark: isDark,
                               ),
                               const SizedBox(height: 12),
                               _buildInputField(
@@ -404,6 +463,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
                                 prefixIcon: Icons.email_outlined,
+                                isDark: isDark,
                               ),
                               const SizedBox(height: 12),
                               _buildInputField(
@@ -412,6 +472,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 controller: _passwordController,
                                 obscureText: _obscurePassword,
                                 prefixIcon: Icons.lock_outline_rounded,
+                                isDark: isDark,
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -428,6 +489,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 controller: _confirmPasswordController,
                                 obscureText: _obscureConfirmPassword,
                                 prefixIcon: Icons.lock_reset_rounded,
+                                isDark: isDark,
                                 suffixIcon: IconButton(
                                   icon: Icon(
                                     _obscureConfirmPassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
@@ -441,23 +503,27 @@ class _LoginScreenState extends State<LoginScreen> {
                               Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
+                                  color: inputFill,
                                   borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: Colors.white12),
+                                  border: Border.all(color: borderCol),
                                 ),
                                 child: Text(
                                   _tr('pass_guidelines'),
                                   style: GoogleFonts.cairo(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w700,
-                                    color: Colors.white70,
+                                    color: textSecondary,
                                   ),
                                 ),
                               ),
                             ] else ...[
                               Text(
                                 _tr('invite_hint'),
-                                style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: Colors.white),
+                                style: GoogleFonts.cairo(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: textPrimary,
+                                ),
                               ),
                               const SizedBox(height: 8),
                               TextField(
@@ -467,17 +533,19 @@ class _LoginScreenState extends State<LoginScreen> {
                                   fontSize: 24,
                                   fontWeight: FontWeight.w900,
                                   letterSpacing: 4,
-                                  color: Colors.white,
+                                  color: textPrimary,
                                 ),
                                 decoration: InputDecoration(
                                   hintText: '849-201',
-                                  hintStyle: GoogleFonts.jetBrainsMono(color: Colors.white30),
+                                  hintStyle: GoogleFonts.jetBrainsMono(
+                                    color: isDark ? Colors.white30 : Colors.black26,
+                                  ),
                                   filled: true,
-                                  fillColor: const Color(0xFF0F172A),
+                                  fillColor: inputFill,
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                                   enabledBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(14),
-                                    borderSide: const BorderSide(color: Color(0xFF334155), width: 1.5),
+                                    borderSide: BorderSide(color: borderCol, width: 1.5),
                                   ),
                                   focusedBorder: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(14),
@@ -528,8 +596,9 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildModeTab(String title, int mode) {
+  Widget _buildModeTab(String title, int mode, bool isDark) {
     final isSel = _authMode == mode;
+    final unselectedColor = isDark ? Colors.white60 : AppColors.textSecondaryLight;
     return Expanded(
       child: GestureDetector(
         onTap: () {
@@ -551,7 +620,7 @@ class _LoginScreenState extends State<LoginScreen> {
             style: GoogleFonts.cairo(
               fontSize: 11,
               fontWeight: isSel ? FontWeight.w900 : FontWeight.w700,
-              color: isSel ? Colors.white : Colors.white60,
+              color: isSel ? Colors.white : unselectedColor,
             ),
           ),
         ),
@@ -563,35 +632,41 @@ class _LoginScreenState extends State<LoginScreen> {
     required String label,
     required String hint,
     required TextEditingController controller,
+    required bool isDark,
     TextInputType keyboardType = TextInputType.text,
     bool obscureText = false,
     IconData? prefixIcon,
     Widget? suffixIcon,
   }) {
+    final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final fillCol = isDark ? const Color(0xFF0F172A) : AppColors.cardMutedLight;
+    final borderCol = isDark ? const Color(0xFF334155) : AppColors.borderLight;
+    final hintCol = isDark ? Colors.white30 : AppColors.textSecondaryLight.withOpacity(0.65);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
+          style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: textPrimary),
         ),
         const SizedBox(height: 5),
         TextField(
           controller: controller,
           keyboardType: keyboardType,
           obscureText: obscureText,
-          style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white),
+          style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700, color: textPrimary),
           decoration: InputDecoration(
             hintText: hint,
-            hintStyle: GoogleFonts.cairo(fontSize: 11, color: Colors.white30),
+            hintStyle: GoogleFonts.cairo(fontSize: 11, color: hintCol),
             filled: true,
-            fillColor: const Color(0xFF0F172A),
+            fillColor: fillCol,
             prefixIcon: prefixIcon != null ? Icon(prefixIcon, size: 18, color: AppColors.emeraldActive) : null,
             suffixIcon: suffixIcon,
             contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF334155), width: 1.2),
+              borderSide: BorderSide(color: borderCol, width: 1.2),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -608,16 +683,22 @@ class _LoginScreenState extends State<LoginScreen> {
     required TextEditingController controller,
     required bool obscureText,
     required VoidCallback onToggle,
+    required bool isDark,
   }) {
+    final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final fillCol = isDark ? const Color(0xFF0F172A) : AppColors.cardMutedLight;
+    final borderCol = isDark ? const Color(0xFF334155) : AppColors.borderLight;
+    final hintCol = isDark ? Colors.white30 : AppColors.textSecondaryLight.withOpacity(0.65);
+
     return TextField(
       controller: controller,
       obscureText: obscureText,
-      style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700, color: Colors.white),
+      style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w700, color: textPrimary),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: GoogleFonts.cairo(fontSize: 11, color: Colors.white30),
+        hintStyle: GoogleFonts.cairo(fontSize: 11, color: hintCol),
         filled: true,
-        fillColor: const Color(0xFF0F172A),
+        fillColor: fillCol,
         prefixIcon: const Icon(Icons.lock_outline_rounded, size: 18, color: AppColors.emeraldActive),
         suffixIcon: IconButton(
           icon: Icon(
@@ -630,7 +711,7 @@ class _LoginScreenState extends State<LoginScreen> {
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF334155), width: 1.2),
+          borderSide: BorderSide(color: borderCol, width: 1.2),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
@@ -796,6 +877,14 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isDark = AppThemeController.instance.isDark;
+    final cardBg = isDark ? AppColors.cardSurfaceDark : AppColors.cardSurfaceLight;
+    final borderCol = isDark ? AppColors.darkBorder : AppColors.borderLight;
+    final inputFill = isDark ? const Color(0xFF0F172A) : AppColors.cardMutedLight;
+    final textPrimary = isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final textSecondary = isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+    final hintCol = isDark ? Colors.white30 : AppColors.textSecondaryLight.withOpacity(0.65);
+
     return Directionality(
       textDirection: AppLocaleController.instance.textDirection,
       child: Container(
@@ -807,12 +896,12 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
           bottom: 20 + bottomInset,
         ),
         decoration: BoxDecoration(
-          color: AppColors.cardSurfaceDark,
+          color: cardBg,
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: AppColors.darkBorder, width: 1.5),
+          border: Border.all(color: borderCol, width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withOpacity(isDark ? 0.6 : 0.15),
               blurRadius: 30,
               offset: const Offset(0, 10),
             ),
@@ -832,12 +921,12 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                       const SizedBox(width: 8),
                       Text(
                         _tr('forgot_modal_title'),
-                        style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white),
+                        style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.w900, color: textPrimary),
                       ),
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white70),
+                    icon: Icon(Icons.close_rounded, color: textSecondary),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -848,13 +937,17 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade900.withOpacity(0.3),
+                    color: Colors.red.shade900.withOpacity(isDark ? 0.3 : 0.12),
                     borderRadius: BorderRadius.circular(10),
                     border: Border.all(color: Colors.redAccent),
                   ),
                   child: Text(
                     _error!,
-                    style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
+                    style: GoogleFonts.cairo(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: isDark ? Colors.white : Colors.red.shade900,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -863,20 +956,20 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
               if (_step == 1) ...[
                 Text(
                   _tr('forgot_step1_desc'),
-                  style: GoogleFonts.cairo(fontSize: 12, color: Colors.white70, height: 1.5),
+                  style: GoogleFonts.cairo(fontSize: 12, color: textSecondary, height: 1.5),
                 ),
                 const SizedBox(height: 16),
                 TextField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
-                  style: GoogleFonts.cairo(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.cairo(fontSize: 13, color: textPrimary, fontWeight: FontWeight.w700),
                   decoration: InputDecoration(
                     labelText: _tr('lbl_email'),
-                    labelStyle: GoogleFonts.cairo(color: Colors.white70),
+                    labelStyle: GoogleFonts.cairo(color: textSecondary),
                     hintText: 'name@example.com',
-                    hintStyle: GoogleFonts.cairo(color: Colors.white30),
+                    hintStyle: GoogleFonts.cairo(color: hintCol),
                     filled: true,
-                    fillColor: const Color(0xFF0F172A),
+                    fillColor: inputFill,
                     prefixIcon: const Icon(Icons.email_outlined, color: AppColors.emeraldActive, size: 18),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -895,7 +988,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
               ] else if (_step == 2) ...[
                 Text(
                   '${_tr('forgot_step2_desc')} ${_emailCtrl.text.trim()}',
-                  style: GoogleFonts.cairo(fontSize: 12, color: Colors.white70, height: 1.5),
+                  style: GoogleFonts.cairo(fontSize: 12, color: textSecondary, height: 1.5),
                 ),
                 const SizedBox(height: 14),
                 TextField(
@@ -912,9 +1005,9 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                   decoration: InputDecoration(
                     counterText: '',
                     hintText: '123456',
-                    hintStyle: GoogleFonts.jetBrainsMono(color: Colors.white24, letterSpacing: 8),
+                    hintStyle: GoogleFonts.jetBrainsMono(color: hintCol, letterSpacing: 8),
                     filled: true,
-                    fillColor: const Color(0xFF0F172A),
+                    fillColor: inputFill,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                   ),
                 ),
@@ -924,7 +1017,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                   children: [
                     Text(
                       '${_tr('resend_after')} ${_formatTimer()}',
-                      style: GoogleFonts.cairo(fontSize: 11, color: Colors.white60),
+                      style: GoogleFonts.cairo(fontSize: 11, color: textSecondary),
                     ),
                     TextButton(
                       onPressed: _secondsLeft == 0 ? _sendOtp : null,
@@ -933,7 +1026,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                         style: GoogleFonts.cairo(
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
-                          color: _secondsLeft == 0 ? AppColors.emeraldActive : Colors.white24,
+                          color: _secondsLeft == 0 ? AppColors.emeraldActive : hintCol,
                         ),
                       ),
                     ),
@@ -955,21 +1048,21 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
               ] else if (_step == 3) ...[
                 Text(
                   _tr('forgot_step3_desc'),
-                  style: GoogleFonts.cairo(fontSize: 12, color: Colors.white70, height: 1.5),
+                  style: GoogleFonts.cairo(fontSize: 12, color: textSecondary, height: 1.5),
                 ),
                 const SizedBox(height: 14),
                 TextField(
                   controller: _newPassCtrl,
                   obscureText: _obscureNewPass,
-                  style: GoogleFonts.cairo(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.cairo(fontSize: 13, color: textPrimary, fontWeight: FontWeight.w700),
                   decoration: InputDecoration(
                     labelText: _tr('lbl_new_pass'),
-                    labelStyle: GoogleFonts.cairo(color: Colors.white70),
+                    labelStyle: GoogleFonts.cairo(color: textSecondary),
                     filled: true,
-                    fillColor: const Color(0xFF0F172A),
+                    fillColor: inputFill,
                     prefixIcon: const Icon(Icons.lock_outline_rounded, color: AppColors.emeraldActive, size: 18),
                     suffixIcon: IconButton(
-                      icon: Icon(_obscureNewPass ? Icons.visibility_off : Icons.visibility, color: Colors.white60, size: 18),
+                      icon: Icon(_obscureNewPass ? Icons.visibility_off : Icons.visibility, color: textSecondary, size: 18),
                       onPressed: () => setState(() => _obscureNewPass = !_obscureNewPass),
                     ),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
@@ -979,12 +1072,12 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                 TextField(
                   controller: _confirmPassCtrl,
                   obscureText: _obscureNewPass,
-                  style: GoogleFonts.cairo(fontSize: 13, color: Colors.white, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.cairo(fontSize: 13, color: textPrimary, fontWeight: FontWeight.w700),
                   decoration: InputDecoration(
                     labelText: _tr('lbl_confirm_new_pass'),
-                    labelStyle: GoogleFonts.cairo(color: Colors.white70),
+                    labelStyle: GoogleFonts.cairo(color: textSecondary),
                     filled: true,
-                    fillColor: const Color(0xFF0F172A),
+                    fillColor: inputFill,
                     prefixIcon: const Icon(Icons.lock_reset_rounded, color: AppColors.emeraldActive, size: 18),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -992,7 +1085,7 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
                 const SizedBox(height: 10),
                 Text(
                   _tr('otp_hint_sec'),
-                  style: GoogleFonts.cairo(fontSize: 10, color: Colors.white54),
+                  style: GoogleFonts.cairo(fontSize: 10, color: textSecondary),
                 ),
                 const SizedBox(height: 18),
                 ElevatedButton(
