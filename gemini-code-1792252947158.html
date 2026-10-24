@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Na7la IoT - التطبيق الكامل بجميع الشاشات</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --bg-app: #F9E04B;
+      --bg-outer: #E2C835;
+      --card-surface: #FFFBEB;
+      --card-muted: #FEF08A;
+      --card-active: #F59B1B;
+      --card-router: #E0F2FE;
+      --text-main: #18181B;
+      --text-sub: #52525B;
+      --ink-border: #18181B;
+      --ink-shadow: #18181B;
+      --jar-glass: #FEF08A;
+      --nav-bg: #18181B;
+      --nav-text: #F9E04B;
+    }
+
+    body.dark-mode {
+      --bg-app: #0F1117;
+      --bg-outer: #07080B;
+      --card-surface: #181B24;
+      --card-muted: #13161E;
+      --card-active: #271E14;
+      --card-router: #10232B;
+      --text-main: #F8FAFC;
+      --text-sub: #94A3B8;
+      --ink-border: #F9E04B;
+      --ink-shadow: #050608;
+      --jar-glass: #13161E;
+      --nav-bg: #181B24;
+      --nav-text: #F9E04B;
+    }
+
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: var(--bg-outer);
+      color: var(--text-main);
+      transition: background-color 0.3s ease;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mono { font-family: 'JetBrains Mono', monospace; }
+
+    .phone-frame {
+      background-color: var(--bg-app);
+      border: 5px solid #18181B;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+      transition: background-color 0.3s ease;
+    }
+    body.dark-mode .phone-frame {
+      border-color: #2E3446;
+    }
+
+    .ink-card {
+      background-color: var(--card-surface);
+      border: 2.5px solid #18181B;
+      box-shadow: 4px 4px 0px #18181B;
+      transition: all 0.2s ease;
+    }
+    body.dark-mode .ink-card {
+      border-color: #32384A;
+      box-shadow: 4px 4px 0px #060709;
+    }
+
+    .socket-on {
+      background-color: var(--card-active);
+      border: 2.5px solid #18181B;
+      box-shadow: 4px 4px 0px #18181B;
+    }
+    body.dark-mode .socket-on {
+      background: linear-gradient(145deg, #2B2012, #1D170F);
+      border-color: #F59B1B;
+      box-shadow: 4px 4px 0px #78350F;
+    }
+
+    .socket-router-on {
+      background-color: var(--card-router);
+      border: 2.5px solid #18181B;
+      box-shadow: 4px 4px 0px #18181B;
+    }
+    body.dark-mode .socket-router-on {
+      background: linear-gradient(145deg, #0E242D, #111A24);
+      border-color: #22D3EE;
+      box-shadow: 4px 4px 0px #0E7490;
+    }
+
+    .socket-off {
+      background-color: var(--card-muted);
+      border: 2.5px solid #18181B;
+      box-shadow: 3px 3px 0px #18181B;
+    }
+    body.dark-mode .socket-off {
+      border-color: #262B38;
+      box-shadow: 3px 3px 0px #07080C;
+    }
+
+    .bee-stripes {
+      background: repeating-linear-gradient(
+        -45deg,
+        #F9E04B,
+        #F9E04B 9px,
+        #18181B 9px,
+        #18181B 18px
+      );
+    }
+
+    .ruler-ticks-y {
+      background-image: repeating-linear-gradient(
+        to bottom,
+        #18181B 0px,
+        #18181B 2px,
+        transparent 2px,
+        transparent 6px
+      );
+    }
+    .ruler-ticks-x {
+      background-image: repeating-linear-gradient(
+        to left,
+        #18181B 0px,
+        #18181B 2px,
+        transparent 2px,
+        transparent 7px
+      );
+    }
+
+    /* إخفاء شريط التمرير مع بقاء التمرير شغال */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center py-4 px-2">
+
+  <!-- شريط تحكم خارجي للتنقل السريع وتجربة الوضع الليلي -->
+  <div class="mb-3 flex flex-wrap items-center justify-center gap-2 bg-[#18181B] text-white px-4 py-2 rounded-2xl border-2 border-[#F9E04B] shadow-lg max-w-[410px] w-full justify-between">
+    <span class="text-xs font-extrabold text-[#F9E04B]">🐝 جميع الشاشات الـ 6 جاهزة للتجربة</span>
+    <div class="flex items-center gap-2">
+      <button onclick="openWizardModal()" class="px-2.5 py-1 rounded-xl bg-[#F59B1B] text-[#18181B] font-black text-[11px] flex items-center gap-1">
+        <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i> ربط مشترك
+      </button>
+      <button onclick="toggleTheme()" id="ext-theme-btn" class="px-2.5 py-1 rounded-xl bg-[#F9E04B] text-[#18181B] font-black text-[11px] flex items-center gap-1">
+        <i data-lucide="moon" class="w-3.5 h-3.5"></i> دارك مود
+      </button>
+    </div>
+  </div>
+
+  <!-- =========================================================
+       إطار شاشة الموبايل الرئيسي (يحتوي على كل الشاشات)
+       ========================================================= -->
+  <div class="phone-frame w-full max-w-[410px] h-[800px] rounded-[44px] flex flex-col justify-between relative overflow-hidden">
+    
+    <!-- 1. Top Global Header -->
+    <header class="px-4 pt-5 pb-2 flex items-center justify-between shrink-0 z-10">
+      <div class="flex items-center gap-2.5">
+        <div class="w-10 h-10 rounded-2xl bg-[#18181B] border-2 border-[#F9E04B] text-[#F9E04B] flex items-center justify-center font-black text-2xl italic tracking-tighter shadow-md">
+          N
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-black text-base leading-none">نحلة IoT</h1>
+            <span class="px-2 py-0.5 text-[9px] font-extrabold rounded-full bg-emerald-500 text-black border border-[#18181B] flex items-center gap-1">
+              <span class="w-1.5 h-1.5 rounded-full bg-black animate-ping"></span> متصل
+            </span>
+          </div>
+          <p id="header-subtitle" class="text-[11px] font-bold opacity-75 mt-0.5">مشترك الصالة الذكي • MTTL-W01</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5">
+        <!-- زر إضافة مشترك جديد (يفتح الشاشة السادسة: Add Strip Wizard) -->
+        <button onclick="openWizardModal()" class="w-9 h-9 rounded-xl ink-card flex items-center justify-center hover:scale-105 active:scale-95" title="إضافة مشترك جديد">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+        </button>
+        <!-- زر تبديل الثيم -->
+        <button onclick="toggleTheme()" class="w-9 h-9 rounded-xl bg-[#18181B] text-[#F9E04B] border-2 border-[#F9E04B] flex items-center justify-center shadow-md hover:scale-105 active:scale-95">
+          <i id="theme-icon" data-lucide="moon" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- =========================================================
+         منطقة محتوى الشاشات المتغيرة (Scrollable Viewport)
+         ========================================================= -->
+    <main class="flex-1 overflow-y-auto no-scrollbar px-4 pt-1 pb-24">
+
+      <!-- =======================================================
+           الشاشة 1: الرئيسية (Main Dashboard)
+           ======================================================= -->
+      <div id="screen-home" class="space-y-4">
+        <!-- كارت برطمان العسل والمسطرة -->
+        <section class="ink-card rounded-3xl p-4 relative overflow-hidden">
+          <div class="flex justify-between items-stretch gap-3">
+            <div class="flex-1 flex flex-col justify-between">
+              <div>
+                <span class="text-[11px] font-extrabold opacity-80">🐝 إجمالي سحب الخلية الآن</span>
+                <div class="flex items-baseline gap-1 mt-0.5">
+                  <span id="total-watts" class="mono text-3xl font-black">323</span>
+                  <span class="mono text-xs font-black text-[#F59B1B]">WATTS</span>
+                </div>
+                <div class="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#F9E04B] text-[#18181B] border-2 border-[#18181B] font-black text-xs">
+                  <span>📐 تكلفة اليوم:</span>
+                  <span id="total-cost" class="mono">7.50</span>
+                  <span>ج.م</span>
+                </div>
+              </div>
+
+              <div class="mt-3 py-1.5 px-2 rounded-xl bg-[#18181B] text-[#F9E04B] border border-[#F9E04B]/40 flex justify-around items-center text-[11px] mono font-bold">
+                <span>⚡ 224V</span>
+                <span class="opacity-40">|</span>
+                <span id="total-amps">1.44A</span>
+                <span class="opacity-40">|</span>
+                <span class="text-emerald-400">3.4kWh</span>
+              </div>
+            </div>
+
+            <!-- برطمان العسل والمسطرة -->
+            <div class="w-24 flex flex-col items-center">
+              <div class="w-16 h-2.5 rounded-t-md bg-[#18181B] border-x-2 border-t-2 border-[#F9E04B]/40"></div>
+              <div class="w-24 h-28 rounded-2xl border-[2.5px] border-[#18181B] relative overflow-hidden flex flex-col justify-end" style="background-color: var(--jar-glass);">
+                <div class="absolute top-0 left-3 w-3.5 bottom-0 bg-[#F59B1B] border-x-[1.5px] border-[#18181B] ruler-ticks-y z-10"></div>
+                <div id="honey-level" class="w-full bg-[#F59B1B] border-t-2 border-[#18181B] relative transition-all duration-500 flex items-end justify-end p-1" style="height: 25%;">
+                  <span id="load-percent" class="mono text-[9px] font-black bg-[#18181B] text-[#F9E04B] px-1 rounded border border-[#F9E04B] z-20">18%</span>
+                </div>
+              </div>
+              <span class="text-[9px] font-extrabold mt-1 opacity-75">مؤشر الحمل الآمن</span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t-2 border-dashed border-current/15">
+            <button onclick="turnAllOn()" class="py-2 px-3 rounded-xl bg-[#F9E04B] text-[#18181B] border-2 border-[#18181B] font-black text-xs flex items-center justify-center gap-1 shadow-[2px_2px_0px_#18181B] active:translate-y-0.5">
+              <i data-lucide="zap" class="w-3.5 h-3.5 fill-black"></i> تشغيل الكل
+            </button>
+            <button onclick="smartAllOff()" class="py-2 px-3 rounded-xl bg-[#18181B] text-white border-2 border-[#F59B1B] font-extrabold text-xs flex items-center justify-center gap-1 active:translate-y-0.5">
+              <i data-lucide="shield-check" class="w-3.5 h-3.5 text-cyan-400"></i> إطفاء ذكي آمن
+            </button>
+          </div>
+        </section>
+
+        <!-- عنوان الفيش الأربعة -->
+        <div class="flex items-center justify-between px-1">
+          <h2 class="text-xs font-black flex items-center gap-1">
+            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i> المخارج الأربعة المستقلة
+          </h2>
+          <span class="text-[10px] font-bold opacity-75">اضغط ⚙️ لفتح الإعدادات الكاملة</span>
+        </div>
+
+        <!-- شبكة الـ 4 فيش -->
+        <div id="sockets-grid" class="grid grid-cols-2 gap-2.5"></div>
+      </div>
+
+
+      <!-- =======================================================
+           الشاشة 3: الاستهلاك والفاتورة (Energy Analytics & Bill)
+           ======================================================= -->
+      <div id="screen-analytics" class="hidden space-y-4">
+        <!-- كارت الشريحة الحالية وتوقع الفاتورة -->
+        <section class="ink-card rounded-3xl p-4">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <span class="px-2 py-0.5 rounded-lg bg-[#F59B1B] text-[#18181B] border border-[#18181B] text-[10px] font-black">الشريحة الثالثة حالياً</span>
+              <h2 class="font-black text-base mt-1">حاسبة فاتورة الكهرباء المصرية</h2>
+            </div>
+            <div class="text-left">
+              <span class="text-[10px] font-bold opacity-70 block">إجمالي الشهر حتى الآن</span>
+              <span class="mono text-2xl font-black text-[#F59B1B]">184.50 <small class="text-xs">ج.م</small></span>
+            </div>
+          </div>
+
+          <!-- مسطرة الشرائح -->
+          <div class="mt-3">
+            <div class="flex justify-between text-[10px] font-extrabold mb-1">
+              <span>الاستهلاك: <strong class="mono">142 kWh</strong></span>
+              <span>باقي <strong class="mono">58 kWh</strong> للشريحة الرابعة</span>
+            </div>
+            <div class="w-full h-5 rounded-xl bg-[#18181B] p-1 border border-[#F9E04B]/40">
+              <div class="h-full w-[71%] rounded-lg bg-[#F9E04B] ruler-ticks-x"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- الرسم البياني للاستهلاك (يومي / أسبوعي / شهري) -->
+        <section class="ink-card rounded-3xl p-4">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-black text-xs flex items-center gap-1">
+              <i data-lucide="bar-chart-3" class="w-4 h-4 text-[#F59B1B]"></i> منحنى استهلاك الطاقة
+            </h3>
+            <div class="flex bg-[#18181B] p-0.5 rounded-xl text-[10px] font-bold text-white">
+              <button class="px-2.5 py-1 rounded-lg bg-[#F9E04B] text-[#18181B] font-black">أسبوعي</button>
+              <button onclick="showToast('تم عرض بيانات الشهر')" class="px-2.5 py-1">شهري</button>
+            </div>
+          </div>
+
+          <!-- أعمدة الرسم البياني على شكل مساطر عسل -->
+          <div class="h-36 flex items-end justify-between gap-2 pt-4 px-2 border-b-2 border-[#18181B]">
+            <div class="flex-1 flex flex-col items-center gap-1">
+              <div class="w-full h-16 bg-[#F9E04B] border-2 border-[#18181B] rounded-t-lg ruler-ticks-y"></div>
+              <span class="text-[9px] font-bold">السبت</span>
+            </div>
+            <div class="flex-1 flex flex-col items-center gap-1">
+              <div class="w-full h-20 bg-[#F9E04B] border-2 border-[#18181B] rounded-t-lg ruler-ticks-y"></div>
+              <span class="text-[9px] font-bold">الأحد</span>
+            </div>
+            <div class="flex-1 flex flex-col items-center gap-1">
+              <div class="w-full h-14 bg-[#F9E04B] border-2 border-[#18181B] rounded-t-lg ruler-ticks-y"></div>
+              <span class="text-[9px] font-bold">الإثنين</span>
+            </div>
+            <div class="flex-1 flex flex-col items-center gap-1">
+              <span class="mono text-[9px] font-black text-[#F59B1B]">ذروة</span>
+              <div class="w-full h-28 bg-[#F59B1B] border-2 border-[#18181B] rounded-t-lg ruler-ticks-y"></div>
+              <span class="text-[9px] font-black">الثلاثاء</span>
+            </div>
+            <div class="flex-1 flex flex-col items-center gap-1">
+              <div class="w-full h-18 bg-[#F9E04B] border-2 border-[#18181B] rounded-t-lg ruler-ticks-y"></div>
+              <span class="text-[9px] font-bold">الأربعاء</span>
+            </div>
+            <div class="flex-1 flex flex-col items-center gap-1">
+              <div class="w-full h-24 bg-[#F59B1B] border-2 border-[#18181B] rounded-t-lg ruler-ticks-y"></div>
+              <span class="text-[9px] font-bold">الخميس</span>
+            </div>
+            <div class="flex-1 flex flex-col items-center gap-1">
+              <div class="w-full h-20 bg-[#F9E04B] border-2 border-[#18181B] rounded-t-lg ruler-ticks-y"></div>
+              <span class="text-[9px] font-bold">الجمعة</span>
+            </div>
+          </div>
+          <p class="text-[10px] font-bold opacity-75 mt-2">⏰ ساعات الذروة المسجلة: من 7:00 مساءً إلى 11:00 مساءً</p>
+        </section>
+
+        <!-- مقارنة استهلاك المخارج الأربعة -->
+        <section class="ink-card rounded-3xl p-4 space-y-2.5">
+          <h3 class="font-black text-xs mb-1">🔌 من يستهلك العسل أكثر؟ (ترتيب الفيش)</h3>
+          
+          <div>
+            <div class="flex justify-between text-[11px] font-bold mb-0.5">
+              <span>1. 🌀 تكييف الصالة</span>
+              <span class="mono font-black">54% (99.6 ج.م)</span>
+            </div>
+            <div class="w-full h-2.5 rounded-full bg-[#18181B]/20 overflow-hidden border border-[#18181B]">
+              <div class="h-full w-[54%] bg-[#F59B1B]"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between text-[11px] font-bold mb-0.5">
+              <span>2. ❄️ تلاجة المطبخ</span>
+              <span class="mono font-black">31% (57.2 ج.م)</span>
+            </div>
+            <div class="w-full h-2.5 rounded-full bg-[#18181B]/20 overflow-hidden border border-[#18181B]">
+              <div class="h-full w-[31%] bg-[#F9E04B]"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="flex justify-between text-[11px] font-bold mb-0.5">
+              <span>3. 📱 شاحن الموبايل + 🌐 الراوتر</span>
+              <span class="mono font-black">15% (27.7 ج.م)</span>
+            </div>
+            <div class="w-full h-2.5 rounded-full bg-[#18181B]/20 overflow-hidden border border-[#18181B]">
+              <div class="h-full w-[15%] bg-cyan-400"></div>
+            </div>
+          </div>
+
+          <!-- زر تصدير الإكسيل -->
+          <button onclick="showToast('📊 جاري تنزيل ملف Na7la_Energy_Report.xlsx...')" class="w-full mt-3 py-2.5 rounded-xl bg-[#18181B] text-[#F9E04B] border-2 border-[#F9E04B] font-black text-xs flex items-center justify-center gap-2 shadow-md">
+            <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+            تصدير تقرير الاستهلاك الكامل (Excel .xlsx)
+          </button>
+        </section>
+      </div>
+
+
+      <!-- =======================================================
+           الشاشة 4: الحماية والأتمتة الذكية (Smart Protection)
+           ======================================================= -->
+      <div id="screen-protection" class="hidden space-y-4">
+        <!-- حارس الجهد الكهربائي (Voltage Guard) -->
+        <section class="ink-card rounded-3xl p-4">
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="font-black text-xs flex items-center gap-1.5">
+              <i data-lucide="gauge" class="w-4 h-4 text-[#F59B1B]"></i> حارس الجهد الكهربائي (Voltage Guard)
+            </h3>
+            <span class="px-2 py-0.5 rounded-md bg-emerald-500 text-black text-[10px] font-black border border-[#18181B]">الجهد الآن: 224V</span>
+          </div>
+          <p class="text-[10px] font-bold opacity-75 mb-3">فصل المشترك تلقائياً لحماية الأجهزة إذا خرجت كهرباء الحكومة عن النطاق الآمن:</p>
+
+          <div class="space-y-2 bg-[#18181B] text-white p-3 rounded-2xl border-2 border-[#F9E04B]">
+            <div class="flex justify-between text-[11px] font-bold">
+              <span>الحد الأدنى للفصل (Low Cut-off):</span>
+              <span id="vmin-val" class="mono text-[#F9E04B] font-black">180 V</span>
+            </div>
+            <input type="range" min="160" max="200" value="180" oninput="document.getElementById('vmin-val').innerText = this.value + ' V'" class="w-full accent-[#F9E04B]" />
+
+            <div class="flex justify-between text-[11px] font-bold pt-1">
+              <span>الحد الأقصى للفصل (High Cut-off):</span>
+              <span id="vmax-val" class="mono text-[#F59B1B] font-black">250 V</span>
+            </div>
+            <input type="range" min="235" max="270" value="250" oninput="document.getElementById('vmax-val').innerText = this.value + ' V'" class="w-full accent-[#F59B1B]" />
+          </div>
+        </section>
+
+        <!-- ترتيب الإقلاع المتتابع بعد انقطاع الكهرباء (Staggered Boot) -->
+        <section class="ink-card rounded-3xl p-4">
+          <h3 class="font-black text-xs flex items-center gap-1.5 mb-1">
+            <i data-lucide="timer-reset" class="w-4 h-4 text-[#F59B1B]"></i> الإقلاع المتتابع بعد عودة النور (حماية الكمبريسور)
+          </h3>
+          <p class="text-[10px] font-bold opacity-75 mb-3">لمنع سحب تيار بدء عالي (Inrush Current) يحرق مواتير التلاجة والتكييف:</p>
+
+          <div class="space-y-2 relative before:content-[''] before:absolute before:right-3.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#18181B]">
+            <div class="flex items-center justify-between pr-8 relative">
+              <span class="w-3 h-3 rounded-full bg-cyan-400 border-2 border-[#18181B] absolute right-2"></span>
+              <span class="text-xs font-extrabold">🌐 راوتر الإنترنت</span>
+              <span class="mono text-[10px] px-2 py-0.5 rounded bg-cyan-400 text-black font-black border border-[#18181B]">00:00 (فوراً)</span>
+            </div>
+            <div class="flex items-center justify-between pr-8 relative">
+              <span class="w-3 h-3 rounded-full bg-[#F9E04B] border-2 border-[#18181B] absolute right-2"></span>
+              <span class="text-xs font-extrabold">📱 شاحن الموبايل</span>
+              <span class="mono text-[10px] px-2 py-0.5 rounded bg-[#F9E04B] text-black font-black border border-[#18181B]">+ 00:05 ثوانٍ</span>
+            </div>
+            <div class="flex items-center justify-between pr-8 relative">
+              <span class="w-3 h-3 rounded-full bg-[#F59B1B] border-2 border-[#18181B] absolute right-2"></span>
+              <span class="text-xs font-extrabold">❄️ تلاجة المطبخ</span>
+              <span class="mono text-[10px] px-2 py-0.5 rounded bg-[#F59B1B] text-black font-black border border-[#18181B]">+ 03:00 دقائق</span>
+            </div>
+            <div class="flex items-center justify-between pr-8 relative">
+              <span class="w-3 h-3 rounded-full bg-rose-400 border-2 border-[#18181B] absolute right-2"></span>
+              <span class="text-xs font-extrabold">🌀 تكييف الصالة</span>
+              <span class="mono text-[10px] px-2 py-0.5 rounded bg-rose-400 text-black font-black border border-[#18181B]">+ 05:00 دقائق</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- تخفيف الأحمال والسيناريوهات الذكية -->
+        <section class="ink-card rounded-3xl p-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-black text-xs">🚨 تخفيف الأحمال التلقائي (Overload Shedding)</h4>
+              <p class="text-[10px] font-bold opacity-75">فصل أعلى فيشة استهلاكاً لو السحب تخطى 16A مع بقاء الراوتر</p>
+            </div>
+            <input type="checkbox" checked class="w-5 h-5 accent-[#18181B]" />
+          </div>
+
+          <div class="pt-2 border-t border-current/15">
+            <span class="text-[11px] font-black block mb-2">🎬 السيناريوهات السريعة (Smart Scenes):</span>
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="showToast('🌙 تم تفعيل وضع النوم')" class="py-2 px-1 rounded-xl bg-[#18181B] text-[#F9E04B] font-extrabold text-[10px] border border-[#F9E04B]/40">🌙 وضع النوم</button>
+              <button onclick="showToast('🎬 تم تفعيل وضع السينما')" class="py-2 px-1 rounded-xl bg-[#18181B] text-[#F9E04B] font-extrabold text-[10px] border border-[#F9E04B]/40">🎬 وضع السينما</button>
+              <button onclick="smartAllOff()" class="py-2 px-1 rounded-xl bg-[#F59B1B] text-black font-black text-[10px] border border-[#18181B]">🚪 خارج المنزل</button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+
+      <!-- =======================================================
+           الشاشة 5: أهل البيت والضيوف (Family & Guest Sharing)
+           ======================================================= -->
+      <div id="screen-family" class="hidden space-y-4">
+        <!-- كارت توليد كود دعوة مؤقت (OTP / QR) -->
+        <section class="ink-card rounded-3xl p-4 text-center">
+          <span class="px-2.5 py-0.5 rounded-full bg-[#F9E04B] text-[#18181B] border border-[#18181B] text-[10px] font-black">مشاركة الخلية بأمان</span>
+          <h2 class="font-black text-base mt-1">إضافة فرد جديد أو ضيف</h2>
+          <p class="text-[10px] font-bold opacity-75 mb-3">كود دعوة صالح لمرة واحدة فقط (ينتهي خلال 15 دقيقة)</p>
+
+          <div class="bg-[#18181B] text-[#F9E04B] py-3 px-4 rounded-2xl border-2 border-[#F59B1B] flex items-center justify-between mb-3">
+            <div class="text-right">
+              <span class="text-[9px] text-slate-400 block">كود الدعوة الفوري:</span>
+              <span id="invite-code" class="mono text-2xl font-black tracking-widest">849-201</span>
+            </div>
+            <button onclick="generateNewCode()" class="px-3 py-1.5 rounded-xl bg-[#F9E04B] text-[#18181B] font-black text-xs flex items-center gap-1">
+              <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> تجديد
+            </button>
+          </div>
+        </section>
+
+        <!-- قائمة أفراد العائلة والصلاحيات الثلاث -->
+        <section class="ink-card rounded-3xl p-4 space-y-3">
+          <h3 class="font-black text-xs flex items-center gap-1.5">
+            <i data-lucide="users" class="w-4 h-4 text-[#F59B1B]"></i> أعضاء البيت الحاليين (3)
+          </h3>
+
+          <!-- عضو 1: تحكم كامل -->
+          <div class="p-3 rounded-2xl bg-black/5 border-2 border-[#18181B] flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-[#18181B] text-[#F9E04B] font-black flex items-center justify-center text-sm">أ</div>
+              <div>
+                <h4 class="font-black text-xs">أحمد (أنت - المالك)</h4>
+                <span class="text-[10px] font-bold opacity-70">كل الصلاحيات + تغيير الـ PIN</span>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded-lg bg-[#F9E04B] text-[#18181B] border border-[#18181B] text-[9px] font-black">تحكم كامل 👑</span>
+          </div>
+
+          <!-- عضو 2: تحكم جزئي مع تحديد الفيش -->
+          <div class="p-3 rounded-2xl bg-black/5 border-2 border-[#18181B] space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-[#F59B1B] text-[#18181B] border border-[#18181B] font-black flex items-center justify-center text-sm">م</div>
+                <div>
+                  <h4 class="font-black text-xs">محمد (أخوك)</h4>
+                  <span class="text-[10px] font-bold opacity-70">مسموح له بفيشتين فقط</span>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded-lg bg-cyan-400 text-[#18181B] border border-[#18181B] text-[9px] font-black">تحكم جزئي 🎛️</span>
+            </div>
+            <!-- تحديد الفيش المسموحة له -->
+            <div class="grid grid-cols-4 gap-1.5 pt-1 text-[9px] font-extrabold text-center">
+              <span class="py-1 rounded bg-rose-500/20 border border-rose-500/40 opacity-60">❄️ ممنوع</span>
+              <span class="py-1 rounded bg-rose-500/20 border border-rose-500/40 opacity-60">🌐 ممنوع</span>
+              <span class="py-1 rounded bg-emerald-500/30 border border-[#18181B]">🌀 مسموح ✓</span>
+              <span class="py-1 rounded bg-emerald-500/30 border border-[#18181B]">📱 مسموح ✓</span>
+            </div>
+          </div>
+
+          <!-- عضو 3: مشاهدة بس -->
+          <div class="p-3 rounded-2xl bg-black/5 border-2 border-[#18181B] flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-xl bg-slate-700 text-white font-black flex items-center justify-center text-sm">ع</div>
+              <div>
+                <h4 class="font-black text-xs">عاصم (ضيف)</h4>
+                <span class="text-[10px] font-bold opacity-70">مراقبة الاستهلاك بدون إطفاء</span>
+              </div>
+            </div>
+            <span class="px-2 py-0.5 rounded-lg bg-slate-300 text-black border border-[#18181B] text-[9px] font-black">مشاهدة بس 👀</span>
+          </div>
+        </section>
+      </div>
+
+    </main>
+
+    <!-- =========================================================
+         6. شريط التنقل السفلي (Bottom Navigation Bar)
+         ========================================================= -->
+    <nav class="absolute bottom-3 inset-x-4 z-20">
+      <div class="rounded-2xl py-2 px-4 flex justify-between items-center border-[2.5px] border-[#18181B] shadow-[4px_4px_0px_#18181B]" style="background-color: var(--nav-bg); color: var(--nav-text);">
+        <button onclick="switchTab('home')" id="tab-home" class="flex flex-col items-center gap-0.5 font-black scale-105 transition">
+          <i data-lucide="home" class="w-4 h-4"></i>
+          <span class="text-[10px]">الخلية</span>
+        </button>
+        <button onclick="switchTab('analytics')" id="tab-analytics" class="flex flex-col items-center gap-0.5 opacity-60 hover:opacity-100 font-bold transition">
+          <i data-lucide="ruler" class="w-4 h-4"></i>
+          <span class="text-[10px]">الفاتورة</span>
+        </button>
+        <button onclick="switchTab('protection')" id="tab-protection" class="flex flex-col items-center gap-0.5 opacity-60 hover:opacity-100 font-bold transition">
+          <i data-lucide="shield-check" class="w-4 h-4"></i>
+          <span class="text-[10px]">الحماية</span>
+        </button>
+        <button onclick="switchTab('family')" id="tab-family" class="flex flex-col items-center gap-0.5 opacity-60 hover:opacity-100 font-bold transition">
+          <i data-lucide="users" class="w-4 h-4"></i>
+          <span class="text-[10px]">العائلة</span>
+        </button>
+      </div>
+    </nav>
+
+
+    <!-- =========================================================
+         الشاشة 2: النافذة التفصيلية للمخرج (Socket Deep-Dive Bottom Sheet)
+         ========================================================= -->
+    <div id="deep-dive-sheet" class="hidden absolute inset-0 bg-black/75 backdrop-blur-sm z-40 flex items-end">
+      <div class="w-full rounded-t-[34px] border-t-[4px] border-[#18181B] p-5 space-y-3.5 max-h-[85%] overflow-y-auto" style="background-color: var(--card-surface); color: var(--text-main);">
+        <div class="w-12 h-1.5 bg-[#18181B]/30 rounded-full mx-auto"></div>
+        
+        <div class="flex items-center justify-between border-b-2 border-[#18181B]/15 pb-2.5">
+          <div>
+            <span class="text-[10px] font-extrabold text-[#F59B1B] block">إعدادات المخرج المتقدمة</span>
+            <h3 id="sheet-socket-title" class="font-black text-base">تلاجة المطبخ (#1)</h3>
+          </div>
+          <button onclick="closeDeepDive()" class="w-8 h-8 rounded-xl bg-[#18181B] text-[#F9E04B] font-black flex items-center justify-center">✕</button>
+        </div>
+
+        <!-- اختيار نوع الجهاز (Appliance Preset Picker) -->
+        <div>
+          <span class="text-[11px] font-black block mb-1.5">🔌 نوع الجهاز المتصل (يضبط الحماية تلقائياً):</span>
+          <div class="grid grid-cols-3 gap-1.5 text-[10px] font-extrabold">
+            <button onclick="showToast('تم تفعيل حماية كمبريسور التلاجة (3 دقائق)')" class="py-1.5 rounded-xl bg-[#F9E04B] text-[#18181B] border-2 border-[#18181B]">❄️ تلاجة</button>
+            <button onclick="showToast('تم تفعيل حماية التكييف (5 دقائق)')" class="py-1.5 rounded-xl bg-black/10 border border-current/20">🌀 تكييف</button>
+            <button onclick="showToast('تم تفعيل درع حماية الراوتر ضد الفصل')" class="py-1.5 rounded-xl bg-black/10 border border-current/20">🌐 راوتر</button>
+            <button onclick="showToast('تم تفعيل فصل الشاحن الذكي < 3W')" class="py-1.5 rounded-xl bg-black/10 border border-current/20">📱 شاحن</button>
+            <button onclick="showToast('تم تفعيل دورة السخان الآمنة')" class="py-1.5 rounded-xl bg-black/10 border border-current/20">🔥 سخان</button>
+            <button onclick="showToast('تم ضبط وضع الشاشة والتلفزيون')" class="py-1.5 rounded-xl bg-black/10 border border-current/20">📺 شاشة</button>
+          </div>
+        </div>
+
+        <!-- المؤقت السريع والدورات المتكررة -->
+        <div class="p-3 rounded-2xl bg-black/5 border-2 border-[#18181B]">
+          <span class="text-[11px] font-black block mb-2">⏱️ مؤقت إيقاف تلقائي (Timer):</span>
+          <div class="grid grid-cols-4 gap-1.5 mono text-xs font-bold mb-2.5">
+            <button onclick="showToast('تم ضبط المؤقت: 15 دقيقة')" class="py-1.5 rounded-lg bg-[#18181B] text-[#F9E04B]">15m</button>
+            <button onclick="showToast('تم ضبط المؤقت: 30 دقيقة')" class="py-1.5 rounded-lg bg-[#18181B] text-[#F9E04B]">30m</button>
+            <button onclick="showToast('تم ضبط المؤقت: 1 ساعة')" class="py-1.5 rounded-lg bg-[#18181B] text-[#F9E04B]">1h</button>
+            <button onclick="showToast('تم ضبط المؤقت: 2 ساعة')" class="py-1.5 rounded-lg bg-[#18181B] text-[#F9E04B]">2h</button>
+          </div>
+          <div class="flex items-center justify-between pt-2 border-t border-current/15 text-[11px]">
+            <span class="font-bold">🔄 دورة متكررة (شغل 15د كل ساعة):</span>
+            <input type="checkbox" class="w-4 h-4 accent-[#18181B]" />
+          </div>
+        </div>
+
+        <!-- فصل الشاحن الذكي + حالة عودة الكهرباء -->
+        <div class="space-y-2">
+          <div class="p-2.5 rounded-2xl bg-black/5 border-2 border-[#18181B] flex items-center justify-between">
+            <div>
+              <span class="font-black text-xs block">🔋 فصل الشاحن الذكي (Auto-Cutoff)</span>
+              <span class="text-[10px] font-bold opacity-75">إيقاف تلقائي لو السحب أقل من 3W لمدة 10 دقائق</span>
+            </div>
+            <input type="checkbox" checked class="w-4 h-4 accent-[#18181B]" />
+          </div>
+
+          <div class="p-2.5 rounded-2xl bg-black/5 border-2 border-[#18181B] flex items-center justify-between">
+            <div>
+              <span class="font-black text-xs block">🔐 قفل هذه الفيشة برقم PIN مستقل</span>
+              <span class="text-[10px] font-bold opacity-75">منع الإطفاء أو التشغيل بدون رمز 1234 أو البصمة</span>
+            </div>
+            <input id="sheet-pin-toggle" type="checkbox" onchange="toggleSocketLockFromSheet()" class="w-4 h-4 accent-[#18181B]" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- =========================================================
+         الشاشة 6: معالج ربط مشترك جديد (Add Strip Wizard Modal)
+         ========================================================= -->
+    <div id="wizard-modal" class="hidden absolute inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="ink-card w-full rounded-3xl p-5 space-y-4">
+        <div class="flex justify-between items-center border-b-2 border-[#18181B]/15 pb-2">
+          <span class="px-2 py-0.5 rounded bg-[#F9E04B] text-[#18181B] border border-[#18181B] text-[10px] font-black">معالج الربط السريع</span>
+          <button onclick="closeWizardModal()" class="text-xs font-black">✕ إغلاق</button>
+        </div>
+
+        <div id="wizard-step-content" class="space-y-3 text-center py-2">
+          <div class="w-14 h-14 rounded-2xl bg-[#F59B1B] text-[#18181B] border-2 border-[#18181B] flex items-center justify-center mx-auto font-black text-xl">
+            1/3
+          </div>
+          <h3 class="font-black text-base">البحث عن مشترك نحلة</h3>
+          <p class="text-xs font-bold opacity-80">اضغط مطولاً على زر الباور في المشترك لمدة 5 ثوانٍ حتى يرمش الـ LED بسرعة، ثم اختر الشبكة:</p>
+          
+          <div class="p-3 rounded-2xl bg-[#18181B] text-[#F9E04B] mono text-xs font-bold flex items-center justify-between border-2 border-[#F9E04B]">
+            <span>📶 TONLY_TAP_8F2A</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-500 text-black text-[10px] font-black">تم الالتقاط ✓</span>
+          </div>
+
+          <div class="p-3 rounded-2xl bg-black/5 border-2 border-[#18181B] text-right">
+            <span class="text-xs font-black block mb-1">🛡️ سؤال الحماية الأهم:</span>
+            <p class="text-[10px] font-bold opacity-80 mb-2">هل راوتر الإنترنت المنزلي متوصل في هذا المشترك؟</p>
+            <select class="w-full p-2 rounded-xl bg-[#18181B] text-[#F9E04B] font-bold text-xs">
+              <option>نعم — متوصل في فيشة رقم (#2) احميه دائماً</option>
+              <option>نعم — متوصل في فيشة رقم (#1)</option>
+              <option>لا — هذا المشترك لغرفة أخرى</option>
+            </select>
+          </div>
+        </div>
+
+        <button onclick="finishWizard()" class="w-full py-2.5 rounded-xl bg-[#F9E04B] text-[#18181B] border-2 border-[#18181B] font-black text-xs shadow-[3px_3px_0px_#18181B]">
+          إتمام الربط وتفعيل حماية الراوتر 🚀
+        </button>
+      </div>
+    </div>
+
+
+    <!-- Modal الـ PIN -->
+    <div id="pin-modal" class="hidden absolute inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="ink-card w-full max-w-[300px] rounded-3xl p-5 text-center relative overflow-hidden">
+        <div class="absolute top-0 inset-x-0 h-3 bee-stripes border-b-2 border-[#18181B]"></div>
+        <h3 id="pin-modal-title" class="font-black text-base mt-3">فيشة محمية برقم PIN</h3>
+        <p class="text-xs opacity-75 mt-1 mb-3">أدخل الرمز السري (جرب <span class="mono font-black text-[#F59B1B]">1234</span>)</p>
+        <input id="pin-input" type="password" maxlength="4" placeholder="••••" class="w-32 text-center mono text-2xl tracking-[0.4em] py-1.5 rounded-xl bg-[#18181B] text-[#F9E04B] border-2 border-[#F9E04B] mb-4" />
+        <div class="grid grid-cols-2 gap-2">
+          <button onclick="verifyPin()" class="py-2 rounded-xl bg-[#F9E04B] text-[#18181B] border-2 border-[#18181B] font-black text-xs">فتح 🔓</button>
+          <button onclick="closePinModal()" class="py-2 rounded-xl bg-slate-800 text-white font-bold text-xs">إلغاء</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- إشعار Toast -->
+    <div id="toast" class="hidden absolute top-16 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl bg-[#18181B] text-[#F9E04B] border-2 border-[#F9E04B] text-xs font-extrabold shadow-2xl whitespace-nowrap"></div>
+
+  </div>
+
+  <script>
+    let isDark = false;
+    let activeSocketSheetId = 1;
+    let pendingPinSocketId = null;
+
+    const sockets = [
+      { id: 1, name: 'تلاجة المطبخ', icon: 'snowflake', isOn: true, watts: 185, activeWatts: 185, isRouter: false, isLocked: false, tag: '❄️ حماية كمبريسور' },
+      { id: 2, name: 'راوتر الإنترنت', icon: 'router', isOn: true, watts: 18, activeWatts: 18, isRouter: true, isLocked: false, tag: '🛡️ محمي ضد الفصل' },
+      { id: 3, name: 'تكييف الصالة', icon: 'wind', isOn: false, watts: 0, activeWatts: 1150, isRouter: false, isLocked: false, tag: '⏳ انتظار الحماية' },
+      { id: 4, name: 'شاحن الموبايل', icon: 'smartphone-charging', isOn: true, watts: 120, activeWatts: 120, isRouter: false, isLocked: true, tag: '🔒 مقفول بـ PIN' }
+    ];
+
+    function switchTab(tabName) {
+      const screens = ['home', 'analytics', 'protection', 'family'];
+      const subtitles = {
+        home: 'مشترك الصالة الذكي • MTTL-W01',
+        analytics: 'حاسبة الفاتورة والشرائح المصرية 📐',
+        protection: 'حارس الجهد والكمبريسور الذكي 🛡️',
+        family: 'صلاحيات أهل البيت والضيوف 👨‍👩‍👧'
+      };
+
+      screens.forEach(s => {
+        document.getElementById('screen-' + s).classList.toggle('hidden', s !== tabName);
+        const btn = document.getElementById('tab-' + s);
+        if (s === tabName) {
+          btn.classList.remove('opacity-60');
+          btn.classList.add('font-black', 'scale-105');
+        } else {
+          btn.classList.add('opacity-60');
+          btn.classList.remove('font-black', 'scale-105');
+        }
+      });
+
+      document.getElementById('header-subtitle').innerText = subtitles[tabName];
+      lucide.createIcons();
+    }
+
+    function toggleTheme() {
+      isDark = !isDark;
+      document.body.classList.toggle('dark-mode', isDark);
+      document.getElementById('theme-icon').setAttribute('data-lucide', isDark ? 'sun' : 'moon');
+      showToast(isDark ? '🌙 تم تفعيل الوضع الليلي (Midnight Hive)' : '☀️ تم تفعيل الوضع النهاري (Sunny Honey)');
+      renderSockets();
+    }
+
+    function renderSockets() {
+      const grid = document.getElementById('sockets-grid');
+      grid.innerHTML = '';
+      let totalW = 0;
+
+      sockets.forEach(s => {
+        if (s.isOn) totalW += s.watts;
+        let cardState = s.isOn ? (s.isRouter ? 'socket-router-on' : 'socket-on') : 'socket-off';
+        let iconBg = s.isOn ? (s.isRouter ? 'bg-cyan-400 text-black' : 'bg-[#18181B] text-[#F9E04B]') : 'bg-[#18181B]/15 text-current';
+
+        grid.innerHTML += `
+          <div class="rounded-2xl p-3 flex flex-col justify-between h-[146px] relative overflow-hidden ${cardState}">
+            ${s.isLocked ? `<div class="absolute top-0 inset-x-0 h-2 bee-stripes border-b border-[#18181B]"></div>` : ''}
+            <div class="flex justify-between items-start ${s.isLocked ? 'mt-1' : ''}">
+              <div class="w-9 h-9 rounded-xl border-2 border-[#18181B] ${iconBg} flex items-center justify-center">
+                <i data-lucide="${s.icon}" class="w-4 h-4"></i>
+              </div>
+              <button onclick="openDeepDive(${s.id})" class="w-7 h-7 rounded-lg bg-[#18181B]/15 hover:bg-[#18181B]/30 flex items-center justify-center" title="الإعدادات التفصيلية">
+                <i data-lucide="settings-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <div>
+              <div class="flex items-center justify-between">
+                <h3 class="font-black text-xs truncate">${s.name}</h3>
+                <span class="mono text-[9px] font-bold opacity-60">#${s.id}</span>
+              </div>
+              <span class="inline-block mt-1 px-2 py-0.5 rounded-md bg-[#18181B] text-[#F9E04B] text-[9px] font-extrabold">${s.tag}</span>
+            </div>
+            <div class="flex items-center justify-between pt-2 border-t border-current/15">
+              <span class="mono font-black text-sm">${s.isOn ? s.watts : 0} <small class="text-[9px]">W</small></span>
+              <button onclick="toggleSocket(${s.id})" class="w-11 h-6 rounded-full border-2 border-[#18181B] p-0.5 flex items-center ${s.isOn ? 'bg-[#18181B] justify-start' : 'bg-slate-400/50 justify-end'}">
+                <span class="w-4 h-4 rounded-full ${s.isOn ? (s.isRouter ? 'bg-cyan-400' : 'bg-[#F9E04B]') : 'bg-[#18181B]'}"></span>
+              </button>
+            </div>
+          </div>
+        `;
+      });
+
+      document.getElementById('total-watts').innerText = totalW.toLocaleString();
+      document.getElementById('total-amps').innerText = (totalW / 224).toFixed(2) + 'A';
+      const pct = Math.min(95, Math.max(12, Math.round((totalW / 1800) * 100)));
+      document.getElementById('honey-level').style.height = pct + '%';
+      document.getElementById('load-percent').innerText = pct + '%';
+      lucide.createIcons();
+    }
+
+    function openDeepDive(id) {
+      activeSocketSheetId = id;
+      const s = sockets.find(x => x.id === id);
+      document.getElementById('sheet-socket-title').innerText = `${s.name} (#${s.id})`;
+      document.getElementById('sheet-pin-toggle').checked = s.isLocked;
+      document.getElementById('deep-dive-sheet').classList.remove('hidden');
+    }
+
+    function closeDeepDive() {
+      document.getElementById('deep-dive-sheet').classList.add('hidden');
+    }
+
+    function toggleSocketLockFromSheet() {
+      const s = sockets.find(x => x.id === activeSocketSheetId);
+      s.isLocked = document.getElementById('sheet-pin-toggle').checked;
+      s.tag = s.isLocked ? '🔒 مقفول بـ PIN' : '⚡ تحكم حر';
+      renderSockets();
+      showToast(s.isLocked ? `🔒 تم قفل "${s.name}" برقم PIN` : `🔓 تم إلغاء قفل "${s.name}"`);
+    }
+
+    function toggleSocket(id) {
+      const s = sockets.find(x => x.id === id);
+      if (s.isLocked) {
+        pendingPinSocketId = id;
+        document.getElementById('pin-modal-title').innerText = `قفل الأمان: ${s.name}`;
+        document.getElementById('pin-input').value = '';
+        document.getElementById('pin-modal').classList.remove('hidden');
+        return;
+      }
+      flipSocket(s);
+    }
+
+    function flipSocket(s) {
+      s.isOn = !s.isOn;
+      if (s.isOn && s.watts === 0) s.watts = s.activeWatts;
+      renderSockets();
+      showToast(`${s.isOn ? '⚡ تم تشغيل' : '🛑 تم إيقاف'} "${s.name}"`);
+    }
+
+    function verifyPin() {
+      if (document.getElementById('pin-input').value === '1234') {
+        const s = sockets.find(x => x.id === pendingPinSocketId);
+        closePinModal();
+        flipSocket(s);
+      } else {
+        showToast('❌ رمز الـ PIN غير صحيح! جرب 1234');
+      }
+    }
+
+    function closePinModal() {
+      document.getElementById('pin-modal').classList.add('hidden');
+    }
+
+    function smartAllOff() {
+      sockets.forEach(s => { if (!s.isRouter) s.isOn = false; });
+      renderSockets();
+      showToast('🛡️ تم إطفاء الكل مع حماية الراوتر من الفصل!');
+    }
+
+    function turnAllOn() {
+      sockets.forEach(s => { if (!s.isLocked) { s.isOn = true; s.watts = s.activeWatts; } });
+      renderSockets();
+      showToast('⚡ تم تشغيل جميع المخارج غير المقفولة');
+    }
+
+    function generateNewCode() {
+      const code = Math.floor(100 + Math.random() * 900) + '-' + Math.floor(100 + Math.random() * 900);
+      document.getElementById('invite-code').innerText = code;
+      showToast('🔑 تم توليد كود دعوة جديد صالح لمدة 15 دقيقة');
+    }
+
+    function openWizardModal() {
+      document.getElementById('wizard-modal').classList.remove('hidden');
+    }
+
+    function closeWizardModal() {
+      document.getElementById('wizard-modal').classList.add('hidden');
+    }
+
+    function finishWizard() {
+      closeWizardModal();
+      showToast('🎉 تم ربط المشترك وتفعيل حماية الراوتر تلقائياً!');
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.innerText = msg;
+      t.classList.remove('hidden');
+      setTimeout(() => t.classList.add('hidden'), 2500);
+    }
+
+    renderSockets();
+  </script>
+</body>
+</html>

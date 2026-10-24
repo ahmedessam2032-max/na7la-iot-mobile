@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  na7la-core:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: na7la-iot-app
+    restart: unless-stopped
+    ports:
+      # Port 8080 is currently open in AWS Security Group (launch-wizard-1)
+      - "8080:8000"
+      # Port 80 (standard HTTP - direct IP access without port)
+      - "80:8000"
+      # MTTL-W01 Hardware TCP Hub communication port
+      - "10086:10086"
+    environment:
+      - DATABASE_URL=sqlite:////app/data/na7la_iot.db
+      - SECRET_KEY=${SECRET_KEY:-na7la_iot_super_secret_master_key_2026}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - SERVER_PUBLIC_URL=${SERVER_PUBLIC_URL:-http://13.61.25.9:8080}
+      - TCP_DEVICE_PORT=10086
+    volumes:
+      - ./data:/app/data
+      - ./dashboard.html:/app/dashboard.html:ro
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

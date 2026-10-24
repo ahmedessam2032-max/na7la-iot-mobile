@@ -1,40 +1,56 @@
 import 'socket_model.dart';
 
 class StripModel {
-  final int id;
-  final String mac;
-  final String name;
-  final String icon;
-  final String roomCategory;
-  final bool isClaimed;
-  final String model;
-  final String fw;
-  final String? ip;
-  final bool isOnline;
-  final double? voltage;
-  final int? rssi;
-  final bool childLock;
-  final double totalWatt;
-  final double totalAmp;
-  final double totalKwh;
-  final double totalCostEgp;
-  final double minVoltage;
-  final double maxVoltage;
-  final bool voltageProtectEnabled;
-  final bool autoRecoverVoltage;
-  final String voltageExemptSockets;
-  final int voltageRecoverDelaySec;
-  final int voltageBreachCount;
-  final int disconnectCount;
-  final String? lastDisconnectAt;
-  final String? lastSeen;
-  final String powerReturnState;
-  final bool biometricControl;
-  final bool autoSheddingEnabled;
-  final int maxTempC;
-  final double maxTotalWatt;
-  final double maxTotalAmp;
-  final List<SocketModel> sockets;
+  int id;
+  String mac;
+  String name;
+  String icon;
+  String roomCategory;
+  bool isClaimed;
+  String model;
+  String fw;
+  String? ip;
+  bool isOnline;
+  double voltage;
+  int? rssi;
+  bool childLock;
+  double totalWatt;
+  double totalAmp;
+  double totalKwh;
+  double totalCostEgp;
+  double minVoltage;
+  double maxVoltage;
+  bool voltageProtectEnabled;
+  bool autoRecoverVoltage;
+  String voltageExemptSockets;
+  int voltageRecoverDelaySec;
+  int voltageBreachCount;
+  int disconnectCount;
+  String? lastDisconnectAt;
+  String? lastSeen;
+  String powerReturnState;
+  bool biometricControl;
+  bool autoSheddingEnabled;
+  int maxTempC;
+  double maxTotalWatt;
+  double maxTotalAmp;
+  List<SocketModel> sockets;
+
+  // Aliases for seamless compatibility across screens
+  String get macAddress => mac;
+  set macAddress(String v) => mac = v;
+
+  String get stripName => name;
+  set stripName(String v) => name = v;
+
+  double get currentVoltage => voltage;
+  set currentVoltage(double v) => voltage = v;
+
+  String get fwVersion => fw;
+  set fwVersion(String v) => fw = v;
+
+  String? get ipAddress => ip;
+  set ipAddress(String? v) => ip = v;
 
   StripModel({
     required this.id,
@@ -47,7 +63,7 @@ class StripModel {
     required this.fw,
     this.ip,
     required this.isOnline,
-    this.voltage,
+    this.voltage = 220.0,
     this.rssi,
     required this.childLock,
     required this.totalWatt,
@@ -81,17 +97,19 @@ class StripModel {
 
     return StripModel(
       id: json['id'] ?? 0,
-      mac: json['mac'] ?? '',
-      name: json['name'] ?? 'مشترك ذكي',
+      mac: json['mac'] ?? json['mac_address'] ?? '',
+      name: json['name'] ?? json['strip_name'] ?? 'مشترك ذكي',
       icon: json['icon'] ?? '💻',
       roomCategory: json['room_category'] ?? 'office',
       isClaimed: json['is_claimed'] ?? true,
       model: json['model'] ?? 'LGU+-TAP-HW002',
-      fw: json['fw'] ?? '1.0.66',
-      ip: json['ip'],
-      isOnline: json['online'] ?? false,
-      voltage: json['voltage'] != null ? (json['voltage'] as num).toDouble() : null,
-      rssi: json['rssi'],
+      fw: json['fw'] ?? json['fw_version'] ?? '1.0.66',
+      ip: json['ip'] ?? json['ip_address'],
+      isOnline: json['online'] ?? json['is_online'] ?? false,
+      voltage: json['voltage'] != null
+          ? (json['voltage'] as num).toDouble()
+          : (json['current_voltage'] != null ? (json['current_voltage'] as num).toDouble() : 220.0),
+      rssi: json['rssi'] ?? json['wifi_rssi'],
       childLock: json['child_lock'] ?? false,
       totalWatt: (json['total_watt'] ?? 0.0).toDouble(),
       totalAmp: (json['total_amp'] ?? 0.0).toDouble(),

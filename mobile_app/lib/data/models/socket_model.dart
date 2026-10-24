@@ -1,39 +1,59 @@
 class SocketModel {
-  final int id;
-  final int index;
-  final String name;
-  final String icon;
-  final String colorHex;
-  final int linkGroup;
-  final bool doorbellMode;
-  final int doorbellPulseSec;
-  final bool isPinnedState;
-  final double? alertWattThreshold;
-  final int? autoOffDelaySec;
-  final bool isRouter;
-  final bool isLocked;
-  final bool isFavorite;
-  final bool isOn;
-  final bool desiredOn;
-  final String powerOnBehavior;
-  final double watt;
-  final double amp;
-  final int? tempC;
-  final double kwh;
-  final double costEgp;
-  final double maxWattLimit;
-  final double? minWattCutoff;
-  final int cutoffDelaySec;
-  final bool compressorProtect;
-  final int compressorDelaySec;
-  final int? masterSocketId;
-  final double masterTriggerWatt;
+  int id;
+  int index;
+  String name;
+  String icon;
+  String colorHex;
+  int linkGroup;
+  bool doorbellMode;
+  int doorbellPulseSec;
+  bool isPinnedState;
+  double? alertWattThreshold;
+  int? autoOffDelaySec;
+  bool isRouter;
+  bool isLocked;
+  bool isFavorite;
+  bool isOn;
+  bool desiredOn;
+  String powerOnBehavior;
+  double watt;
+  double amp;
+  int? tempC;
+  double kwh;
+  double costEgp;
+  double maxWattLimit;
+  double? minWattCutoff;
+  int cutoffDelaySec;
+  bool compressorProtect;
+  int compressorDelaySec;
+  int? masterSocketId;
+  double masterTriggerWatt;
+
+  // Aliases for seamless compatibility across screens
+  int get socketIndex => index;
+  set socketIndex(int v) => index = v;
+
+  bool get state => isOn;
+  set state(bool v) => isOn = v;
+
+  double get currentWatt => watt;
+  set currentWatt(double v) => watt = v;
+
+  double get currentAmp => amp;
+  set currentAmp(double v) => amp = v;
+
+  int get currentTempC => tempC ?? 28;
+  set currentTempC(int? v) => tempC = v;
+
+  double get rawEnergyKwh => kwh;
+  set rawEnergyKwh(double v) => kwh = v;
 
   SocketModel({
     required this.id,
-    required this.index,
+    int? index,
+    int? socketIndex,
     required this.name,
-    required this.icon,
+    this.icon = 'power_plug',
     this.colorHex = '#10B981',
     this.linkGroup = 0,
     this.doorbellMode = false,
@@ -41,17 +61,17 @@ class SocketModel {
     this.isPinnedState = false,
     this.alertWattThreshold,
     this.autoOffDelaySec,
-    required this.isRouter,
+    this.isRouter = false,
     this.isLocked = false,
-    required this.isFavorite,
-    required this.isOn,
-    required this.desiredOn,
+    this.isFavorite = false,
+    this.isOn = false,
+    this.desiredOn = false,
     this.powerOnBehavior = 'LAST',
-    required this.watt,
-    required this.amp,
+    this.watt = 0.0,
+    this.amp = 0.0,
     this.tempC,
-    required this.kwh,
-    required this.costEgp,
+    this.kwh = 0.0,
+    this.costEgp = 0.0,
     this.maxWattLimit = 2500.0,
     this.minWattCutoff,
     this.cutoffDelaySec = 600,
@@ -59,13 +79,13 @@ class SocketModel {
     this.compressorDelaySec = 180,
     this.masterSocketId,
     this.masterTriggerWatt = 20.0,
-  });
+  }) : index = index ?? socketIndex ?? 1;
 
   factory SocketModel.fromJson(Map<String, dynamic> json) {
     return SocketModel(
       id: json['id'] ?? 0,
-      index: json['index'] ?? 1,
-      name: json['name'] ?? 'مقبس',
+      index: json['index'] ?? json['socket_index'] ?? 1,
+      name: json['name'] ?? json['socket_name'] ?? 'مقبس',
       icon: json['icon'] ?? 'power_plug',
       colorHex: json['color_hex'] ?? '#10B981',
       linkGroup: (json['link_group'] as num?)?.toInt() ?? 0,
@@ -77,13 +97,13 @@ class SocketModel {
       isRouter: json['is_router'] ?? false,
       isLocked: json['is_locked'] ?? false,
       isFavorite: json['is_favorite'] ?? false,
-      isOn: json['on'] ?? false,
-      desiredOn: json['desired_on'] ?? (json['on'] ?? false),
+      isOn: json['on'] ?? json['state'] ?? false,
+      desiredOn: json['desired_on'] ?? (json['on'] ?? json['state'] ?? false),
       powerOnBehavior: json['power_on_behavior'] ?? 'LAST',
-      watt: (json['watt'] ?? 0.0).toDouble(),
-      amp: (json['amp'] ?? 0.0).toDouble(),
-      tempC: json['temp_c'],
-      kwh: (json['kwh'] ?? 0.0).toDouble(),
+      watt: (json['watt'] ?? json['current_watt'] ?? 0.0).toDouble(),
+      amp: (json['amp'] ?? json['current_amp'] ?? 0.0).toDouble(),
+      tempC: json['temp_c'] ?? json['current_temp_c'],
+      kwh: (json['kwh'] ?? json['raw_energy_kwh'] ?? 0.0).toDouble(),
       costEgp: (json['cost_egp'] ?? 0.0).toDouble(),
       maxWattLimit: (json['max_watt_limit'] ?? 2500.0).toDouble(),
       minWattCutoff: json['min_watt_cutoff'] != null ? (json['min_watt_cutoff'] as num).toDouble() : null,

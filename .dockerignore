@@ -1,0 +1,25 @@
+# Git & System
+.git
+.gitignore
+.gemini
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache
+
+# Large media files & artifacts
+*.mp4
+*.apk
+*.jpg
+*.png
+*.log
+
+# Local virtual environment
+.venv
+venv
+env
+
+# SQLite runtime locks
+*.db-shm
+*.db-wal

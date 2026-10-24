@@ -14,6 +14,8 @@ class ScheduleModel {
   final bool isActive;
   final DateTime? nextRunAt;
 
+  int? get timerDurationSec => durationSec;
+
   ScheduleModel({
     required this.id,
     required this.socketId,

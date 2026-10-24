@@ -1,0 +1,3773 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr" data-theme="ember">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Na7la IoT Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d0907;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(255, 255, 255, 0.12);
+      --text: #fff4ec;
+      --text-muted: #a39285;
+      --accent: #ff7a3d;
+      --accent-glow: rgba(255, 122, 61, 0.35);
+      --green: #10b981;
+      --green-glow: rgba(16, 185, 129, 0.25);
+      --red: #ef4444;
+      --red-glow: rgba(239, 68, 68, 0.25);
+      --amber: #f59e0b;
+      --blue: #3b82f6;
+      --font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    [data-theme="ocean"] {
+      --bg: #060e1a;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(56, 189, 248, 0.2);
+      --text: #eaf4ff;
+      --text-muted: #8ba2bd;
+      --accent: #38bdf8;
+      --accent-glow: rgba(56, 189, 248, 0.35);
+    }
+
+    [data-theme="emerald"] {
+      --bg: #06140d;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(52, 211, 153, 0.2);
+      --text: #ecfdf5;
+      --text-muted: #86ab99;
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.35);
+    }
+
+    [data-theme="light"] {
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --card-border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --accent: #ea580c;
+      --accent-glow: rgba(234, 88, 12, 0.2);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      padding: 16px;
+      transition: background 0.3s, color 0.3s;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0 20px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 20px;
+    }
+    .logo-area { display: flex; align-items: center; gap: 12px; }
+    .logo-badge {
+      width: 44px; height: 44px; border-radius: 12px;
+      background: linear-gradient(135deg, var(--accent), #ff9a5c);
+      display: grid; place-items: center; font-size: 24px; font-weight: 800;
+      box-shadow: 0 4px 14px var(--accent-glow);
+    }
+    .logo-text h1 { font-size: 20px; font-weight: 800; }
+    .logo-text span { font-size: 12px; color: var(--text-muted); }
+
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .btn-tool {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 8px 14px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .btn-tool:hover { transform: translateY(-1px); border-color: var(--accent); }
+
+    /* Top Telemetry Strip */
+    .telemetry-bar {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 16px;
+      align-items: center;
+    }
+    .t-item { display: flex; flex-direction: column; gap: 4px; }
+    .t-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+    .t-val { font-size: 20px; font-weight: 800; }
+    .t-unit { font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 2px; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; width: fit-content;
+    }
+    .status-online { background: rgba(16, 185, 129, 0.15); color: var(--green); border: 1px solid var(--green); }
+    .status-offline { background: rgba(239, 68, 68, 0.15); color: var(--red); border: 1px solid var(--red); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+
+    /* Global Controls Row */
+    .global-controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .master-switch-group { display: flex; gap: 10px; }
+    .btn-master {
+      padding: 10px 18px; border-radius: 12px; font-weight: 700; font-size: 14px;
+      cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-master-on { background: var(--green); color: #fff; box-shadow: 0 4px 14px var(--green-glow); }
+    .btn-master-off { background: var(--red); color: #fff; box-shadow: 0 4px 14px var(--red-glow); }
+    .btn-master:hover { transform: translateY(-2px); filter: brightness(1.1); }
+
+    /* Comparison Bar */
+    .comparison-section {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+    }
+    .comparison-title {
+      font-size: 13px; font-weight: 700; margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .comp-bar {
+      height: 12px; width: 100%; border-radius: 6px; background: rgba(255, 255, 255, 0.08);
+      display: flex; overflow: hidden;
+    }
+    .comp-seg { height: 100%; transition: width 0.4s ease; position: relative; }
+    .comp-seg:nth-child(1) { background: #38bdf8; }
+    .comp-seg:nth-child(2) { background: #10b981; }
+    .comp-seg:nth-child(3) { background: #f59e0b; }
+    .comp-seg:nth-child(4) { background: #a855f7; }
+    .comp-legend { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; font-size: 11px; }
+    .comp-legend-item { display: flex; align-items: center; gap: 6px; }
+    .comp-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* Socket Cards Grid */
+    .sockets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .socket-card {
+      background: var(--card-bg);
+      border: 2px solid var(--card-border);
+      border-radius: 20px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .socket-card.is-on {
+      border-color: var(--green);
+      box-shadow: 0 0 24px -6px var(--green-glow);
+    }
+    .socket-card.is-off {
+      border-color: var(--card-border);
+      opacity: 0.85;
+    }
+    .socket-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .socket-title-wrap { display: flex; align-items: center; gap: 8px; }
+    .socket-idx {
+      width: 28px; height: 28px; border-radius: 8px; background: rgba(255, 255, 255, 0.08);
+      display: grid; place-items: center; font-size: 12px; font-weight: 800;
+    }
+    .socket-name { font-size: 16px; font-weight: 700; }
+    .badge-router {
+      background: rgba(59, 130, 246, 0.2); color: #60a5fa; border: 1px solid #3b82f6;
+      font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+    }
+
+    /* Main Switch Button Inside Card */
+    .btn-socket-power {
+      width: 100%;
+      padding: 12px;
+      border-radius: 14px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+      border: none;
+    }
+    .socket-card.is-on .btn-socket-power {
+      background: var(--green);
+      color: #fff;
+      box-shadow: 0 4px 16px var(--green-glow);
+    }
+    .socket-card.is-off .btn-socket-power {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--red);
+      border: 1px solid var(--red);
+    }
+    .btn-socket-power:hover { transform: scale(1.02); }
+
+    /* Card Telemetry Details */
+    .socket-stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      background: rgba(0, 0, 0, 0.15);
+      padding: 10px 12px;
+      border-radius: 12px;
+    }
+    .stat-row { display: flex; flex-direction: column; }
+    .stat-lbl { font-size: 11px; color: var(--text-muted); }
+    .stat-num { font-size: 14px; font-weight: 700; }
+
+    /* Card Micro Actions */
+    .card-actions {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      border-top: 1px solid var(--card-border);
+      padding-top: 12px;
+    }
+    .btn-micro {
+      flex: 1;
+      padding: 7px 4px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      font-size: 12px;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: all 0.2s;
+    }
+    .btn-micro:hover { background: var(--card-border); color: var(--accent); }
+
+    /* Section Panels */
+    .panel-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .panel-header {
+      font-size: 16px; font-weight: 700; margin-bottom: 16px;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .form-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .form-input {
+      background: rgba(0, 0, 0, 0.25); border: 1px solid var(--card-border);
+      color: var(--text); padding: 10px 12px; border-radius: 10px; font-size: 14px; outline: none;
+    }
+    .form-input:focus { border-color: var(--accent); }
+    .form-checkbox { display: flex; align-items: center; gap: 8px; cursor: pointer; margin-top: 8px; }
+
+    /* Audit Log Table */
+    .log-table-wrap { overflow-x: auto; }
+    .log-table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: start; }
+    .log-table th { color: var(--text-muted); padding: 8px 12px; border-bottom: 1px solid var(--card-border); }
+    .log-table td { padding: 10px 12px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+
+    /* Toast */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px;
+      background: #1e130d; color: #fff; padding: 14px 20px; border-radius: 14px;
+      border: 1px solid var(--accent); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      z-index: 1000; transform: translateY(100px); opacity: 0; transition: all 0.3s;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(4px); display: none; place-items: center; z-index: 900; padding: 16px;
+    }
+    .modal-backdrop.open { display: grid; }
+    .modal-box {
+      background: #18110c; border: 1px solid var(--card-border);
+      border-radius: 20px; width: 100%; max-width: 440px; padding: 22px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .modal-header { font-size: 17px; font-weight: 800; display: flex; justify-content: space-between; }
+    .modal-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; }
+    .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+
+    /* Multi-Strip Hub Selector */
+    .strip-selector-wrap { position: relative; display: inline-block; }
+    .btn-strip-select {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      padding: 7px 13px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 13px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .btn-strip-select:hover { border-color: var(--accent); background: rgba(255,255,255,0.08); }
+    .strip-power-pill {
+      font-size: 11px;
+      background: rgba(255, 122, 61, 0.15);
+      color: var(--accent);
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+    .strip-status-dot {
+      width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+    }
+    .strip-status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+    .strip-status-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+    .strip-dropdown-menu {
+      position: absolute;
+      top: calc(100% + 8px);
+      left: 0;
+      min-width: 290px;
+      background: #18110c;
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      box-shadow: 0 12px 32px rgba(0,0,0,0.65);
+      padding: 8px;
+      z-index: 950;
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+    }
+    [dir="rtl"] .strip-dropdown-menu { left: auto; right: 0; }
+    .strip-dropdown-menu.show { display: flex; }
+    .strip-dropdown-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px 10px; font-size: 12px; font-weight: 700; color: var(--text-muted);
+      border-bottom: 1px solid var(--card-border); margin-bottom: 4px;
+    }
+    .strip-dropdown-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; border-radius: 10px; cursor: pointer;
+      transition: background 0.2s; font-size: 13px; font-weight: 600;
+    }
+    .strip-dropdown-item:hover { background: rgba(255,255,255,0.08); }
+    .strip-dropdown-item.active { background: rgba(255,122,61,0.18); border: 1px solid var(--accent); }
+    .strip-dropdown-item-meta { display: flex; align-items: center; gap: 8px; }
+
+    /* Onboarding Modal & Stepper */
+    .onboarding-stepper {
+      display: flex; justify-content: space-between; align-items: center;
+      position: relative; margin: 10px 0 20px;
+    }
+    .stepper-step {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--text-muted); font-weight: 600; z-index: 2; cursor: pointer;
+    }
+    .stepper-step.active { color: var(--accent); font-weight: 700; }
+    .stepper-step.completed { color: var(--green); }
+    .step-circle {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--card-bg); border: 2px solid var(--card-border);
+      display: grid; place-items: center; font-size: 13px; font-weight: 700;
+      transition: all 0.2s;
+    }
+    .stepper-step.active .step-circle { border-color: var(--accent); background: rgba(255,122,61,0.2); }
+    .stepper-step.completed .step-circle { border-color: var(--green); background: rgba(16,185,129,0.2); }
+    .room-category-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 8px;
+    }
+    @media (max-width: 500px) {
+      .room-category-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    .room-category-btn {
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      padding: 12px 8px; border-radius: 12px; background: rgba(255,255,255,0.04);
+      border: 1px solid var(--card-border); cursor: pointer; transition: all 0.2s;
+      font-size: 12px; font-weight: 600; color: var(--text);
+    }
+    .room-category-btn:hover { border-color: var(--accent); background: rgba(255,255,255,0.08); }
+    .room-category-btn.selected { border-color: var(--accent); background: rgba(255,122,61,0.2); color: var(--accent); font-weight: 700; }
+    .room-category-btn .room-icon { font-size: 24px; }
+    .onboarding-tip-box {
+      background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 12px; padding: 12px 14px; font-size: 12px; line-height: 1.5; color: #bae6fd;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .unclaimed-card {
+      background: rgba(255,255,255,0.04); border: 1px solid var(--card-border);
+      border-radius: 12px; padding: 12px 14px; display: flex; justify-content: space-between; align-items: center;
+      transition: all 0.2s;
+    }
+    .unclaimed-card:hover { border-color: var(--accent); background: rgba(255,255,255,0.07); }
+
+    [dir="rtl"] { direction: rtl; text-align: right; }
+    [dir="rtl"] .modal-footer { justify-content: flex-start; }
+    [dir="rtl"] .toast { right: auto; left: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Top Header -->
+    <header>
+      <div class="logo-area">
+        <div class="logo-badge">⚡</div>
+        <div class="logo-text">
+          <h1 id="ui-title">Na7la IoT Hub</h1>
+          <span id="ui-strip-model">MTTL-W01 Power Strip</span>
+        </div>
+
+        <!-- Multi-Strip Hub Selector Dropdown -->
+        <div class="strip-selector-wrap" id="strip-selector-wrap">
+          <button class="btn-strip-select" id="btn-strip-select" onclick="toggleStripDropdown()">
+            <span id="strip-active-icon">💻</span>
+            <span id="strip-active-name">Office Strip</span>
+            <span id="strip-active-power" class="strip-power-pill">0.0 W</span>
+            <span class="strip-status-dot offline" id="strip-active-status"></span>
+            <span style="font-size: 10px; margin-left: 2px;">▼</span>
+          </button>
+          <div class="strip-dropdown-menu" id="strip-dropdown-menu">
+            <div class="strip-dropdown-header">
+              <span data-i="my_strips">My Power Strips</span>
+              <button class="btn-micro" style="font-size: 11px; padding: 3px 8px;" onclick="openOnboardingModal()">➕ <span data-i="add_strip">Add Strip</span></button>
+            </div>
+            <div id="strip-dropdown-items" style="display: flex; flex-direction: column; gap: 4px;">
+              <!-- Populated dynamically via JS -->
+            </div>
+            <div style="border-top: 1px solid var(--card-border); margin-top: 6px; padding-top: 6px; display: flex; justify-content: space-between; align-items: center;">
+              <button class="btn-micro" style="font-size: 11px;" onclick="openEditActiveStripModal()">✏️ <span data-i="edit_strip">Edit Strip</span></button>
+              <button class="btn-micro" style="font-size: 11px; color: var(--red); border-color: rgba(239,68,68,0.3);" onclick="confirmUnpairActiveStrip()">🔌 <span data-i="unpair_strip">Unpair</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn-tool" onclick="openOnboardingModal()" id="btn-add-strip">➕ <span data-i="add_strip">Add Strip</span></button>
+        <button class="btn-tool" onclick="toggleLanguage()" id="btn-lang">🌐 العربية</button>
+        <button class="btn-tool" onclick="cycleTheme()" id="btn-theme">🎨 Theme</button>
+        <button class="btn-tool" onclick="exportExcel()">📥 Excel</button>
+        <button class="btn-tool" id="btn-user-mgmt" onclick="openUserMgmtModal()" style="display: none; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 700;">👑 <span data-i="user_mgmt_btn">Admin Console</span></button>
+        <button class="btn-tool" id="btn-family" onclick="openFamilyModal()" style="display: none;">👨‍👩‍👧‍👦 <span data-i="family_btn">Family</span></button>
+        <button class="btn-tool" id="btn-migrate" onclick="openMigrateModal()" style="display: none;">🌐 <span data-i="migrate_btn">Cloud</span></button>
+        <button class="btn-tool" id="btn-lock" onclick="handleLockBtnClick()">🔒 <span data-i="lock_btn">Lock</span></button>
+        <span id="badge-user" class="badge-router" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.4); display: none;"></span>
+        <button class="btn-tool" id="btn-logout" onclick="logoutUser()" style="display: none; padding: 6px 10px;" title="Logout">🚪</button>
+      </div>
+    </header>
+
+    <!-- Telemetry Bar -->
+    <div class="telemetry-bar">
+      <div class="t-item">
+        <span class="t-label" data-i="status">Status</span>
+        <div id="val-status" class="status-badge status-offline">
+          <span class="status-dot"></span> <span id="txt-status">Offline</span>
+        </div>
+      </div>
+      <div class="t-item">
+        <span class="t-label" data-i="voltage">Voltage</span>
+        <div class="t-val"><span id="val-vol">0.0</span><span class="t-unit">V</span></div>
+      </div>
+      <div class="t-item">
+        <span class="t-label" data-i="total_power">Total Power</span>
+        <div class="t-val" style="color: var(--accent);"><span id="val-total-watt">0.0</span><span class="t-unit">W</span></div>
+      </div>
+      <div class="t-item">
+        <span class="t-label" data-i="total_current">Total Current</span>
+        <div class="t-val"><span id="val-total-amp">0.00</span><span class="t-unit">A</span></div>
+      </div>
+      <div class="t-item">
+        <span class="t-label" data-i="total_energy">Total Energy</span>
+        <div class="t-val"><span id="val-total-kwh">0.00</span><span class="t-unit">kWh</span></div>
+      </div>
+      <div class="t-item">
+        <span class="t-label" data-i="total_cost">Est. Cost</span>
+        <div class="t-val" style="color: var(--green);"><span id="val-total-cost">0.00</span><span class="t-unit" data-i="currency">EGP</span></div>
+      </div>
+    </div>
+
+    <!-- Global Controls -->
+    <div class="global-controls">
+      <div class="master-switch-group">
+        <button class="btn-master btn-master-on" onclick="masterSwitch('on')">
+          ⚡ <span data-i="turn_all_on">Turn All ON</span>
+        </button>
+        <button class="btn-master btn-master-off" onclick="masterSwitch('off')">
+          ⭕ <span data-i="turn_all_off">Turn All OFF</span>
+        </button>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <!-- [DISABLED FOR STOCK 1.0.66] زر قفل الأطفال معطل تجنباً للارتداد العنيف
+        <button class="btn-tool" onclick="toggleChildLock()" id="btn-child-lock">
+          🔒 <span data-i="child_lock">Child Lock</span>: <b id="lbl-child-lock">OFF</b>
+        </button>
+        -->
+        <button class="btn-tool" onclick="openProtectionModal()">
+          🛡️ <span data-i="protection_settings">Protection</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Load Comparison Bar -->
+    <div class="comparison-section">
+      <div class="comparison-title">
+        <span data-i="load_distribution">Real-time Load Distribution</span>
+        <span id="txt-comp-total">0 W</span>
+      </div>
+      <div class="comp-bar" id="comp-bar-segments">
+        <div class="comp-seg" id="seg-1" style="width: 25%;"></div>
+        <div class="comp-seg" id="seg-2" style="width: 25%;"></div>
+        <div class="comp-seg" id="seg-3" style="width: 25%;"></div>
+        <div class="comp-seg" id="seg-4" style="width: 25%;"></div>
+      </div>
+      <div class="comp-legend" id="comp-legend-items">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- Sockets Grid (4 Outlets) -->
+    <div class="sockets-grid" id="sockets-container">
+      <!-- Cards rendered dynamically via JS -->
+    </div>
+
+    <!-- Live Audit Logs Table -->
+    <div class="panel-box">
+      <div class="panel-header">
+        <span data-i="recent_events">Recent Events & Black Box Logs</span>
+        <button class="btn-tool" onclick="loadAuditLogs()">🔄 <span data-i="refresh">Refresh</span></button>
+      </div>
+      <div class="log-table-wrap">
+        <table class="log-table">
+          <thead>
+            <tr>
+              <th data-i="time">Time</th>
+              <th data-i="outlet">Outlet</th>
+              <th data-i="action">Action</th>
+              <th data-i="trigger">Trigger</th>
+              <th data-i="reason">Details</th>
+            </tr>
+          </thead>
+          <tbody id="logs-tbody">
+            <tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Loading logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Watt Limits -->
+  <div class="modal-backdrop" id="modal-limits">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span data-i="watt_limits_title">Outlet Watt Limits</span>
+        <button class="modal-close" onclick="closeModal('modal-limits')">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="max_watt_trip">Trip if power exceeds (W):</label>
+        <input type="number" id="inp-max-watt" class="form-input" placeholder="e.g. 2500">
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="min_watt_trip">Trip if power falls below (Idle/Charger) (W):</label>
+        <input type="number" id="inp-min-watt" class="form-input" placeholder="e.g. 3 (empty = disabled)">
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="idle_delay_sec">Idle duration before trip (seconds):</label>
+        <input type="number" id="inp-cutoff-delay" class="form-input" value="600">
+      </div>
+      <label class="form-checkbox">
+        <input type="checkbox" id="inp-compressor-en">
+        <span data-i="compressor_protect_lbl">Compressor Delay Protection (Fridges/Coolers)</span>
+      </label>
+      <div class="form-group" id="wrap-compressor-delay" style="margin-top: 6px;">
+        <label class="form-label" data-i="compressor_delay_lbl">Protection Delay (seconds):</label>
+        <input type="number" id="inp-compressor-delay" class="form-input" value="180">
+      </div>
+      <div class="modal-footer">
+        <button class="btn-tool" onclick="closeModal('modal-limits')" data-i="cancel">Cancel</button>
+        <button class="btn-master btn-master-on" onclick="saveWattLimits()" data-i="save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Rename & Router Tag -->
+  <div class="modal-backdrop" id="modal-config">
+    <div class="modal-box">
+      <div class="modal-header">
+        <span data-i="outlet_settings">Outlet Configuration</span>
+        <button class="modal-close" onclick="closeModal('modal-config')">✕</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="outlet_name">Outlet Name:</label>
+        <input type="text" id="inp-outlet-name" class="form-input" maxlength="30" placeholder="e.g. PC, Router, TV">
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="power_on_behavior_lbl">Power-On Recovery State:</label>
+        <select id="inp-power-on-behavior" class="form-input">
+          <option value="LAST" data-i="power_on_last">Remember Last State (Recommended)</option>
+          <option value="ON" data-i="power_on_on">Always Turn ON</option>
+          <option value="OFF" data-i="power_on_off">Always Turn OFF</option>
+        </select>
+      </div>
+      <label class="form-checkbox">
+        <input type="checkbox" id="inp-is-router">
+        <span style="font-weight: 700; color: #60a5fa;" data-i="tag_as_router">📶 Tag as Router (Protected from Master OFF)</span>
+      </label>
+      <div style="border-top: 1px solid var(--card-border); padding-top: 12px; margin-top: 10px;">
+        <label class="form-checkbox">
+          <input type="checkbox" id="inp-master-slave-en" onchange="toggleMasterSlaveFields()">
+          <span style="font-weight: 700; color: var(--accent);" data-i="enable_master_slave">🔗 Master-Slave Automation (Follow Another Socket)</span>
+        </label>
+        <div id="wrap-master-slave" style="display: none; margin-top: 10px; flex-direction: column; gap: 10px;">
+          <div class="form-group">
+            <label class="form-label" data-i="master_outlet_lbl">Master Outlet to Follow:</label>
+            <select id="inp-master-socket" class="form-input"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" data-i="master_trigger_watt_lbl">Turn this socket ON when master exceeds (Watts):</label>
+            <input type="number" id="inp-master-watt" class="form-input" value="20" placeholder="e.g. 20">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-tool" onclick="closeModal('modal-config')" data-i="cancel">Cancel</button>
+        <button class="btn-master btn-master-on" onclick="saveOutletConfig()" data-i="save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Schedules & Timers -->
+  <div class="modal-backdrop" id="modal-schedules">
+    <div class="modal-box" style="max-width: 520px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <div>
+          <span data-i="schedules_modal_title">Outlet Schedules & Timers</span>
+          <div id="sched-outlet-sub" style="font-size: 12px; color: var(--accent); font-weight: 700; margin-top: 2px;"></div>
+        </div>
+        <button class="modal-close" onclick="closeModal('modal-schedules')">✕</button>
+      </div>
+
+      <!-- Quick Countdown Timer -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px;">
+        <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;" data-i="quick_timer_title">⏱️ Quick Countdown Timer</div>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;">
+          <button class="btn-tool" style="padding: 6px 12px; font-size: 12px;" onclick="startQuickTimer(15)">15m</button>
+          <button class="btn-tool" style="padding: 6px 12px; font-size: 12px;" onclick="startQuickTimer(30)">30m</button>
+          <button class="btn-tool" style="padding: 6px 12px; font-size: 12px;" onclick="startQuickTimer(60)">1h</button>
+          <button class="btn-tool" style="padding: 6px 12px; font-size: 12px;" onclick="startQuickTimer(120)">2h</button>
+          <button class="btn-tool" style="padding: 6px 12px; font-size: 12px;" onclick="startQuickTimer(240)">4h</button>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="number" id="inp-custom-timer-min" class="form-input" style="flex: 1;" placeholder="Minutes (e.g. 45)" min="1">
+          <select id="inp-timer-action" class="form-input" style="width: 120px;">
+            <option value="false" data-i="turn_off_action">Turn OFF</option>
+            <option value="true" data-i="turn_on_action">Turn ON</option>
+          </select>
+          <button class="btn-master btn-master-on" style="padding: 8px 14px; font-size: 12px;" onclick="startCustomTimer()" data-i="start_timer_btn">Start</button>
+        </div>
+      </div>
+
+      <!-- Advanced Automations: Auto-Off & Cycle Loop -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px;">
+        <div style="display: flex; gap: 8px; margin-bottom: 12px; border-bottom: 1px solid var(--card-border); padding-bottom: 8px;">
+          <button id="tab-btn-auto-off" class="btn-tool" style="flex: 1; border-color: var(--accent);" onclick="switchScheduleTab('auto-off')" data-i="auto_off_tab">🔄 Auto-Off Delay</button>
+          <button id="tab-btn-cycle" class="btn-tool" style="flex: 1;" onclick="switchScheduleTab('cycle')" data-i="cycle_tab">🔁 Cycle Loop</button>
+        </div>
+
+        <div id="tab-auto-off-content">
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;" data-i="auto_off_desc">Turn this outlet OFF automatically after being ON for a set duration.</p>
+          <div style="display: flex; gap: 8px;">
+            <input type="number" id="inp-auto-off-min" class="form-input" style="flex: 1;" placeholder="Minutes (e.g. 60)" min="1">
+            <button class="btn-master btn-master-on" style="padding: 8px 14px; font-size: 12px;" onclick="saveAutoOffSchedule()" data-i="save">Save</button>
+          </div>
+        </div>
+
+        <div id="tab-cycle-content" style="display: none;">
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;" data-i="cycle_desc">Alternate between ON and OFF continuously in a recurring cycle.</p>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px;">
+            <div class="form-group">
+              <label class="form-label" data-i="cycle_on_lbl">ON Duration (min):</label>
+              <input type="number" id="inp-cycle-on-min" class="form-input" value="15" min="1">
+            </div>
+            <div class="form-group">
+              <label class="form-label" data-i="cycle_off_lbl">OFF Duration (min):</label>
+              <input type="number" id="inp-cycle-off-min" class="form-input" value="30" min="1">
+            </div>
+          </div>
+          <button class="btn-master btn-master-on" style="width: 100%; font-size: 13px;" onclick="saveCycleSchedule()" data-i="start_cycle_btn">Save Cycle Loop</button>
+        </div>
+      </div>
+
+      <!-- Active Schedules List -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+          <span data-i="active_schedules_title">Active Schedules & Timers</span>
+          <button class="btn-tool" style="padding: 3px 8px; font-size: 11px;" onclick="loadSocketSchedules(selectedSocketIdx)">🔄</button>
+        </div>
+        <div id="schedules-list-container" style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- Loaded dynamically -->
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-tool" onclick="closeModal('modal-schedules')" data-i="cancel">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Protection Settings -->
+  <div class="modal-backdrop" id="modal-protection">
+    <div class="modal-box" style="max-width: 520px;">
+      <div class="modal-header">
+        <span data-i="protection_settings">Global Strip Protection Limits</span>
+        <button class="modal-close" onclick="closeModal('modal-protection')">✕</button>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label" data-i="min_voltage">Min Voltage (V):</label>
+          <input type="number" id="inp-min-vol" class="form-input" value="185">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i="max_voltage">Max Voltage (V):</label>
+          <input type="number" id="inp-max-vol" class="form-input" value="245">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i="max_total_watt">Max Total Watt (W):</label>
+          <input type="number" id="inp-max-total-watt" class="form-input" value="3000">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i="max_total_amp_lbl">Max Total Current (A):</label>
+          <input type="number" id="inp-max-total-amp" class="form-input" value="16.0" step="0.5">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i="max_temp_c">Max Safe Temp (°C):</label>
+          <input type="number" id="inp-max-temp" class="form-input" value="65">
+        </div>
+      </div>
+      <label class="form-checkbox">
+        <input type="checkbox" id="inp-voltage-protect-en" checked>
+        <span data-i="enable_voltage_protect">Enable Live Voltage Fluctuations Protection</span>
+      </label>
+      <label class="form-checkbox">
+        <input type="checkbox" id="inp-auto-shedding-en" checked>
+        <span data-i="enable_auto_shedding">Enable Smart Load Shedding (Trip highest non-router socket on danger)</span>
+      </label>
+      <div class="modal-footer">
+        <button class="btn-tool" onclick="closeModal('modal-protection')" data-i="cancel">Cancel</button>
+        <button class="btn-master btn-master-on" onclick="saveProtectionSettings()" data-i="save">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: First-Run Admin Setup -->
+  <div class="modal-backdrop" id="modal-admin-setup">
+    <div class="modal-box" style="max-width: 480px;">
+      <div class="modal-header">
+        <span data-i="admin_setup_title">👑 Create Master Admin Account</span>
+      </div>
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: -8px;" data-i="admin_setup_desc">Set up your secure primary administrator account for this Na7la IoT Hub.</p>
+      
+      <div class="form-group">
+        <label class="form-label" data-i="full_name">Full Name:</label>
+        <input type="text" id="setup-admin-name" class="form-input" placeholder="e.g. Ahmed" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="email">Email Address:</label>
+        <input type="email" id="setup-admin-email" class="form-input" placeholder="admin@example.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="password">Master Password:</label>
+        <input type="password" id="setup-admin-password" class="form-input" placeholder="8+ chars, uppercase, digit, symbol" oninput="checkPasswordRuleDisplay(this.value)" required>
+        <div id="pw-rules-hint" style="font-size: 11px; color: var(--text-muted); margin-top: 4px; line-height: 1.4;">
+          <span id="pw-rule-len">● 8+ chars</span> · <span id="pw-rule-upper">● Upper</span> · <span id="pw-rule-lower">● Lower</span> · <span id="pw-rule-num">● Digit</span> · <span id="pw-rule-sym">● Special</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="pin_code">Master 4-digit PIN (for quick unlock):</label>
+        <input type="password" id="setup-admin-pin" class="form-input" placeholder="e.g. 1234" maxlength="6" value="1234">
+      </div>
+      <div class="modal-footer" style="justify-content: stretch;">
+        <button class="btn-master btn-master-on" style="width: 100%; padding: 12px;" onclick="submitAdminSetup()" data-i="create_admin_btn">Create Admin & Launch</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Sign In / Access -->
+  <div class="modal-backdrop" id="modal-login">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-header">
+        <span data-i="login_title">🔐 Access Na7la IoT</span>
+      </div>
+
+      <!-- Auth Mode Tabs -->
+      <div style="display: flex; gap: 6px; margin-bottom: 12px; border-bottom: 1px solid var(--card-border); padding-bottom: 8px;">
+        <button id="tab-login-signin" class="btn-tool" style="flex: 1; border-color: var(--accent); color: var(--accent); font-weight: 700;" onclick="switchAuthTab('signin')" data-i="signin_tab">🔑 Sign In</button>
+        <button id="tab-login-signup" class="btn-tool" style="flex: 1;" onclick="switchAuthTab('signup')" data-i="signup_tab">✨ Sign Up</button>
+        <button id="tab-login-invite" class="btn-tool" style="flex: 1;" onclick="switchAuthTab('invite')" data-i="invite_tab">🎫 Fast Invite</button>
+      </div>
+
+      <!-- Sign In Tab (Email + Password) -->
+      <div id="auth-tab-signin-content">
+        <div class="form-group">
+          <label class="form-label" data-i="email">Email Address:</label>
+          <input type="email" id="inp-login-email" class="form-input" placeholder="user@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i="password">Password:</label>
+          <input type="password" id="inp-login-password" class="form-input" placeholder="••••••••">
+        </div>
+        <button class="btn-master btn-master-on" style="width: 100%; padding: 12px; margin-top: 10px;" onclick="submitEmailLogin()" data-i="login_btn">Sign In</button>
+      </div>
+
+      <!-- Sign Up Tab (Full Name + Email + Password + Strength) -->
+      <div id="auth-tab-signup-content" style="display: none;">
+        <div class="form-group">
+          <label class="form-label" data-i="full_name">Full Name:</label>
+          <input type="text" id="inp-signup-name" class="form-input" placeholder="Ahmed Mohamed">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i="email">Email Address:</label>
+          <input type="email" id="inp-signup-email" class="form-input" placeholder="user@example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label" data-i="password">Password:</label>
+          <input type="password" id="inp-signup-password" class="form-input" placeholder="••••••••" oninput="checkSignupPasswordRules(this.value)">
+          <div style="font-size: 11px; margin-top: 6px; color: var(--text-muted);" id="su-rule-len">
+            ✓ <span data-i="pass_min_len">Password must be at least 6 characters</span>
+          </div>
+        </div>
+        <button class="btn-master btn-master-on" style="width: 100%; padding: 12px; margin-top: 10px;" onclick="submitRegister()" data-i="signup_btn">Create Account</button>
+      </div>
+
+      <!-- Invite Code Tab -->
+      <div id="auth-tab-invite-content" style="display: none;">
+        <div class="form-group">
+          <label class="form-label" data-i="invite_code_lbl">Enter 6-digit Invite Code (e.g. NA7LA-XXXX):</label>
+          <input type="text" id="inp-invite-code" class="form-input" style="text-transform: uppercase; font-size: 16px; font-weight: 700; text-align: center; letter-spacing: 2px;" placeholder="NA7LA-XXXX">
+        </div>
+        <button class="btn-master btn-master-on" style="width: 100%; padding: 12px; margin-top: 10px;" onclick="submitInviteLogin()" data-i="enter_dash_btn">Enter Dashboard</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: PIN Prompt Lock -->
+  <div class="modal-backdrop" id="modal-pin-prompt">
+    <div class="modal-box" style="max-width: 400px; text-align: center;">
+      
+      <!-- VIEW 1: Verify PIN -->
+      <div id="pin-view-verify">
+        <div class="modal-header" style="justify-content: center;">
+          <span id="pin-modal-title" data-i="pin_title">🔒 Enter PIN to Unlock</span>
+        </div>
+        <div style="margin: 15px 0;">
+          <input type="password" id="inp-unlock-pin" class="form-input" style="font-size: 20px; text-align: center; letter-spacing: 4px; width: 220px; margin: 0 auto;" maxlength="64" placeholder="••••" onkeydown="if(event.key === 'Enter') verifyUnlockPin()">
+          <div id="pin-prompt-msg" style="font-size: 12px; color: var(--text-muted); margin-top: 10px;" data-i="pin_hint">Enter 4-digit PIN or your account password</div>
+        </div>
+        <div class="modal-footer" style="justify-content: center; gap: 10px;">
+          <button class="btn-tool" onclick="pendingLockedAction = null; closeModal('modal-pin-prompt');" data-i="cancel">Cancel</button>
+          <button class="btn-master btn-master-on" onclick="verifyUnlockPin()" data-i="unlock_btn">Unlock</button>
+        </div>
+        <div style="margin-top: 14px; border-top: 1px dashed var(--card-border); padding-top: 10px;">
+          <button class="btn-micro" style="color: var(--accent); font-size: 12px; background: transparent; border: none; cursor: pointer; text-decoration: underline;" onclick="togglePinView('change')">
+            ⚙️ <span data-i="change_pin_btn">تغيير رمز PIN (Change PIN)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW 2: First-Time Setup -->
+      <div id="pin-view-setup" style="display: none; text-align: right;">
+        <div class="modal-header" style="justify-content: center;">
+          <span style="color: #10b981; font-weight: 700;">🛡️ <span data-i="setup_pin_title">تعيين رمز PIN لأول مرة</span></span>
+        </div>
+        <p style="font-size: 12px; color: var(--text-muted); text-align: center; margin: 8px 0 14px;" data-i="setup_pin_desc">
+          لحماية أجهزتك ومقابس المشترك من العبث، يرجى تعيين رمز PIN مكوّن من 4 أرقام خاص بك:
+        </p>
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label class="form-label" style="font-size: 11px;" data-i="new_pin_lbl">رمز PIN الجديد (4-6 أرقام):</label>
+          <input type="password" id="inp-setup-pin" class="form-input" maxlength="6" placeholder="مثال: 5678" style="text-align: center; font-size: 18px; letter-spacing: 4px;">
+        </div>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" style="font-size: 11px;" data-i="confirm_pin_lbl">تأكيد رمز PIN الجديد:</label>
+          <input type="password" id="inp-setup-confirm-pin" class="form-input" maxlength="6" placeholder="مثال: 5678" style="text-align: center; font-size: 18px; letter-spacing: 4px;" onkeydown="if(event.key === 'Enter') submitSetupPin()">
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: center;">
+          <button class="btn-tool" onclick="pendingLockedAction = null; closeModal('modal-pin-prompt');" data-i="cancel">إلغاء</button>
+          <button class="btn-master btn-master-on" onclick="submitSetupPin()" data-i="save_pin_btn">حفظ وتفعيل القفل</button>
+        </div>
+      </div>
+
+      <!-- VIEW 3: Change PIN -->
+      <div id="pin-view-change" style="display: none; text-align: right;">
+        <div class="modal-header" style="justify-content: center;">
+          <span style="color: #f59e0b; font-weight: 700;">⚙️ <span data-i="change_pin_title">تغيير رمز PIN</span></span>
+        </div>
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label class="form-label" style="font-size: 11px;" data-i="curr_pwd_lbl">كلمة المرور الحالية أو الـ PIN القديم:</label>
+          <input type="password" id="inp-change-curr" class="form-input" placeholder="••••••">
+        </div>
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label class="form-label" style="font-size: 11px;" data-i="new_pin_lbl">رمز PIN الجديد (4-6 أرقام):</label>
+          <input type="password" id="inp-change-new" class="form-input" maxlength="6" placeholder="مثال: 5678" style="text-align: center; font-size: 18px; letter-spacing: 4px;">
+        </div>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" style="font-size: 11px;" data-i="confirm_pin_lbl">تأكيد رمز PIN الجديد:</label>
+          <input type="password" id="inp-change-confirm" class="form-input" maxlength="6" placeholder="مثال: 5678" style="text-align: center; font-size: 18px; letter-spacing: 4px;" onkeydown="if(event.key === 'Enter') submitChangePin()">
+        </div>
+        <div style="display: flex; gap: 8px; justify-content: center;">
+          <button class="btn-tool" onclick="togglePinView('verify')" data-i="back">رجوع</button>
+          <button class="btn-master btn-master-on" onclick="submitChangePin()" data-i="save_pin_btn">حفظ الرمز الجديد</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Modal: Family Sharing -->
+  <div class="modal-backdrop" id="modal-family">
+    <div class="modal-box" style="max-width: 540px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <span data-i="family_title">👨‍👩‍👧‍👦 Family Sharing & Permissions</span>
+        <button class="modal-close" onclick="closeModal('modal-family')">✕</button>
+      </div>
+
+      <!-- Add New Member Box -->
+      <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px;">
+        <div style="font-size: 13px; font-weight: 700; margin-bottom: 10px;" data-i="add_member">+ Add Member / Generate Invite</div>
+        
+        <div class="form-group">
+          <label class="form-label" data-i="member_name">Member Name / Nickname:</label>
+          <input type="text" id="share-name" class="form-input" placeholder="e.g. Mama, Sarah, Guest">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" data-i="permission_level">Permission Level:</label>
+          <select id="share-perm" class="form-input" onchange="toggleShareSocketsBox()">
+            <option value="FULL" data-i="perm_full">Full Control (All Outlets)</option>
+            <option value="PARTIAL" data-i="perm_partial">Selective Outlets (Restricted)</option>
+            <option value="VIEW" data-i="perm_view">View Only (Energy & Bills)</option>
+          </select>
+        </div>
+
+        <!-- Sockets Selector for Partial Access -->
+        <div id="share-sockets-box" style="display: none; background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px; margin-bottom: 12px;">
+          <div style="font-size: 12px; font-weight: 700; margin-bottom: 6px;" data-i="allowed_outlets">Allowed Outlets:</div>
+          <div id="share-sockets-checkboxes" style="display: flex; gap: 12px; flex-wrap: wrap;"></div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" data-i="duration">Duration / Expiry:</label>
+          <select id="share-duration" class="form-input">
+            <option value="0" data-i="dur_permanent">Permanent (Family)</option>
+            <option value="24" data-i="dur_24h">24 Hours (Guest)</option>
+            <option value="168" data-i="dur_7d">7 Days</option>
+          </select>
+        </div>
+
+        <button class="btn-master btn-master-on" style="width: 100%; padding: 10px;" onclick="createFamilyShare()" data-i="generate_invite">Generate Fast Invite Code</button>
+
+        <!-- Generated Code Banner -->
+        <div id="share-result-box" style="display: none; margin-top: 12px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 10px; padding: 10px; text-align: center;">
+          <div style="font-size: 11px; color: var(--green); font-weight: 700;" data-i="invite_code_generated">Invite Code Ready:</div>
+          <div id="share-code-display" style="font-size: 20px; font-weight: 800; color: #fff; letter-spacing: 2px; margin: 4px 0;"></div>
+          <button class="btn-micro" style="padding: 4px 12px;" onclick="copyInviteCode()" data-i="copy_code">📋 Copy Code</button>
+        </div>
+      </div>
+
+      <!-- Active Shared Members List -->
+      <div>
+        <div style="font-size: 13px; font-weight: 700; margin: 10px 0;" data-i="active_members">Active Shared Members</div>
+        <div id="shares-list-container" style="display: flex; flex-direction: column; gap: 8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Cloud VPS Migration -->
+  <div class="modal-backdrop" id="modal-migrate">
+    <div class="modal-box" style="max-width: 460px;">
+      <div class="modal-header">
+        <span data-i="cloud_title">🌐 Cloud VPS Migration</span>
+        <button class="modal-close" onclick="closeModal('modal-migrate')">✕</button>
+      </div>
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: -6px;" data-i="cloud_desc">Redirect the smart strip directly to your public VPS or domain to control it from anywhere globally.</p>
+
+      <div class="form-group">
+        <label class="form-label" data-i="target_vps">Target VPS IP or Domain:</label>
+        <input type="text" id="inp-migrate-host" class="form-input" placeholder="e.g. 159.65.xxx.xxx or myvps.na7la.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" data-i="target_port">Target Port:</label>
+        <input type="number" id="inp-migrate-port" class="form-input" value="10086">
+      </div>
+
+      <div id="migrate-alert" style="display: none; font-size: 12px; padding: 10px; border-radius: 8px; margin-top: 6px;"></div>
+
+      <div class="modal-footer">
+        <button class="btn-tool" onclick="closeModal('modal-migrate')" data-i="cancel">Cancel</button>
+        <button class="btn-master btn-master-on" onclick="applyServerMigration()" data-i="apply_migration">Check & Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Admin User & Quota Management -->
+  <div class="modal-backdrop" id="modal-user-mgmt">
+    <div class="modal-box" style="max-width: 680px; max-height: 90vh; overflow-y: auto;">
+      <div class="modal-header">
+        <span data-i="users_title">👥 User Management & Quotas</span>
+        <button class="modal-close" onclick="closeModal('modal-user-mgmt')">✕</button>
+      </div>
+      <p style="font-size: 12px; color: var(--text-muted); margin-top: -6px;" data-i="users_desc">Manage registered user accounts, roles, and device quotas (maximum strips allowed per user).</p>
+
+      <!-- Admin Stats Banner -->
+      <div id="admin-stats-bar" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 10px; margin-bottom: 12px;">
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted);">👥 إجمالي المستخدمين</div>
+          <div id="stat-total-users" style="font-size: 18px; font-weight: 800; color: #fff;">-</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted);">🔌 الأجهزة المسجلة</div>
+          <div id="stat-total-strips" style="font-size: 18px; font-weight: 800; color: #38bdf8;">-</div>
+        </div>
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px; text-align: center;">
+          <div style="font-size: 11px; color: var(--text-muted);">🟢 متصل بالسيرفر الآن</div>
+          <div id="stat-online-strips" style="font-size: 18px; font-weight: 800; color: var(--green);">-</div>
+        </div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <div id="users-table-loading" style="text-align: center; padding: 25px; color: var(--text-muted);">
+          ⏳ <span data-i="loading_users">Loading users...</span>
+        </div>
+        <div id="users-table-container" style="display: none; overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+            <thead>
+              <tr style="border-bottom: 1px solid var(--card-border); color: var(--text-muted); text-align: left;">
+                <th style="padding: 10px 8px;">User / Email</th>
+                <th style="padding: 10px 8px;">Role</th>
+                <th style="padding: 10px 8px; text-align: center;">Owned</th>
+                <th style="padding: 10px 8px; text-align: center;">Quota (Limit)</th>
+                <th style="padding: 10px 8px; text-align: right;">Action</th>
+              </tr>
+            </thead>
+            <tbody id="users-table-body">
+              <!-- Populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="margin-top: 16px;">
+        <button class="btn-tool" onclick="closeModal('modal-user-mgmt')" data-i="cancel">Close</button>
+        <button class="btn-master btn-master-on" onclick="loadAdminUsers()">🔄 Refresh</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Device Onboarding Wizard -->
+  <div class="modal-backdrop" id="modal-onboarding">
+    <div class="modal-box" style="max-width: 540px; max-height: 92vh; overflow-y: auto;">
+      <div class="modal-header">
+        <span data-i="onboarding_title">✨ Add & Pair Power Strip</span>
+        <button class="modal-close" onclick="closeModal('modal-onboarding')">✕</button>
+      </div>
+
+      <!-- Navigation Stepper -->
+      <div class="onboarding-stepper">
+        <div class="stepper-step active" id="step-nav-1" onclick="switchOnboardingStep(1)">
+          <div class="step-circle" id="circle-step-1">1</div>
+          <span data-i="step1_nav">1. Connect / Find</span>
+        </div>
+        <div style="flex: 1; height: 2px; background: var(--card-border); margin: 0 4px; margin-bottom: 14px;"></div>
+        <div class="stepper-step" id="step-nav-2" onclick="switchOnboardingStep(2)">
+          <div class="step-circle" id="circle-step-2">2</div>
+          <span data-i="step2_nav">2. WiFi Setup</span>
+        </div>
+        <div style="flex: 1; height: 2px; background: var(--card-border); margin: 0 4px; margin-bottom: 14px;"></div>
+        <div class="stepper-step" id="step-nav-3" onclick="switchOnboardingStep(3)">
+          <div class="step-circle" id="circle-step-3">3</div>
+          <span data-i="step3_nav">3. Room & Names</span>
+        </div>
+      </div>
+
+      <!-- Step 1: Connect / Discovery Selection -->
+      <div id="onboarding-step-1" class="onboarding-step-pane">
+        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+          <button id="tab-ob-discovered" class="btn-tool" style="flex: 1; border-color: var(--accent);" onclick="switchDiscoveryTab('discovered')" data-i="tab_network_strips">🔍 Found on Network</button>
+          <button id="tab-ob-softap" class="btn-tool" style="flex: 1;" onclick="switchDiscoveryTab('softap')" data-i="tab_new_strip_ap">📶 New Strip (SoftAP)</button>
+        </div>
+
+        <!-- Discovered strips list -->
+        <div id="ob-discovered-content">
+          <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 10px;" data-i="discovered_desc">Unclaimed power strips detected automatically on your local network:</p>
+          <div id="unclaimed-strips-list" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;">
+            <!-- Rendered by JS -->
+          </div>
+          <div style="text-align: center; margin-bottom: 12px;">
+            <button class="btn-tool" onclick="refreshUnclaimedStrips()">🔄 <span data-i="scan_again">Scan Network Again</span></button>
+          </div>
+
+          <!-- Manual MAC Pairing Option -->
+          <div style="border-top: 1px dashed var(--card-border); margin-top: 12px; padding-top: 12px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-muted); margin-bottom: 6px;">
+              🏷️ <span data-i="manual_mac_lbl">Or Enter Device MAC Address (Printed on Strip):</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <input type="text" id="inp-manual-mac" class="form-input" placeholder="e.g. AA11BB22CC33" maxlength="17" style="text-transform: uppercase; font-family: monospace; font-weight: 700; letter-spacing: 1px;">
+              <button class="btn-master btn-master-on" style="padding: 0 16px; white-space: nowrap;" onclick="submitManualMacClaim()">Pair ➔</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- SoftAP instructions tab -->
+        <div id="ob-softap-content" style="display: none;">
+          <div class="onboarding-tip-box" style="margin-bottom: 14px;">
+            <span style="font-size: 20px;">💡</span>
+            <div>
+              <b data-i="softap_tip_title">Connect to the Strip's Hotspot:</b><br>
+              <span data-i="softap_tip_desc">Plug in the power strip. Open your phone or PC WiFi settings and connect to the network starting with <b>TONLY_TAP_</b>.</span>
+            </div>
+          </div>
+
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px; margin-bottom: 14px; font-size: 12px;">
+            <div style="font-weight: 700; margin-bottom: 6px;" data-i="default_password_title">🔑 Hotspot Password:</div>
+            <div style="color: var(--text-muted); line-height: 1.5;" data-i="default_password_desc">
+              Formula: <code>LGU_</code> followed by the last 7 characters of the device MAC address (or check the sticker under the power strip).
+            </div>
+            <div class="onboarding-tip-box" style="margin-top: 10px; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: #fde68a;">
+              <span>⚠️</span>
+              <span data-i="cellular_data_warning">Important: Temporarily turn OFF cellular mobile data on your phone so your connection routes to the strip.</span>
+            </div>
+          </div>
+
+          <div style="text-align: right;">
+            <button class="btn-master btn-master-on" onclick="switchOnboardingStep(2)" data-i="btn_next_wifi">Next: WiFi Credentials ➔</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: SoftAP WiFi Credentials Sending -->
+      <div id="onboarding-step-2" class="onboarding-step-pane" style="display: none;">
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;" data-i="enter_wifi_desc">
+          Enter your home or office 2.4 GHz WiFi network details to connect the strip:
+        </p>
+        <div class="form-group" style="margin-bottom: 10px;">
+          <label class="form-label" data-i="wifi_ssid_lbl">WiFi Name (SSID):</label>
+          <input type="text" id="ob-wifi-ssid" class="form-input" placeholder="e.g. MyHome-2.4G">
+        </div>
+        <div class="form-group" style="margin-bottom: 14px;">
+          <label class="form-label" data-i="wifi_pass_lbl">WiFi Password:</label>
+          <input type="password" id="ob-wifi-pass" class="form-input" placeholder="••••••••">
+        </div>
+
+        <div id="ob-provision-alert" style="display: none; font-size: 12px; padding: 10px; border-radius: 8px; margin-bottom: 12px;"></div>
+
+        <div class="modal-footer" style="justify-content: space-between;">
+          <button class="btn-tool" onclick="switchOnboardingStep(1)" data-i="back">⬅ Back</button>
+          <button class="btn-master btn-master-on" id="btn-provision-send" onclick="submitProvisionAp()" data-i="send_wifi_btn">Send Credentials to Strip ➔</button>
+        </div>
+      </div>
+
+      <!-- Step 3: Room Category, Icons & Sockets Customization -->
+      <div id="onboarding-step-3" class="onboarding-step-pane" style="display: none;">
+        <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 12px;" data-i="customize_strip_desc">
+          Personalize your power strip and assign outlets for clear monitoring:
+        </p>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" data-i="strip_name_lbl">Power Strip Name:</label>
+          <input type="text" id="ob-strip-name" class="form-input" placeholder="e.g. Office Desk Strip" value="Office Strip">
+        </div>
+
+        <!-- Room Category Grid -->
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" data-i="select_room_category">Select Room / Location:</label>
+          <div class="room-category-grid" id="room-category-grid">
+            <div class="room-category-btn selected" onclick="selectRoomCategory('office', '💻')" data-room="office">
+              <span class="room-icon">💻</span>
+              <span data-i="room_office">Office</span>
+            </div>
+            <div class="room-category-btn" onclick="selectRoomCategory('living', '🛋️')" data-room="living">
+              <span class="room-icon">🛋️</span>
+              <span data-i="room_living">Living</span>
+            </div>
+            <div class="room-category-btn" onclick="selectRoomCategory('bedroom', '🛏️')" data-room="bedroom">
+              <span class="room-icon">🛏️</span>
+              <span data-i="room_bedroom">Bedroom</span>
+            </div>
+            <div class="room-category-btn" onclick="selectRoomCategory('kids', '🧸')" data-room="kids">
+              <span class="room-icon">🧸</span>
+              <span data-i="room_kids">Kids</span>
+            </div>
+            <div class="room-category-btn" onclick="selectRoomCategory('kitchen', '🍳')" data-room="kitchen">
+              <span class="room-icon">🍳</span>
+              <span data-i="room_kitchen">Kitchen</span>
+            </div>
+            <div class="room-category-btn" onclick="selectRoomCategory('server', '📶')" data-room="server">
+              <span class="room-icon">📶</span>
+              <span data-i="room_server">Server/Net</span>
+            </div>
+            <div class="room-category-btn" onclick="selectRoomCategory('media', '📺')" data-room="media">
+              <span class="room-icon">📺</span>
+              <span data-i="room_media">Media TV</span>
+            </div>
+            <div class="room-category-btn" onclick="selectRoomCategory('workshop', '⚡')" data-room="workshop">
+              <span class="room-icon">⚡</span>
+              <span data-i="room_workshop">Workshop</span>
+            </div>
+          </div>
+          <input type="hidden" id="ob-selected-room" value="office">
+          <input type="hidden" id="ob-selected-icon" value="💻">
+          <input type="hidden" id="ob-target-mac" value="">
+        </div>
+
+        <!-- Sockets Presets -->
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px; margin-bottom: 14px;">
+          <div style="font-size: 13px; font-weight: 700; margin-bottom: 8px;" data-i="socket_names_title">Outlet Names & Router Tag:</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="font-size: 12px; font-weight: 700; width: 24px;">#1</span>
+              <input type="text" id="ob-sock-name-1" class="form-input" style="flex: 1; padding: 6px 10px; font-size: 13px;" value="PC" placeholder="Outlet 1">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+                <input type="checkbox" id="ob-sock-router-1"> 📶 Router
+              </label>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="font-size: 12px; font-weight: 700; width: 24px;">#2</span>
+              <input type="text" id="ob-sock-name-2" class="form-input" style="flex: 1; padding: 6px 10px; font-size: 13px;" value="Router" placeholder="Outlet 2">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+                <input type="checkbox" id="ob-sock-router-2" checked> 📶 Router
+              </label>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="font-size: 12px; font-weight: 700; width: 24px;">#3</span>
+              <input type="text" id="ob-sock-name-3" class="form-input" style="flex: 1; padding: 6px 10px; font-size: 13px;" value="Monitor" placeholder="Outlet 3">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+                <input type="checkbox" id="ob-sock-router-3"> 📶 Router
+              </label>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <span style="font-size: 12px; font-weight: 700; width: 24px;">#4</span>
+              <input type="text" id="ob-sock-name-4" class="form-input" style="flex: 1; padding: 6px 10px; font-size: 13px;" value="Desk Lamp" placeholder="Outlet 4">
+              <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+                <input type="checkbox" id="ob-sock-router-4"> 📶 Router
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer" style="justify-content: space-between;">
+          <button class="btn-tool" onclick="switchOnboardingStep(1)" data-i="back">⬅ Back</button>
+          <button class="btn-master btn-master-on" onclick="submitClaimStrip()" data-i="finish_claim_btn">✨ Complete Setup</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Edit Strip Details -->
+  <div class="modal-backdrop" id="modal-edit-strip">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-header">
+        <span data-i="edit_strip_title">✏️ Edit Power Strip Details</span>
+        <button class="modal-close" onclick="closeModal('modal-edit-strip')">✕</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" data-i="strip_name_lbl">Power Strip Name:</label>
+        <input type="text" id="edit-strip-name" class="form-input">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" data-i="select_room_category">Room / Location:</label>
+        <div class="room-category-grid" id="edit-room-category-grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="room-category-btn" onclick="selectEditRoomCategory('office', '💻')" data-room="office"><span class="room-icon">💻</span><span data-i="room_office">Office</span></div>
+          <div class="room-category-btn" onclick="selectEditRoomCategory('living', '🛋️')" data-room="living"><span class="room-icon">🛋️</span><span data-i="room_living">Living</span></div>
+          <div class="room-category-btn" onclick="selectEditRoomCategory('bedroom', '🛏️')" data-room="bedroom"><span class="room-icon">🛏️</span><span data-i="room_bedroom">Bedroom</span></div>
+          <div class="room-category-btn" onclick="selectEditRoomCategory('kids', '🧸')" data-room="kids"><span class="room-icon">🧸</span><span data-i="room_kids">Kids</span></div>
+          <div class="room-category-btn" onclick="selectEditRoomCategory('kitchen', '🍳')" data-room="kitchen"><span class="room-icon">🍳</span><span data-i="room_kitchen">Kitchen</span></div>
+          <div class="room-category-btn" onclick="selectEditRoomCategory('server', '📶')" data-room="server"><span class="room-icon">📶</span><span data-i="room_server">Server</span></div>
+          <div class="room-category-btn" onclick="selectEditRoomCategory('media', '📺')" data-room="media"><span class="room-icon">📺</span><span data-i="room_media">Media</span></div>
+          <div class="room-category-btn" onclick="selectEditRoomCategory('workshop', '⚡')" data-room="workshop"><span class="room-icon">⚡</span><span data-i="room_workshop">Workshop</span></div>
+        </div>
+        <input type="hidden" id="edit-strip-room" value="office">
+        <input type="hidden" id="edit-strip-icon" value="💻">
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-tool" onclick="closeModal('modal-edit-strip')" data-i="cancel">Cancel</button>
+        <button class="btn-master btn-master-on" onclick="saveEditStrip()" data-i="save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">Notification message</div>
+
+  <script>
+    // --- i18n Dictionary ---
+    const I18N = {
+      en: {
+        title: "Na7la IoT Hub",
+        status: "Status",
+        voltage: "Voltage",
+        total_power: "Total Power",
+        total_current: "Total Current",
+        total_energy: "Total Energy",
+        total_cost: "Est. Cost",
+        currency: "EGP",
+        turn_all_on: "Turn All ON",
+        turn_all_off: "Turn All OFF",
+        child_lock: "Child Lock",
+        protection_settings: "Protection",
+        load_distribution: "Real-time Load Distribution",
+        recent_events: "Recent Events & Black Box Logs",
+        refresh: "Refresh",
+        time: "Time", outlet: "Outlet", action: "Action", trigger: "Trigger", reason: "Details",
+        watt_limits_title: "Outlet Watt Limits",
+        max_watt_trip: "Trip if power exceeds (W):",
+        min_watt_trip: "Trip if power falls below (Idle/Charger) (W):",
+        idle_delay_sec: "Idle duration before trip (seconds):",
+        compressor_protect_lbl: "Compressor Delay Protection (Fridges/Coolers)",
+        compressor_delay_lbl: "Protection Delay (seconds):",
+        outlet_settings: "Outlet Configuration",
+        outlet_name: "Outlet Name:",
+        power_on_behavior_lbl: "Power-On Recovery State:",
+        power_on_last: "Remember Last State (Recommended)",
+        power_on_on: "Always Turn ON",
+        power_on_off: "Always Turn OFF",
+        tag_as_router: "📶 Tag as Router (Protected from Master OFF)",
+        min_voltage: "Min Voltage (V):",
+        max_voltage: "Max Voltage (V):",
+        max_total_watt: "Max Total Watt (W):",
+        max_total_amp_lbl: "Max Total Current (A):",
+        max_temp_c: "Max Safe Temp (°C):",
+        enable_voltage_protect: "Enable Live Voltage Fluctuations Protection",
+        enable_auto_shedding: "Enable Smart Load Shedding (Trip highest load on danger)",
+        power_lbl: "Power",
+        current_lbl: "Current",
+        energy_lbl: "Energy",
+        temp_lbl: "Temp",
+        limits_btn: "Limits",
+        schedules_btn: "Schedules",
+        config_btn: "Rename",
+        reset_btn: "Reset",
+        schedules_modal_title: "Outlet Schedules & Timers",
+        quick_timer_title: "⏱️ Quick Countdown Timer",
+        turn_off_action: "Turn OFF",
+        turn_on_action: "Turn ON",
+        start_timer_btn: "Start",
+        auto_off_tab: "🔄 Auto-Off Delay",
+        cycle_tab: "🔁 Cycle Loop",
+        auto_off_desc: "Turn this outlet OFF automatically after being ON for a set duration.",
+        cycle_desc: "Alternate between ON and OFF continuously in a recurring cycle.",
+        cycle_on_lbl: "ON Duration (min):",
+        cycle_off_lbl: "OFF Duration (min):",
+        start_cycle_btn: "Save Cycle Loop",
+        active_schedules_title: "Active Schedules & Timers",
+        no_schedules: "No active schedules for this outlet",
+        enable_master_slave: "🔗 Master-Slave Automation (Follow Another Socket)",
+        master_outlet_lbl: "Master Outlet to Follow:",
+        master_trigger_watt_lbl: "Turn this socket ON when master exceeds (Watts):",
+        cancel: "Cancel", save: "Save",
+        online: "Online", offline: "Offline",
+        router_warn: "⚠️ Warning: This socket is powering your Router! Turning it off will disconnect your network. Are you sure?",
+        reset_kwh_confirm: "Reset energy counter for this outlet back to 0.00 kWh?",
+        family_btn: "Family",
+        migrate_btn: "Cloud",
+        lock_btn: "Lock",
+        locked_btn: "Locked",
+        logout_btn: "Logout",
+        admin_protected: "Admin Protected",
+        outlet_locked_tooltip: "Locked for your access level",
+        admin_setup_title: "👑 Create Master Admin Account",
+        admin_setup_desc: "Set up your secure primary administrator account for this Na7la IoT Hub.",
+        full_name: "Full Name:",
+        email: "Email Address:",
+        password: "Master Password:",
+        pin_code: "Master 4-digit PIN (for quick unlock):",
+        create_admin_btn: "Create Admin & Launch",
+        login_title: "🔐 Access Na7la IoT",
+        signin_tab: "🔑 Sign In",
+        signup_tab: "✨ Sign Up",
+        invite_tab: "🎫 Fast Invite",
+        login_btn: "Sign In",
+        signup_btn: "Create Account",
+        pass_min_len: "Password must be at least 6 characters",
+        manual_mac_lbl: "Or Enter Device MAC Address (Printed on Strip):",
+        enter_dash_btn: "Enter Dashboard",
+        or_social: "or continue with",
+        google_continue_btn: "Continue with Google",
+        pin_title: "🔒 Enter PIN or Password to Unlock",
+        pin_hint: "Enter 4-digit PIN or your account password",
+        unlock_btn: "Unlock",
+        change_pin_btn: "Change PIN",
+        setup_pin_title: "Set Master PIN for First Time",
+        setup_pin_desc: "To protect sensitive devices from accidental switching, please set your personal 4-digit PIN:",
+        new_pin_lbl: "New 4-digit PIN (4-6 digits):",
+        confirm_pin_lbl: "Confirm New PIN:",
+        save_pin_btn: "Save & Secure",
+        change_pin_title: "Change Master PIN",
+        curr_pwd_lbl: "Current Password or Old PIN:",
+        family_title: "👨‍👩‍👧‍👦 Family Sharing & Permissions",
+        add_member: "+ Add Member / Generate Invite",
+        member_name: "Member Name / Nickname:",
+        permission_level: "Permission Level:",
+        perm_full: "Full Control (All Outlets)",
+        perm_partial: "Selective Outlets (Restricted)",
+        perm_view: "View Only (Energy & Bills)",
+        allowed_outlets: "Allowed Outlets:",
+        duration: "Duration / Expiry:",
+        dur_permanent: "Permanent (Family)",
+        dur_24h: "24 Hours (Guest)",
+        dur_7d: "7 Days",
+        generate_invite: "Generate Fast Invite Code",
+        invite_code_generated: "Invite Code Ready:",
+        copy_code: "📋 Copy Code",
+        active_members: "Active Shared Members",
+        cloud_title: "🌐 Cloud VPS Migration",
+        cloud_desc: "Redirect the smart strip directly to your public VPS or domain to control it from anywhere globally.",
+        target_vps: "Target VPS IP or Domain:",
+        target_port: "Target Port:",
+        apply_migration: "Check & Apply",
+        code_copied: "Invite code copied to clipboard!",
+        migration_success: "Migration successful! Device redirected.",
+        user_mgmt_btn: "Users",
+        users_title: "👥 User Management & Quotas",
+        users_desc: "Manage registered user accounts, roles, and device quotas (maximum strips allowed per user).",
+        loading_users: "Loading users...",
+        perm_denied: "Permission Denied: Socket is restricted for your account",
+        my_strips: "My Power Strips",
+        add_strip: "Add Strip",
+        edit_strip: "Edit Strip",
+        unpair_strip: "Unpair",
+        onboarding_title: "✨ Add & Pair Power Strip",
+        step1_nav: "1. Connect / Find",
+        step2_nav: "2. WiFi Setup",
+        step3_nav: "3. Room & Names",
+        tab_network_strips: "🔍 Found on Network",
+        tab_new_strip_ap: "📶 New Strip (SoftAP)",
+        discovered_desc: "Unclaimed power strips detected automatically on your local network:",
+        scan_again: "Scan Network Again",
+        softap_tip_title: "Connect to the Strip's Hotspot:",
+        softap_tip_desc: "Plug in the power strip. Open your phone or PC WiFi settings and connect to the network starting with TONLY_TAP_.",
+        default_password_title: "🔑 Hotspot Password:",
+        default_password_desc: "Formula: LGU_ followed by the last 7 characters of the device MAC address (or check the sticker under the power strip).",
+        cellular_data_warning: "Important: Temporarily turn OFF cellular mobile data on your phone so your connection routes to the strip.",
+        btn_next_wifi: "Next: WiFi Credentials ➔",
+        enter_wifi_desc: "Enter your home or office 2.4 GHz WiFi network details to connect the strip:",
+        wifi_ssid_lbl: "WiFi Name (SSID):",
+        wifi_pass_lbl: "WiFi Password:",
+        send_wifi_btn: "Send Credentials to Strip ➔",
+        customize_strip_desc: "Personalize your power strip and assign outlets for clear monitoring:",
+        strip_name_lbl: "Power Strip Name:",
+        select_room_category: "Select Room / Location:",
+        room_office: "Office",
+        room_living: "Living Room",
+        room_bedroom: "Bedroom",
+        room_kids: "Kids Room",
+        room_kitchen: "Kitchen",
+        room_server: "Server / Network",
+        room_media: "Media & TV",
+        room_workshop: "Workshop / Lab",
+        socket_names_title: "Outlet Names & Router Tag:",
+        finish_claim_btn: "✨ Complete Setup",
+        edit_strip_title: "✏️ Edit Power Strip Details",
+        claim_this_strip: "Claim & Setup",
+        unclaimed_none: "No unclaimed power strips found on the local network.",
+        unpair_confirm: "Are you sure you want to unpair this power strip? It will be removed from your dashboard and returned to the discovery pool.",
+        unpaired_success: "Power strip unpaired successfully.",
+        strip_saved: "Power strip updated successfully.",
+        strip_claimed: "Power strip paired and ready!",
+        back: "⬅ Back"
+      },
+      ar: {
+        title: "منصة نحلة IoT الذكية",
+        status: "حالة المشترك",
+        voltage: "الجهد (الفولت)",
+        total_power: "إجمالي السحب",
+        total_current: "إجمالي التيار",
+        total_energy: "إجمالي الطاقة",
+        total_cost: "التكلفة التقديرية",
+        currency: "ج.م",
+        turn_all_on: "تشغيل الكل",
+        turn_all_off: "إطفاء الكل",
+        child_lock: "قفل الأطفال",
+        protection_settings: "إعدادات الحماية",
+        load_distribution: "توزيع الأحمال اللحظي",
+        recent_events: "الصندوق الأسود وسجل الأحداث",
+        refresh: "تحديث",
+        time: "الوقت", outlet: "المخرج", action: "الإجراء", trigger: "المُشغّل", reason: "التفاصيل",
+        watt_limits_title: "حدود الواط للمخرج",
+        max_watt_trip: "افصل لو الواط زاد عن (واط):",
+        min_watt_trip: "افصل لو الواط قل عن (اكتمال شحن/خمول) (واط):",
+        idle_delay_sec: "مدة الانتظار قبل الفصل (ثوانٍ):",
+        compressor_protect_lbl: "حماية مواتير التبريد (تأخير التشغيل)",
+        compressor_delay_lbl: "مهلة تأخير تشغيل الموتور (ثوانٍ):",
+        outlet_settings: "تخصيص المخرج",
+        outlet_name: "اسم المخرج:",
+        power_on_behavior_lbl: "حالة الفيشة بعد عودة الكهرباء:",
+        power_on_last: "تذكر آخر حالة (موصى به)",
+        power_on_on: "تشغيل دائم",
+        power_on_off: "إطفاء دائم",
+        tag_as_router: "📶 وسم كراوتر (محمي من إطفاء الكل وإسقاط الحمل)",
+        min_voltage: "أدنى فولت آمن (V):",
+        max_voltage: "أقصى فولت آمن (V):",
+        max_total_watt: "أقصى واط إجمالي (W):",
+        max_total_amp_lbl: "أقصى تيار كلي (أمبير):",
+        max_temp_c: "أقصى حرارة مسموحة (°C):",
+        enable_voltage_protect: "تفعيل حماية تذبذب الفولت اللحظي",
+        enable_auto_shedding: "تفعيل إسقاط الأحمال الذكي عند الطوارئ",
+        power_lbl: "الواط",
+        current_lbl: "التيار",
+        energy_lbl: "الطاقة",
+        temp_lbl: "الحرارة",
+        limits_btn: "الحدود",
+        schedules_btn: "الجدولة",
+        config_btn: "تعديل",
+        reset_btn: "تصفير",
+        schedules_modal_title: "جدولة ومؤقتات المخرج",
+        quick_timer_title: "⏱️ مؤقت العد التنازلي السريع",
+        turn_off_action: "إطفاء المخرج",
+        turn_on_action: "تشغيل المخرج",
+        start_timer_btn: "بدء المؤقت",
+        auto_off_tab: "🔄 إطفاء تلقائي",
+        cycle_tab: "🔁 تشغيل دوري",
+        auto_off_desc: "إطفاء المخرج تلقائياً بعد كل تشغيل بمهلة محددة (ممتاز للسخانات والمكواة والشواحن).",
+        cycle_desc: "تشغيل وإطفاء المخرج بالتناوب بشكل دوري ومستمر في حلقة تكرارية.",
+        cycle_on_lbl: "مدة التشغيل (دقيقة):",
+        cycle_off_lbl: "مدة الإيقاف (دقيقة):",
+        start_cycle_btn: "حفظ التشغيل الدوري",
+        active_schedules_title: "الجداول والمؤقتات الحالية",
+        no_schedules: "لا توجد مؤقتات أو جداول نشطة لهذا المخرج",
+        enable_master_slave: "🔗 الترابط الشرطي التلقائي (Master-Slave)",
+        master_outlet_lbl: "المقبس الرئيسي المتبوع (Master):",
+        master_trigger_watt_lbl: "شغّل هذا المقبس لو سحب الرئيسي زاد عن (واط):",
+        cancel: "إلغاء", save: "حفظ",
+        online: "متصل", offline: "غير متصل",
+        router_warn: "⚠️ تحذير: هذه الفيشة تغذي الراوتر! إطفاؤها سيقطع الإنترنت عن المنزل. هل أنت متأكد من الإطفاء؟",
+        reset_kwh_confirm: "هل تريد تصفير عداد الطاقة لهذا المخرج وإعادته إلى 0.00 كيلوواط؟",
+        family_btn: "العائلة",
+        migrate_btn: "السحابة",
+        lock_btn: "قفل",
+        locked_btn: "مُقفل",
+        logout_btn: "خروج",
+        admin_protected: "محمي للمدير فقط",
+        outlet_locked_tooltip: "غير مصرح بالتحكم لهذا الحساب",
+        admin_setup_title: "👑 إنشاء حساب المدير الرئيسي",
+        admin_setup_desc: "قم بإعداد حساب المدير الرئيسي للتحكم الكامل في منصة نحلة IoT.",
+        full_name: "الاسم بالكامل:",
+        email: "البريد الإلكتروني:",
+        password: "كلمة المرور الرئيسية:",
+        pin_code: "رمز PIN السريع (للقفل السريع):",
+        create_admin_btn: "إنشاء الحساب وتشغيل المنصة",
+        login_title: "🔐 الوصول إلى منصة نحلة IoT",
+        signin_tab: "🔑 تسجيل الدخول",
+        signup_tab: "✨ إنشاء حساب جديد",
+        invite_tab: "🎫 كود دعوة سريع",
+        login_btn: "تسجيل الدخول",
+        signup_btn: "إنشاء الحساب ودخول اللوحة",
+        pass_min_len: "كلمة المرور يجب ألا تقل عن 6 أحرف",
+        manual_mac_lbl: "أو أدخل عنوان الـ MAC المطبوع على المشترك مباشرة:",
+        enter_dash_btn: "الدخول للمشترك",
+        or_social: "أو المتابعة السريعة",
+        google_continue_btn: "المتابعة باستخدام Google",
+        invite_code_lbl: "أدخل كود الدعوة (مثال NA7LA-XXXX):",
+        pin_title: "🔒 أدخل رمز PIN أو كلمة المرور لفك القفل",
+        pin_hint: "أدخل رمز PIN (4 أرقام) أو كلمة مرور حسابك",
+        unlock_btn: "فتح القفل",
+        change_pin_btn: "تغيير رمز PIN",
+        setup_pin_title: "تعيين رمز PIN لأول مرة",
+        setup_pin_desc: "لحماية أجهزتك ومقابس المشترك من العبث، يرجى تعيين رمز PIN مكوّن من 4 أرقام خاص بك:",
+        new_pin_lbl: "رمز PIN الجديد (4-6 أرقام):",
+        confirm_pin_lbl: "تأكيد رمز PIN الجديد:",
+        save_pin_btn: "حفظ وتفعيل القفل",
+        change_pin_title: "تغيير رمز PIN",
+        curr_pwd_lbl: "كلمة المرور الحالية أو الـ PIN القديم:",
+        family_title: "👨‍👩‍👧‍👦 مشاركة العائلة والصلاحيات",
+        add_member: "+ إضافة فرد / إنشاء كود دعوة",
+        member_name: "اسم الفرد / اللقب:",
+        permission_level: "مستوى الصلاحية:",
+        perm_full: "تحكم كامل (جميع الفيش)",
+        perm_partial: "فيش محددة فقط (مقيّد)",
+        perm_view: "مشاهدة فقط (الاستهلاك والفواتير)",
+        allowed_outlets: "الفيش المسموح بها:",
+        duration: "مدة الصلاحية:",
+        dur_permanent: "دائم (أفراد العائلة)",
+        dur_24h: "24 ساعة (للضيوف)",
+        dur_7d: "7 أيام",
+        generate_invite: "إنشاء كود الدعوة السريع",
+        invite_code_generated: "كود الدعوة جاهز:",
+        copy_code: "📋 نسخ الكود",
+        active_members: "الأعضاء المشتركون حالياً",
+        cloud_title: "🌐 التحويل لسيرفر كلود VPS",
+        cloud_desc: "تحويل اتصال المشترك مباشرة إلى خادم سحابي VPS للتحكم به من أي مكان في العالم.",
+        target_vps: "عنوان الـ IP أو الدومين للسيرفر:",
+        target_port: "بورت الاتصال:",
+        apply_migration: "فحص وتطبيق النقل",
+        code_copied: "تم نسخ كود الدعوة للحافظة!",
+        migration_success: "نجح النقل! تم توجيه المشترك إلى السيرفر السحابي.",
+        user_mgmt_btn: "المستخدمين والكوتا",
+        users_title: "👥 إدارة المستخدمين وحصص المشتركات (الكوتا)",
+        users_desc: "إدارة حسابات المستخدمين المسجلين وتحديد الحد الأقصى للمشتركات المسموح بربطها لكل مستخدم.",
+        loading_users: "جاري تحميل قائمة المستخدمين...",
+        perm_denied: "تم رفض الإجراء: هذا المخرج غير مصرح لك بالتحكم به",
+        my_strips: "مشتركاتي الذكية",
+        add_strip: "إضافة مشترك",
+        edit_strip: "تعديل المشترك",
+        unpair_strip: "إلغاء الاقتران",
+        onboarding_title: "✨ إضافة واقتران مشترك ذكي",
+        step1_nav: "١. الاتصال / البحث",
+        step2_nav: "٢. إعداد الواي فاي",
+        step3_nav: "٣. الغرفة والأسماء",
+        tab_network_strips: "🔍 مكتشف على الشبكة",
+        tab_new_strip_ap: "📶 مشترك جديد (نقطة اتصال)",
+        discovered_desc: "المشتركات الذكية غير المقترنة المكتشفة تلقائياً على شبكتك المحلية:",
+        scan_again: "إعادة البحث في الشبكة",
+        softap_tip_title: "اتصل بشبكة المشترك أولاً:",
+        softap_tip_desc: "وصّل المشترك بالكهرباء. افتح شبكات الواي فاي في هاتفك أو جهازك واتصل بالشبكة التي تبدأ بـ TONLY_TAP_.",
+        default_password_title: "🔑 كلمة مرور شبكة المشترك:",
+        default_password_desc: "المعادلة: كلمة LGU_ متبوعة بآخر 7 خانات من عنوان الماك MAC الخاص بالجهاز (أو انظر الاستيكر أسفل المشترك).",
+        cellular_data_warning: "هام: يرجى إيقاف بيانات الهاتف المحمول (باقة النت) مؤقتاً لضمان توجيه الاتصال مباشرة للمشترك.",
+        btn_next_wifi: "التالي: بيانات الواي فاي ➔",
+        enter_wifi_desc: "أدخل بيانات شبكة الواي فاي المنزلية (تردد 2.4 جيجاهرتز) لربط المشترك بها:",
+        wifi_ssid_lbl: "اسم شبكة الواي فاي (SSID):",
+        wifi_pass_lbl: "كلمة مرور الواي فاي:",
+        send_wifi_btn: "إرسال البيانات للمشترك ➔",
+        customize_strip_desc: "قم بتخصيص اسم المشترك واختيار الغرفة وتسمية الفيش:",
+        strip_name_lbl: "اسم المشترك:",
+        select_room_category: "اختر الغرفة / المكان:",
+        room_office: "المكتب",
+        room_living: "الصالون",
+        room_bedroom: "غرفة النوم",
+        room_kids: "غرفة الأطفال",
+        room_kitchen: "المطبخ",
+        room_server: "الراوتر والسيرفر",
+        room_media: "شاشة التلفزيون",
+        room_workshop: "الورشة والمختبر",
+        socket_names_title: "تسمية الفيش ووسم الراوتر:",
+        finish_claim_btn: "✨ إتمام التجهيز والاقتران",
+        edit_strip_title: "✏️ تعديل بيانات المشترك",
+        claim_this_strip: "اقتران وتجهيز",
+        unclaimed_none: "لا توجد مشتركات جديدة غير مقترنة على الشبكة حالياً.",
+        unpair_confirm: "هل أنت متأكد من إلغاء اقتران هذا المشترك؟ سيتم حذفه من لوحتك وإعادته لمرحلة الإعداد.",
+        unpaired_success: "تم إلغاء اقتران المشترك بنجاح.",
+        strip_saved: "تم تحديث بيانات المشترك بنجاح.",
+        strip_claimed: "تم اقتران المشترك وتجهيزه بنجاح!",
+        back: "⬅ السابق"
+      }
+    };
+
+    let currentLang = localStorage.getItem("na7la_lang") || "en";
+    let currentTheme = localStorage.getItem("na7la_theme") || "ember";
+    let activeStripMac = null;
+    let activeStripData = null;
+    let selectedSocketIdx = null;
+    let ws = null;
+    let currentUser = null;
+    let isDashboardLocked = localStorage.getItem("na7la_dash_locked") === "true";
+    let pendingLockedAction = null;
+    let currentUserHasPin = false;
+
+
+    // Apply Theme & Lang on load
+    async function initApp() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const qToken = urlParams.get("token");
+      if (qToken) {
+        document.cookie = `na7la_token=${qToken}; path=/; max-age=86400`;
+      }
+      const qLang = urlParams.get("lang");
+      if (qLang) {
+        currentLang = qLang;
+        localStorage.setItem("na7la_lang", qLang);
+      }
+      applyTheme(currentTheme);
+      applyLang(currentLang);
+      await checkAuthStatus();
+      await fetchStrips();
+
+      const qModal = urlParams.get("modal");
+      if (qModal) {
+        openModal(qModal);
+        if (qModal === "modal-user-mgmt") loadAdminUsers();
+      }
+
+      setInterval(fetchStrips, 4000);
+      setInterval(loadAuditLogs, 5000);
+    }
+
+    async function checkAuthStatus() {
+      try {
+        const res = await fetch("/api/v1/auth/status");
+        const st = await res.json();
+        cachedGoogleClientId = st.google_client_id || "";
+        if (!st.admin_exists) {
+          openModal("modal-admin-setup");
+          return;
+        }
+        if (!st.authenticated) {
+          openModal("modal-login");
+          return;
+        }
+        currentUser = {
+          authenticated: true,
+          role: st.role,
+          name: st.name,
+          level: st.level,
+          allowed_sockets: st.allowed_sockets || [1, 2, 3, 4]
+        };
+        currentUserHasPin = !!st.has_pin;
+        closeModal("modal-login");
+        closeModal("modal-admin-setup");
+        updateAuthUI();
+      } catch (e) {
+        console.error("Auth status error", e);
+      }
+    }
+
+    function updateAuthUI() {
+      if (!currentUser || !currentUser.authenticated) return;
+      const isAdmin = currentUser.role === "ADMIN";
+      const userBadge = document.getElementById("badge-user");
+      const btnUserMgmt = document.getElementById("btn-user-mgmt");
+      const btnFamily = document.getElementById("btn-family");
+      const btnMigrate = document.getElementById("btn-migrate");
+      const btnLock = document.getElementById("btn-lock");
+      const btnLogout = document.getElementById("btn-logout");
+
+      if (userBadge) {
+        userBadge.style.display = "inline-flex";
+        userBadge.textContent = `${isAdmin ? "👑" : "👤"} ${currentUser.name}`;
+      }
+      if (btnUserMgmt) btnUserMgmt.style.display = isAdmin ? "inline-flex" : "none";
+      if (btnFamily) btnFamily.style.display = isAdmin ? "inline-flex" : "none";
+      if (btnMigrate) btnMigrate.style.display = isAdmin ? "inline-flex" : "none";
+      if (btnLock) btnLock.style.display = isAdmin ? "inline-flex" : "none";
+      if (btnLogout) btnLogout.style.display = "inline-flex";
+
+      renderSockets();
+    }
+
+    function isSocketControllable(idx) {
+      if (!currentUser || !currentUser.authenticated) return false;
+      if (currentUser.role === "ADMIN") return true;
+      if (currentUser.level === "VIEW") return false;
+      const allowed = currentUser.allowed_sockets || [];
+      return allowed.includes(idx);
+    }
+
+    function applyTheme(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+      localStorage.setItem("na7la_theme", theme);
+      currentTheme = theme;
+    }
+
+    function cycleTheme() {
+      const themes = ["ember", "ocean", "emerald", "light"];
+      const next = themes[(themes.indexOf(currentTheme) + 1) % themes.length];
+      applyTheme(next);
+      showToast("Theme changed to " + next);
+    }
+
+    function applyLang(lang) {
+      currentLang = lang;
+      localStorage.setItem("na7la_lang", lang);
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === "ar" ? "rtl" : "ltr";
+      document.getElementById("btn-lang").textContent = lang === "ar" ? "🌐 English" : "🌐 العربية";
+
+      const dict = I18N[lang];
+      document.querySelectorAll("[data-i]").forEach(el => {
+        const k = el.dataset.i;
+        if (dict[k]) el.textContent = dict[k];
+      });
+      document.getElementById("ui-title").textContent = dict.title;
+      updateLockUi();
+
+      // Re-render sockets & logs to apply new language immediately
+      const container = document.getElementById("sockets-container");
+      if (container) container.innerHTML = "";
+      renderSockets();
+      loadAuditLogs();
+      if (typeof renderStripsDropdown === "function") {
+        renderStripsDropdown(allStrips);
+      }
+    }
+
+    function toggleLanguage() {
+      applyLang(currentLang === "en" ? "ar" : "en");
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 3500);
+    }
+
+    // --- Multi-Strip Hub & Dropdown Selector ---
+    let allStrips = [];
+
+    function toggleStripDropdown() {
+      const menu = document.getElementById("strip-dropdown-menu");
+      if (menu) menu.classList.toggle("show");
+    }
+
+    function closeStripDropdown() {
+      const menu = document.getElementById("strip-dropdown-menu");
+      if (menu) menu.classList.remove("show");
+    }
+
+    window.addEventListener("click", (e) => {
+      const wrap = document.getElementById("strip-selector-wrap");
+      if (wrap && !wrap.contains(e.target)) {
+        closeStripDropdown();
+      }
+    });
+
+    function renderStripsDropdown(strips) {
+      const itemsContainer = document.getElementById("strip-dropdown-items");
+      if (!itemsContainer) return;
+      if (!strips || strips.length === 0) {
+        itemsContainer.innerHTML = `<div style="padding: 10px; font-size: 12px; color: var(--text-muted); text-align: center;">${currentLang === "ar" ? "لا توجد مشتركات مضافة بعد" : "No power strips added yet"}</div>`;
+        return;
+      }
+      itemsContainer.innerHTML = strips.map(s => {
+        const isActive = activeStripMac && s.mac === activeStripMac;
+        const icon = s.icon || "💻";
+        const isOnline = !!s.online;
+        const watt = (s.total_watt || 0).toFixed(1);
+        return `
+          <div class="strip-dropdown-item ${isActive ? 'active' : ''}" onclick="switchActiveStrip('${s.mac}')">
+            <div class="strip-dropdown-item-meta">
+              <span style="font-size: 16px;">${icon}</span>
+              <div>
+                <div>${escapeHtml(s.name || s.mac)}</div>
+                <div style="font-size: 10px; color: var(--text-muted); font-family: monospace;">${s.mac}</div>
+              </div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <span class="strip-power-pill">${watt} W</span>
+              <span class="strip-status-dot ${isOnline ? 'online' : 'offline'}"></span>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function switchActiveStrip(mac) {
+      if (activeStripMac === mac) {
+        closeStripDropdown();
+        return;
+      }
+      activeStripMac = mac;
+      localStorage.setItem("na7la_active_strip_mac", mac);
+      if (ws) {
+        ws.onclose = null;
+        ws.close();
+        ws = null;
+      }
+      closeStripDropdown();
+      const found = allStrips.find(s => s.mac === mac);
+      if (found) {
+        activeStripData = found;
+        updateTopBar(activeStripData);
+        renderSockets();
+        connectWebSocket(activeStripMac);
+        loadAuditLogs();
+      }
+      fetchStrips();
+    }
+
+    // Fetch strips
+    async function fetchStrips() {
+      try {
+        const res = await fetch("/api/v1/strips");
+        if (res.status === 401) {
+          checkAuthStatus();
+          return;
+        }
+        if (!res.ok) return;
+        const data = await res.json();
+        allStrips = data.strips || [];
+        renderStripsDropdown(allStrips);
+
+        if (allStrips.length > 0) {
+          const savedMac = localStorage.getItem("na7la_active_strip_mac");
+          let match = allStrips.find(s => s.mac === savedMac);
+          if (!match) {
+            match = allStrips[0];
+          }
+          activeStripData = match;
+          activeStripMac = match.mac;
+          localStorage.setItem("na7la_active_strip_mac", activeStripMac);
+
+          // Update header strip button
+          const btnName = document.getElementById("strip-active-name");
+          const btnIcon = document.getElementById("strip-active-icon");
+          const btnPill = document.getElementById("strip-active-power");
+          const btnDot = document.getElementById("strip-active-status");
+          if (btnName) btnName.textContent = activeStripData.name || activeStripData.mac;
+          if (btnIcon) btnIcon.textContent = activeStripData.icon || "💻";
+          if (btnPill) btnPill.textContent = (activeStripData.total_watt || 0).toFixed(1) + " W";
+          if (btnDot) {
+            btnDot.className = "strip-status-dot " + (activeStripData.online ? "online" : "offline");
+          }
+
+          updateTopBar(activeStripData);
+          renderSockets();
+          connectWebSocket(activeStripMac);
+          loadAuditLogs();
+        } else {
+          activeStripData = null;
+          activeStripMac = null;
+          const container = document.getElementById("sockets-container");
+          if (container) {
+            container.innerHTML = `
+              <div style="grid-column: 1 / -1; text-align: center; padding: 40px; background: var(--card-bg); border: 1px dashed var(--card-border); border-radius: 16px;">
+                <div style="font-size: 32px; margin-bottom: 12px;">🔌</div>
+                <div style="font-size: 16px; font-weight: 700; margin-bottom: 6px;">${currentLang === "ar" ? "لا توجد مشتركات مقترنة بحسابك حالياً" : "No power strips paired with your account"}</div>
+                <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">${currentLang === "ar" ? "اضغط على زر إضافة مشترك لإعداده وإقرانه في ثوانٍ" : "Click 'Add Strip' to discover and onboard your devices in seconds"}</div>
+                <button class="btn-master btn-master-on" onclick="openOnboardingModal()">➕ ${I18N[currentLang].add_strip}</button>
+              </div>
+            `;
+          }
+        }
+      } catch (err) {
+        console.error("Fetch error:", err);
+      }
+    }
+
+    function updateTopBar(strip) {
+      if (!strip) return;
+      const isOnline = !!strip.online;
+      const statusBadge = document.getElementById("val-status");
+      const statusTxt = document.getElementById("txt-status");
+      statusBadge.className = "status-badge " + (isOnline ? "status-online" : "status-offline");
+      statusTxt.textContent = isOnline ? (I18N[currentLang].online) : (I18N[currentLang].offline);
+
+      // Update header strip button
+      const btnName = document.getElementById("strip-active-name");
+      const btnIcon = document.getElementById("strip-active-icon");
+      const btnPill = document.getElementById("strip-active-power");
+      const btnDot = document.getElementById("strip-active-status");
+      if (btnName) btnName.textContent = strip.name || strip.mac;
+      if (btnIcon) btnIcon.textContent = strip.icon || "💻";
+      if (btnPill) btnPill.textContent = (strip.total_watt || 0).toFixed(1) + " W";
+      if (btnDot) {
+        btnDot.className = "strip-status-dot " + (isOnline ? "online" : "offline");
+      }
+
+      document.getElementById("val-vol").textContent = (strip.voltage || 0).toFixed(1);
+      document.getElementById("val-total-watt").textContent = (strip.total_watt || 0).toFixed(1);
+      document.getElementById("val-total-amp").textContent = (strip.total_amp || 0).toFixed(2);
+      document.getElementById("val-total-kwh").textContent = (strip.total_kwh || 0).toFixed(3);
+      document.getElementById("val-total-cost").textContent = (strip.total_cost_egp || 0).toFixed(2);
+      const clLbl = document.getElementById("lbl-child-lock");
+      if (clLbl) clLbl.textContent = strip.child_lock ? "ON" : "OFF";
+      if (strip.mac) {
+        document.getElementById("ui-strip-model").textContent = `${strip.name || 'Na7la Strip'} (${strip.mac}) · fw ${strip.fw || '1.0'}`;
+      }
+
+      updateComparisonBar(strip.sockets, strip.total_watt);
+    }
+
+    // --- Onboarding & Pairing Wizard Handlers ---
+    let onboardingStep = 1;
+    let selectedRoom = "office";
+    let selectedRoomIcon = "💻";
+
+    function openOnboardingModal() {
+      closeStripDropdown();
+      switchOnboardingStep(1);
+      switchDiscoveryTab("discovered");
+      refreshUnclaimedStrips();
+      openModal("modal-onboarding");
+    }
+
+    function switchOnboardingStep(step) {
+      onboardingStep = step;
+      [1, 2, 3].forEach(i => {
+        const nav = document.getElementById(`step-nav-${i}`);
+        const pane = document.getElementById(`onboarding-step-${i}`);
+        if (nav) {
+          nav.classList.remove("active", "completed");
+          if (i < step) nav.classList.add("completed");
+          if (i === step) nav.classList.add("active");
+        }
+        if (pane) pane.style.display = i === step ? "block" : "none";
+      });
+    }
+
+    function switchDiscoveryTab(tab) {
+      const btnDisc = document.getElementById("tab-ob-discovered");
+      const btnAp = document.getElementById("tab-ob-softap");
+      const boxDisc = document.getElementById("ob-discovered-content");
+      const boxAp = document.getElementById("ob-softap-content");
+      if (tab === "discovered") {
+        if (btnDisc) btnDisc.style.borderColor = "var(--accent)";
+        if (btnAp) btnAp.style.borderColor = "var(--card-border)";
+        if (boxDisc) boxDisc.style.display = "block";
+        if (boxAp) boxAp.style.display = "none";
+        refreshUnclaimedStrips();
+      } else {
+        if (btnAp) btnAp.style.borderColor = "var(--accent)";
+        if (btnDisc) btnDisc.style.borderColor = "var(--card-border)";
+        if (boxAp) boxAp.style.display = "block";
+        if (boxDisc) boxDisc.style.display = "none";
+      }
+    }
+
+    async function refreshUnclaimedStrips() {
+      const list = document.getElementById("unclaimed-strips-list");
+      if (!list) return;
+      list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 12px;">${currentLang === "ar" ? "جارٍ البحث عن أجهزة غير مقترنة على الشبكة..." : "Scanning network for unclaimed power strips..."}</div>`;
+      try {
+        const res = await fetch("/api/v1/strips/unclaimed");
+        if (!res.ok) return;
+        const data = await res.json();
+        const unclaimed = data.unclaimed || [];
+        if (unclaimed.length === 0) {
+          list.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 16px; background: rgba(255,255,255,0.02); border-radius: 10px;">${I18N[currentLang].unclaimed_none}</div>`;
+          return;
+        }
+        list.innerHTML = unclaimed.map(u => `
+          <div class="unclaimed-card">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">${escapeHtml(u.model || "MTTL-W01")}</div>
+              <div style="font-size: 11px; color: var(--text-muted); font-family: monospace;">MAC: ${u.mac} · IP: ${u.ip || "-"}</div>
+            </div>
+            <button class="btn-master btn-master-on" style="font-size: 12px; padding: 6px 12px;" onclick="selectUnclaimedForClaim('${u.mac}', '${escapeHtml(u.model || 'MTTL-W01')}')">
+              ✨ ${I18N[currentLang].claim_this_strip}
+            </button>
+          </div>
+        `).join("");
+      } catch (e) {
+        list.innerHTML = `<div style="color: var(--red); font-size: 12px; text-align: center;">Error scanning network</div>`;
+      }
+    }
+
+    function selectUnclaimedForClaim(mac, model) {
+      document.getElementById("ob-target-mac").value = mac;
+      document.getElementById("ob-strip-name").value = `${model} (${mac.slice(-4)})`;
+      switchOnboardingStep(3);
+    }
+
+    async function submitManualMacClaim() {
+      const inp = document.getElementById("inp-manual-mac");
+      if (!inp) return;
+      const rawMac = inp.value.trim().replace(/[:-]/g, "").toUpperCase();
+      if (!rawMac || rawMac.length !== 12) {
+        showToast(currentLang === "ar" ? "يرجى كتابة عنوان MAC صحيح (12 رمزاً، مثل AA11BB22CC33)" : "Please enter a valid 12-char MAC address (e.g. AA11BB22CC33)");
+        return;
+      }
+      try {
+        const res = await fetch("/api/v1/strips/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mac: rawMac, name: `مشترك ذكي (${rawMac.slice(-4)})` })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(currentLang === "ar" ? `✅ ${data.message || "تم اقتران المشترك بنجاح"}` : "Power strip paired successfully!");
+          closeModal("modal-onboarding");
+          localStorage.setItem("na7la_active_strip_mac", rawMac);
+          fetchStrips();
+        } else {
+          showToast(`❌ ${data.detail || "Claim failed"}`);
+        }
+      } catch (e) {
+        showToast(currentLang === "ar" ? "خطأ في الاتصال بالخادم" : "Network error");
+      }
+    }
+
+    function selectRoomCategory(room, icon) {
+      selectedRoom = room;
+      selectedRoomIcon = icon;
+      document.getElementById("ob-selected-room").value = room;
+      document.getElementById("ob-selected-icon").value = icon;
+      document.querySelectorAll("#room-category-grid .room-category-btn").forEach(btn => {
+        btn.classList.toggle("selected", btn.dataset.room === room);
+      });
+      // Suggest Strip name based on room
+      const nameInp = document.getElementById("ob-strip-name");
+      const roomLabels = {
+        office: currentLang === "ar" ? "مشترك المكتب" : "Office Desk Strip",
+        living: currentLang === "ar" ? "مشترك الصالون" : "Living Room Strip",
+        bedroom: currentLang === "ar" ? "مشترك غرفة النوم" : "Bedroom Strip",
+        kids: currentLang === "ar" ? "مشترك غرفة الأطفال" : "Kids Room Strip",
+        kitchen: currentLang === "ar" ? "مشترك المطبخ" : "Kitchen Strip",
+        server: currentLang === "ar" ? "مشترك الراوتر والسيرفر" : "Server & Network Strip",
+        media: currentLang === "ar" ? "مشترك الشاشة والتلفزيون" : "Media & TV Strip",
+        workshop: currentLang === "ar" ? "مشترك الورشة" : "Workshop Strip"
+      };
+      if (roomLabels[room]) {
+        nameInp.value = roomLabels[room];
+      }
+    }
+
+    async function submitProvisionAp() {
+      const ssid = document.getElementById("ob-wifi-ssid").value.trim();
+      const pass = document.getElementById("ob-wifi-pass").value;
+      const alert = document.getElementById("ob-provision-alert");
+      const btn = document.getElementById("btn-provision-send");
+
+      if (!ssid) {
+        showToast(currentLang === "ar" ? "يرجى كتابة اسم شبكة الواي فاي" : "Please enter WiFi SSID");
+        return;
+      }
+
+      if (alert) {
+        alert.style.display = "block";
+        alert.style.background = "rgba(56, 189, 248, 0.15)";
+        alert.style.color = "#38bdf8";
+        alert.style.border = "1px solid rgba(56, 189, 248, 0.3)";
+        alert.textContent = currentLang === "ar" ? "جارٍ إرسال البيانات للمشترك على 192.168.1.1:30300..." : "Sending WiFi credentials to strip at 192.168.1.1:30300...";
+      }
+      if (btn) btn.disabled = true;
+
+      try {
+        const res = await fetch("/api/v1/strips/provision-ap", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ssid, password: pass })
+        });
+        const data = await res.json();
+        if (btn) btn.disabled = false;
+        if (res.ok) {
+          if (alert) {
+            alert.style.background = "rgba(16, 185, 129, 0.15)";
+            alert.style.color = "var(--green)";
+            alert.style.border = "1px solid rgba(16, 185, 129, 0.4)";
+            alert.textContent = `✅ ${data.message || "WiFi sent! The strip is connecting to your router."}`;
+          }
+          showToast(currentLang === "ar" ? "تم إرسال إعدادات الواي فاي للمشترك!" : "WiFi credentials sent successfully!");
+          setTimeout(() => {
+            switchOnboardingStep(1);
+            switchDiscoveryTab("discovered");
+          }, 3000);
+        } else {
+          if (alert) {
+            alert.style.background = "rgba(239, 68, 68, 0.15)";
+            alert.style.color = "var(--red)";
+            alert.style.border = "1px solid rgba(239, 68, 68, 0.4)";
+            alert.textContent = `❌ ${data.detail || "Could not reach strip SoftAP. Are you connected to TONLY_TAP_*?"}`;
+          }
+        }
+      } catch (e) {
+        if (btn) btn.disabled = false;
+        if (alert) {
+          alert.style.background = "rgba(239, 68, 68, 0.15)";
+          alert.style.color = "var(--red)";
+          alert.textContent = "Error sending AP credentials";
+        }
+      }
+    }
+
+    async function submitClaimStrip() {
+      const mac = document.getElementById("ob-target-mac").value.trim();
+      if (!mac) {
+        showToast(currentLang === "ar" ? "يرجى اختيار المشترك أولاً" : "Please select a power strip first");
+        switchOnboardingStep(1);
+        return;
+      }
+      const stripName = document.getElementById("ob-strip-name").value.trim() || "My Strip";
+      const room = document.getElementById("ob-selected-room").value || "office";
+      const icon = document.getElementById("ob-selected-icon").value || "💻";
+
+      const s1 = document.getElementById("ob-sock-name-1").value.trim() || "Outlet 1";
+      const s2 = document.getElementById("ob-sock-name-2").value.trim() || "Outlet 2";
+      const s3 = document.getElementById("ob-sock-name-3").value.trim() || "Outlet 3";
+      const s4 = document.getElementById("ob-sock-name-4").value.trim() || "Outlet 4";
+
+      const r1 = document.getElementById("ob-sock-router-1").checked;
+      const r2 = document.getElementById("ob-sock-router-2").checked;
+      const r3 = document.getElementById("ob-sock-router-3").checked;
+      const r4 = document.getElementById("ob-sock-router-4").checked;
+
+      try {
+        const res = await fetch(`/api/v1/strips/${mac}/claim`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: stripName,
+            room_category: room,
+            icon: icon,
+            socket_names: { "1": s1, "2": s2, "3": s3, "4": s4 },
+            router_sockets: [r1 ? 1 : 0, r2 ? 2 : 0, r3 ? 3 : 0, r4 ? 4 : 0].filter(x => x > 0)
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(I18N[currentLang].strip_claimed);
+          closeModal("modal-onboarding");
+          localStorage.setItem("na7la_active_strip_mac", mac);
+          fetchStrips();
+        } else {
+          showToast(data.detail || "Claim failed");
+        }
+      } catch (e) {
+        showToast("Error claiming power strip");
+      }
+    }
+
+    // Edit Active Strip Modal
+    function openEditActiveStripModal() {
+      closeStripDropdown();
+      if (!activeStripData) return;
+      document.getElementById("edit-strip-name").value = activeStripData.name || "";
+      const room = activeStripData.room_category || "office";
+      const icon = activeStripData.icon || "💻";
+      selectEditRoomCategory(room, icon);
+      openModal("modal-edit-strip");
+    }
+
+    function selectEditRoomCategory(room, icon) {
+      document.getElementById("edit-strip-room").value = room;
+      document.getElementById("edit-strip-icon").value = icon;
+      document.querySelectorAll("#edit-room-category-grid .room-category-btn").forEach(btn => {
+        btn.classList.toggle("selected", btn.dataset.room === room);
+      });
+    }
+
+    async function saveEditStrip() {
+      if (!activeStripMac) return;
+      const name = document.getElementById("edit-strip-name").value.trim();
+      const room = document.getElementById("edit-strip-room").value;
+      const icon = document.getElementById("edit-strip-icon").value;
+
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, room_category: room, icon })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(I18N[currentLang].strip_saved);
+          closeModal("modal-edit-strip");
+          fetchStrips();
+        } else {
+          showToast(data.detail || "Update failed");
+        }
+      } catch (e) {
+        showToast("Error updating strip");
+      }
+    }
+
+    async function confirmUnpairActiveStrip() {
+      closeStripDropdown();
+      if (!activeStripMac) return;
+      if (!confirm(I18N[currentLang].unpair_confirm)) return;
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}`, { method: "DELETE" });
+        if (res.ok) {
+          showToast(I18N[currentLang].unpaired_success);
+          localStorage.removeItem("na7la_active_strip_mac");
+          activeStripMac = null;
+          activeStripData = null;
+          fetchStrips();
+        } else {
+          const data = await res.json();
+          showToast(data.detail || "Unpair failed");
+        }
+      } catch (e) {
+        showToast("Error unpairing strip");
+      }
+    }
+
+    function updateComparisonBar(sockets, totalWatt) {
+      const compTotal = totalWatt || 0.1;
+      document.getElementById("txt-comp-total").textContent = (totalWatt || 0).toFixed(1) + " W";
+      const legend = document.getElementById("comp-legend-items");
+      legend.innerHTML = "";
+
+      (sockets || []).forEach((s, i) => {
+        const pct = Math.max(0, Math.min(100, (s.watt / compTotal) * 100));
+        const seg = document.getElementById(`seg-${s.index}`);
+        if (seg) seg.style.width = pct + "%";
+
+        const colors = ["#38bdf8", "#10b981", "#f59e0b", "#a855f7"];
+        legend.innerHTML += `
+          <div class="comp-legend-item">
+            <span class="comp-legend-dot" style="background: ${colors[i % 4]}"></span>
+            <span>${escapeHtml(s.name)}: <bdi>${(s.watt || 0).toFixed(1)} W</bdi> (<bdi>${pct.toFixed(0)}%</bdi>)</span>
+          </div>
+        `;
+      });
+    }
+
+    function renderSockets() {
+      if (!activeStripData || !activeStripData.sockets) return;
+      const container = document.getElementById("sockets-container");
+      if (!container) return;
+
+      const existingCards = container.querySelectorAll(".socket-card");
+      if (existingCards.length !== activeStripData.sockets.length) {
+        container.innerHTML = "";
+        activeStripData.sockets.forEach(s => {
+          container.appendChild(createSocketCard(s));
+        });
+      } else {
+        activeStripData.sockets.forEach(s => {
+          updateSocketCard(s);
+        });
+      }
+    }
+
+    function formatCurrent(amp) {
+      const a = Number(amp) || 0;
+      if (a <= 0.0001) return "0.00 A";
+      if (a < 0.05) {
+        return Math.round(a * 1000) + " mA";
+      }
+      return a.toFixed(2) + " A";
+    }
+
+    function createSocketCard(s) {
+      const isOn = !!s.on;
+      const isRouter = !!s.is_router;
+      const isLocked = !!s.is_locked || isRouter;
+      const hasMaster = !!s.master_socket_id;
+      const canControl = isSocketControllable(s.index);
+      const card = document.createElement("div");
+      card.className = `socket-card ${isOn ? "is-on" : "is-off"}`;
+      card.id = `card-socket-${s.index}`;
+
+      const powerButtonHtml = canControl
+        ? `<button id="s-btn-power-${s.index}" class="btn-socket-power" onclick="toggleSocket(${s.index})">
+            ${isOn ? (currentLang === "ar" ? "🟢 شغال (اضغط للإطفاء)" : "🟢 ON (Tap to Turn OFF)") : (currentLang === "ar" ? "🔴 مطفأ (اضغط للتشغيل)" : "🔴 OFF (Tap to Turn ON)")}
+           </button>`
+        : `<button id="s-btn-power-${s.index}" class="btn-socket-power" disabled style="opacity: 0.65; cursor: not-allowed; background: rgba(255, 255, 255, 0.05); color: var(--text-muted); border: 1px dashed var(--card-border);" title="${I18N[currentLang].outlet_locked_tooltip}">
+            🔒 ${I18N[currentLang].admin_protected}
+           </button>`;
+
+      const actionsHtml = canControl
+        ? `<div class="card-actions">
+            <button class="btn-micro" title="Limits" onclick="openWattLimitsModal(${s.index})">⚡ ${I18N[currentLang].limits_btn}</button>
+            <button class="btn-micro" title="Schedules" onclick="openSchedulesModal(${s.index})">🕒 ${I18N[currentLang].schedules_btn}</button>
+            <button class="btn-micro" title="Config" onclick="openConfigModal(${s.index})">✏️ ${I18N[currentLang].config_btn}</button>
+            <button class="btn-micro" title="Reset Energy" onclick="resetSocketEnergy(${s.index})">🔄 ${I18N[currentLang].reset_btn}</button>
+           </div>`
+        : `<div class="card-actions" style="opacity: 0.25; pointer-events: none;">
+            <button class="btn-micro" disabled>⚡ ${I18N[currentLang].limits_btn}</button>
+            <button class="btn-micro" disabled>🕒 ${I18N[currentLang].schedules_btn}</button>
+            <button class="btn-micro" disabled>✏️ ${I18N[currentLang].config_btn}</button>
+            <button class="btn-micro" disabled>🔄 ${I18N[currentLang].reset_btn}</button>
+           </div>`;
+
+      card.innerHTML = `
+        <div class="socket-header">
+          <div class="socket-title-wrap">
+            <span class="socket-idx">${s.index}</span>
+            <span class="socket-name" id="s-name-${s.index}">${escapeHtml(s.name)}</span>
+          </div>
+          <div style="display: flex; gap: 4px; align-items: center;">
+            <span id="s-master-badge-${s.index}" class="badge-router" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border-color: #f59e0b; display: ${hasMaster ? 'inline-block' : 'none'};">🔗 Sync</span>
+            <span id="s-router-badge-${s.index}" class="badge-router" style="display: ${isRouter ? 'inline-block' : 'none'};">📶 Router</span>
+            <button id="s-lock-btn-${s.index}" class="btn-micro" style="${isLocked ? 'background: rgba(239, 68, 68, 0.2); border-color: rgba(239, 68, 68, 0.6); color: #f87171; font-weight: 700;' : 'opacity: 0.65;'}" onclick="handleSocketLockClick(${s.index})" title="${isLocked ? (currentLang === 'ar' ? 'المخرج مقفل برمز PIN' : 'Outlet is locked with PIN') : (currentLang === 'ar' ? 'انقر لقفل المخرج' : 'Click to lock outlet')}">
+              ${isLocked ? "🔒" : "🔓"}
+            </button>
+          </div>
+        </div>
+
+        ${powerButtonHtml}
+
+        <div class="socket-stats-grid">
+          <div class="stat-row">
+            <span class="stat-lbl">${I18N[currentLang].power_lbl}</span>
+            <span class="stat-num" id="s-watt-${s.index}" style="color: var(--accent);">${(s.watt || 0).toFixed(1)} W</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-lbl">${I18N[currentLang].current_lbl}</span>
+            <span class="stat-num" id="s-amp-${s.index}">${formatCurrent(s.amp)}</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-lbl">${I18N[currentLang].energy_lbl}</span>
+            <span class="stat-num" id="s-kwh-${s.index}">${(s.kwh || 0).toFixed(3)} kWh</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-lbl">${I18N[currentLang].temp_lbl}</span>
+            <span class="stat-num" id="s-temp-${s.index}">${s.temp_c || 0}°C</span>
+          </div>
+        </div>
+
+        ${actionsHtml}
+      `;
+      return card;
+    }
+
+    function updateSocketCard(s) {
+      const card = document.getElementById(`card-socket-${s.index}`);
+      if (!card) return;
+      const isOn = !!s.on;
+      const isRouter = !!s.is_router;
+      const isLocked = !!s.is_locked || isRouter;
+      const hasMaster = !!s.master_socket_id;
+      const canControl = isSocketControllable(s.index);
+
+      card.className = `socket-card ${isOn ? "is-on" : "is-off"}`;
+      const nameEl = document.getElementById(`s-name-${s.index}`);
+      if (nameEl) nameEl.textContent = s.name;
+
+      const routerBadgeEl = document.getElementById(`s-router-badge-${s.index}`);
+      if (routerBadgeEl) routerBadgeEl.style.display = isRouter ? 'inline-block' : 'none';
+
+      const masterBadgeEl = document.getElementById(`s-master-badge-${s.index}`);
+      if (masterBadgeEl) masterBadgeEl.style.display = hasMaster ? 'inline-block' : 'none';
+
+      const lockBtn = document.getElementById(`s-lock-btn-${s.index}`);
+      if (lockBtn) {
+        lockBtn.innerHTML = isLocked ? "🔒" : "🔓";
+        lockBtn.style.background = isLocked ? "rgba(239, 68, 68, 0.2)" : "";
+        lockBtn.style.borderColor = isLocked ? "rgba(239, 68, 68, 0.6)" : "";
+        lockBtn.style.color = isLocked ? "#f87171" : "";
+        lockBtn.style.fontWeight = isLocked ? "700" : "";
+        lockBtn.style.opacity = isLocked ? "1" : "0.65";
+        lockBtn.title = isLocked ? (currentLang === 'ar' ? 'المخرج مقفل برمز PIN' : 'Outlet is locked with PIN') : (currentLang === 'ar' ? 'انقر لقفل المخرج' : 'Click to lock outlet');
+      }
+
+      const btnPower = document.getElementById(`s-btn-power-${s.index}`);
+      if (btnPower) {
+        if (!canControl) {
+          btnPower.innerHTML = `🔒 ${I18N[currentLang].admin_protected}`;
+          btnPower.disabled = true;
+          btnPower.style.opacity = "0.65";
+          btnPower.style.cursor = "not-allowed";
+          btnPower.style.background = "rgba(255, 255, 255, 0.05)";
+          btnPower.style.color = "var(--text-muted)";
+          btnPower.style.border = "1px dashed var(--card-border)";
+        } else {
+          btnPower.disabled = false;
+          btnPower.style.opacity = "";
+          btnPower.style.cursor = "";
+          btnPower.style.background = "";
+          btnPower.style.color = "";
+          btnPower.style.border = "";
+          btnPower.innerHTML = isOn
+            ? (currentLang === "ar" ? "🟢 شغال (اضغط للإطفاء)" : "🟢 ON (Tap to Turn OFF)")
+            : (currentLang === "ar" ? "🔴 مطفأ (اضغط للتشغيل)" : "🔴 OFF (Tap to Turn ON)");
+        }
+      }
+
+      const wattEl = document.getElementById(`s-watt-${s.index}`);
+      if (wattEl) wattEl.textContent = (s.watt || 0).toFixed(1) + " W";
+
+      const ampEl = document.getElementById(`s-amp-${s.index}`);
+      if (ampEl) ampEl.textContent = formatCurrent(s.amp);
+
+      const kwhEl = document.getElementById(`s-kwh-${s.index}`);
+      if (kwhEl) kwhEl.textContent = (s.kwh || 0).toFixed(3) + " kWh";
+
+      const tempEl = document.getElementById(`s-temp-${s.index}`);
+      if (tempEl) tempEl.textContent = (s.temp_c || 0) + "°C";
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Toggle Socket Action
+    async function toggleSocket(idx, bypassLock = false) {
+      if (!activeStripData) return;
+      const s = activeStripData.sockets.find(x => x.index === idx);
+      if (!s) return;
+
+      const isSocketLocked = !!s.is_locked || !!s.is_router || isDashboardLocked;
+      if (!bypassLock && isSocketLocked) {
+        pendingLockedAction = { type: 'socket', idx: idx };
+        promptPinLock(currentLang === "ar" ? `🔒 المخرج #${idx} (${escapeHtml(s.name)}) محمي برمز PIN!` : `🔒 Outlet #${idx} (${escapeHtml(s.name)}) is locked!`);
+        showToast(currentLang === "ar" ? "🔒 هذا المخرج محمي برمز PIN!" : "🔒 This outlet is protected with PIN!");
+        return;
+      }
+      if (!isSocketControllable(idx)) {
+        showToast(I18N[currentLang].perm_denied);
+        return;
+      }
+      const currentState = !!s.on;
+      if (s.is_router && currentState) {
+        if (!confirm(I18N[currentLang].router_warn)) return;
+      }
+      try {
+        // Optimistic UI state
+        s.on = !currentState;
+        updateSocketCard(s);
+
+        const res = await fetch(`/api/v1/strips/${activeStripMac}/sockets/${idx}/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: currentState ? "off" : "on" })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          showToast(`${s.name}: ${s.on ? "ON" : "OFF"}`);
+          setTimeout(fetchStrips, 400);
+        } else {
+          // Revert on failure
+          s.on = currentState;
+          updateSocketCard(s);
+          showToast(data.detail || "Switch failed");
+        }
+      } catch (err) {
+        s.on = currentState;
+        updateSocketCard(s);
+        showToast("Error toggling socket");
+      }
+    }
+
+    // Master Switch
+    async function masterSwitch(action, bypassLock = false) {
+      if (!bypassLock && isDashboardLocked) {
+        pendingLockedAction = { type: 'master', action: action };
+        promptPinLock(currentLang === "ar" ? "🔒 المشترك مقفل برمز PIN! أدخل الرمز للتحكم الشامل" : "🔒 Strip is locked! Enter PIN to control all outlets");
+        showToast(currentLang === "ar" ? "🔒 لوحة التحكم مقفلة! أدخل رمز PIN للمتابعة" : "🔒 Dashboard is locked! Enter PIN to control");
+        return;
+      }
+      if (currentUser && currentUser.role !== "ADMIN") {
+        showToast(currentLang === "ar" ? "التحكم الشامل متاح للمدير فقط" : "Master control is restricted to Admin only");
+        return;
+      }
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}/sockets/0/switch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action })
+        });
+        const data = await res.json();
+        showToast(action === "on" ? "Turned all ON" : "Turned all OFF (Router preserved)");
+        fetchStrips();
+      } catch (err) {
+        showToast("Master switch error");
+      }
+    }
+
+    // Reset Energy
+    async function resetSocketEnergy(idx) {
+      if (!confirm(I18N[currentLang].reset_kwh_confirm)) return;
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}/sockets/${idx}/reset-energy`, { method: "POST" });
+        showToast(`Energy counter reset for socket ${idx}`);
+        fetchStrips();
+      } catch (err) {
+        showToast("Reset failed");
+      }
+    }
+
+    // Child Lock
+    async function toggleChildLock() {
+      if (!activeStripData) return;
+      const nextState = !activeStripData.child_lock;
+      try {
+        await fetch(`/api/v1/strips/${activeStripMac}/protection`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ child_lock: nextState })
+        });
+        showToast(`Child Lock is now ${nextState ? "ON" : "OFF"}`);
+        fetchStrips();
+      } catch (err) {
+        showToast("Failed to toggle child lock");
+      }
+    }
+
+    // Modals Handling
+    function openModal(id) { document.getElementById(id).classList.add("open"); }
+    function closeModal(id) { document.getElementById(id).classList.remove("open"); }
+
+    function openWattLimitsModal(idx) {
+      selectedSocketIdx = idx;
+      const s = activeStripData.sockets.find(x => x.index === idx);
+      document.getElementById("inp-max-watt").value = s.max_watt_limit || 2500;
+      document.getElementById("inp-min-watt").value = s.min_watt_cutoff || "";
+      document.getElementById("inp-cutoff-delay").value = s.cutoff_delay_sec || 600;
+      document.getElementById("inp-compressor-en").checked = !!s.compressor_protect;
+      document.getElementById("inp-compressor-delay").value = s.compressor_delay_sec || 180;
+      openModal("modal-limits");
+    }
+
+    async function saveWattLimits() {
+      const maxW = parseFloat(document.getElementById("inp-max-watt").value) || 2500;
+      const minWVal = document.getElementById("inp-min-watt").value;
+      const minW = minWVal === "" ? null : parseFloat(minWVal);
+      const delay = parseInt(document.getElementById("inp-cutoff-delay").value) || 600;
+      const compProtect = document.getElementById("inp-compressor-en").checked;
+      const compDelay = parseInt(document.getElementById("inp-compressor-delay").value) || 180;
+
+      await fetch(`/api/v1/strips/${activeStripMac}/sockets/${selectedSocketIdx}/config`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          max_watt_limit: maxW,
+          min_watt_cutoff: minW,
+          cutoff_delay_sec: delay,
+          compressor_protect: compProtect,
+          compressor_delay_sec: compDelay
+        })
+      });
+      closeModal("modal-limits");
+      showToast("Watt limits saved");
+      fetchStrips();
+    }
+
+    function toggleMasterSlaveFields() {
+      const en = document.getElementById("inp-master-slave-en").checked;
+      document.getElementById("wrap-master-slave").style.display = en ? "flex" : "none";
+    }
+
+    function openConfigModal(idx) {
+      selectedSocketIdx = idx;
+      const s = activeStripData.sockets.find(x => x.index === idx);
+      document.getElementById("inp-outlet-name").value = s.name;
+      document.getElementById("inp-is-router").checked = !!s.is_router;
+      document.getElementById("inp-power-on-behavior").value = s.power_on_behavior || "LAST";
+
+      // Populate Master Outlets list excluding this outlet
+      const masterSelect = document.getElementById("inp-master-socket");
+      masterSelect.innerHTML = "";
+      (activeStripData.sockets || []).forEach(other => {
+        if (other.index !== idx) {
+          masterSelect.innerHTML += `<option value="${other.id}">#${other.index} - ${escapeHtml(other.name)}</option>`;
+        }
+      });
+      const hasMaster = !!s.master_socket_id;
+      document.getElementById("inp-master-slave-en").checked = hasMaster;
+      document.getElementById("wrap-master-slave").style.display = hasMaster ? "flex" : "none";
+      if (hasMaster) {
+        masterSelect.value = s.master_socket_id;
+        document.getElementById("inp-master-watt").value = s.master_trigger_watt || 20;
+      }
+      openModal("modal-config");
+    }
+
+    async function saveOutletConfig() {
+      const name = document.getElementById("inp-outlet-name").value.trim();
+      const isRouter = document.getElementById("inp-is-router").checked;
+      const behavior = document.getElementById("inp-power-on-behavior").value;
+      const masterEn = document.getElementById("inp-master-slave-en").checked;
+      const masterId = masterEn ? parseInt(document.getElementById("inp-master-socket").value) : null;
+      const masterWatt = masterEn ? (parseFloat(document.getElementById("inp-master-watt").value) || 20.0) : null;
+
+      await fetch(`/api/v1/strips/${activeStripMac}/sockets/${selectedSocketIdx}/config`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name || `Outlet ${selectedSocketIdx}`,
+          is_router: isRouter,
+          power_on_behavior: behavior,
+          master_socket_id: masterId,
+          master_trigger_watt: masterWatt
+        })
+      });
+      closeModal("modal-config");
+      showToast("Outlet saved");
+      fetchStrips();
+    }
+
+    // --- Schedules & Automations UI ---
+    function openSchedulesModal(idx) {
+      selectedSocketIdx = idx;
+      const s = activeStripData.sockets.find(x => x.index === idx);
+      if (!s) return;
+      document.getElementById("sched-outlet-sub").textContent = `#${idx} ${s.name} · ${s.on ? "🟢 ON" : "🔴 OFF"}`;
+      document.getElementById("inp-custom-timer-min").value = "";
+      document.getElementById("inp-auto-off-min").value = "";
+      switchScheduleTab("auto-off");
+      loadSocketSchedules(idx);
+      openModal("modal-schedules");
+    }
+
+    function switchScheduleTab(tab) {
+      const isAuto = tab === "auto-off";
+      document.getElementById("tab-auto-off-content").style.display = isAuto ? "block" : "none";
+      document.getElementById("tab-cycle-content").style.display = isAuto ? "none" : "block";
+      document.getElementById("tab-btn-auto-off").style.borderColor = isAuto ? "var(--accent)" : "var(--card-border)";
+      document.getElementById("tab-btn-cycle").style.borderColor = isAuto ? "var(--card-border)" : "var(--accent)";
+    }
+
+    async function loadSocketSchedules(idx) {
+      const container = document.getElementById("schedules-list-container");
+      container.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); text-align: center;">Loading...</div>';
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}/sockets/${idx}/schedules`);
+        const data = await res.json();
+        if (!data.schedules || data.schedules.length === 0) {
+          container.innerHTML = `<div style="font-size: 12px; color: var(--text-muted); text-align: center; padding: 12px;">${I18N[currentLang].no_schedules}</div>`;
+          return;
+        }
+        container.innerHTML = "";
+        const isAr = currentLang === "ar";
+        data.schedules.forEach(sc => {
+          let desc = "";
+          let typeBadge = `<span style="background: rgba(59, 130, 246, 0.2); color: #60a5fa; padding: 2px 6px; border-radius: 6px; font-size: 11px; font-weight: 700;">${sc.schedule_type}</span>`;
+          if (sc.schedule_type === "TIMER") {
+            const remMin = sc.next_run_at ? Math.max(0, Math.round((new Date(sc.next_run_at) - new Date()) / 60000)) : 0;
+            const actionText = sc.target_state ? (isAr ? "🟢 تشغيل" : "🟢 Turn ON") : (isAr ? "🔴 إيقاف" : "🔴 Turn OFF");
+            desc = isAr ? `${actionText} بعد <b>${remMin} دقيقة</b>` : `${actionText} in <b>${remMin} min</b>`;
+          } else if (sc.schedule_type === "AUTO_OFF") {
+            const m = Math.round((sc.auto_off_delay_sec || 600) / 60);
+            desc = isAr ? `فصل تلقائي بعد <b>${m} دقيقة</b> من التشغيل` : `Auto-Off after <b>${m} min</b> of operation`;
+          } else if (sc.schedule_type === "CYCLE") {
+            const onM = Math.round((sc.cycle_on_sec || 900) / 60);
+            const offM = Math.round((sc.cycle_off_sec || 1800) / 60);
+            desc = isAr ? `تكرار دوري: 🟢 ${onM}د تشغيل / 🔴 ${offM}د إيقاف` : `Loop: 🟢 ${onM}m ON / 🔴 ${offM}m OFF`;
+          }
+          const statusText = sc.is_active ? (isAr ? "● مفعل" : "● Active") : (isAr ? "○ متوقف" : "○ Paused");
+          container.innerHTML += `
+            <div style="background: rgba(0,0,0,0.25); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 4px;">
+                  ${typeBadge}
+                  <span style="font-size: 11px; color: ${sc.is_active ? 'var(--green)' : 'var(--text-muted)'}; font-weight: 700;">${statusText}</span>
+                </div>
+                <div style="font-size: 12px;">${desc}</div>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button class="btn-micro" style="padding: 4px 8px;" onclick="toggleScheduleActive(${sc.id})" title="${isAr ? 'تبديل الحالة' : 'Toggle Active'}">${sc.is_active ? '⏸️' : '▶️'}</button>
+                <button class="btn-micro" style="padding: 4px 8px; color: var(--red);" onclick="deleteScheduleItem(${sc.id})" title="${isAr ? 'حذف' : 'Delete'}">🗑️</button>
+              </div>
+            </div>
+          `;
+        });
+      } catch (e) {
+        container.innerHTML = '<div style="font-size: 12px; color: var(--red); text-align: center;">Error loading schedules</div>';
+      }
+    }
+
+    async function startQuickTimer(mins) {
+      const s = activeStripData.sockets.find(x => x.index === selectedSocketIdx);
+      const targetState = !s.on;
+      try {
+        await fetch(`/api/v1/strips/${activeStripMac}/sockets/${selectedSocketIdx}/schedules`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            schedule_type: "TIMER",
+            duration_sec: mins * 60,
+            target_state: targetState
+          })
+        });
+        showToast(`Timer set: ${targetState ? "ON" : "OFF"} in ${mins} min`);
+        loadSocketSchedules(selectedSocketIdx);
+      } catch (e) {
+        showToast("Failed to set timer");
+      }
+    }
+
+    async function startCustomTimer() {
+      const minInp = parseInt(document.getElementById("inp-custom-timer-min").value);
+      if (!minInp || minInp <= 0) {
+        showToast("Please enter valid minutes");
+        return;
+      }
+      const targetState = document.getElementById("inp-timer-action").value === "true";
+      try {
+        await fetch(`/api/v1/strips/${activeStripMac}/sockets/${selectedSocketIdx}/schedules`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            schedule_type: "TIMER",
+            duration_sec: minInp * 60,
+            target_state: targetState
+          })
+        });
+        showToast(`Timer set: ${targetState ? "ON" : "OFF"} in ${minInp} min`);
+        document.getElementById("inp-custom-timer-min").value = "";
+        loadSocketSchedules(selectedSocketIdx);
+      } catch (e) {
+        showToast("Failed to set timer");
+      }
+    }
+
+    async function saveAutoOffSchedule() {
+      const minInp = parseInt(document.getElementById("inp-auto-off-min").value);
+      if (!minInp || minInp <= 0) {
+        showToast("Please enter valid minutes");
+        return;
+      }
+      try {
+        await fetch(`/api/v1/strips/${activeStripMac}/sockets/${selectedSocketIdx}/schedules`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            schedule_type: "AUTO_OFF",
+            auto_off_delay_sec: minInp * 60,
+            target_state: false
+          })
+        });
+        showToast(`Auto-Off saved: ${minInp} min`);
+        document.getElementById("inp-auto-off-min").value = "";
+        loadSocketSchedules(selectedSocketIdx);
+      } catch (e) {
+        showToast("Failed to save Auto-Off");
+      }
+    }
+
+    async function saveCycleSchedule() {
+      const onMin = parseInt(document.getElementById("inp-cycle-on-min").value) || 15;
+      const offMin = parseInt(document.getElementById("inp-cycle-off-min").value) || 30;
+      try {
+        await fetch(`/api/v1/strips/${activeStripMac}/sockets/${selectedSocketIdx}/schedules`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            schedule_type: "CYCLE",
+            cycle_on_sec: onMin * 60,
+            cycle_off_sec: offMin * 60,
+            target_state: false
+          })
+        });
+        showToast(`Cycle loop saved: ${onMin}m ON / ${offMin}m OFF`);
+        loadSocketSchedules(selectedSocketIdx);
+      } catch (e) {
+        showToast("Failed to save cycle loop");
+      }
+    }
+
+    async function deleteScheduleItem(id) {
+      try {
+        await fetch(`/api/v1/schedules/${id}`, { method: "DELETE" });
+        showToast("Schedule removed");
+        loadSocketSchedules(selectedSocketIdx);
+      } catch (e) {
+        showToast("Failed to remove schedule");
+      }
+    }
+
+    async function toggleScheduleActive(id) {
+      try {
+        await fetch(`/api/v1/schedules/${id}/toggle`, { method: "PATCH" });
+        loadSocketSchedules(selectedSocketIdx);
+      } catch (e) {
+        showToast("Toggle failed");
+      }
+    }
+
+    function openProtectionModal() {
+      if (!activeStripData) return;
+      const p = activeStripData.protection || {};
+      document.getElementById("inp-min-vol").value = p.min_voltage || 185;
+      document.getElementById("inp-max-vol").value = p.max_voltage || 245;
+      document.getElementById("inp-max-total-watt").value = p.max_total_watt || 3000;
+      document.getElementById("inp-max-total-amp").value = p.max_total_amp || 16.0;
+      document.getElementById("inp-max-temp").value = p.max_temp_c || 65;
+      document.getElementById("inp-voltage-protect-en").checked = p.voltage_protect_enabled !== false;
+      document.getElementById("inp-auto-shedding-en").checked = p.auto_shedding_enabled !== false;
+      openModal("modal-protection");
+    }
+
+    async function saveProtectionSettings() {
+      const minV = parseFloat(document.getElementById("inp-min-vol").value);
+      const maxV = parseFloat(document.getElementById("inp-max-vol").value);
+      const maxW = parseFloat(document.getElementById("inp-max-total-watt").value);
+      const maxA = parseFloat(document.getElementById("inp-max-total-amp").value) || 16.0;
+      const maxT = parseInt(document.getElementById("inp-max-temp").value);
+      const vEn = document.getElementById("inp-voltage-protect-en").checked;
+      const sEn = document.getElementById("inp-auto-shedding-en").checked;
+
+      await fetch(`/api/v1/strips/${activeStripMac}/protection`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          min_voltage: minV,
+          max_voltage: maxV,
+          max_total_watt: maxW,
+          max_total_amp: maxA,
+          max_temp_c: maxT,
+          voltage_protect_enabled: vEn,
+          auto_shedding_enabled: sEn
+        })
+      });
+      closeModal("modal-protection");
+      showToast("Protection settings updated");
+      fetchStrips();
+    }
+
+    // Load Audit Logs
+    async function loadAuditLogs() {
+      if (!activeStripMac) return;
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}/logs?limit=15`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const tbody = document.getElementById("logs-tbody");
+        if (!tbody) return;
+        if (!data.logs || data.logs.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">${currentLang === "ar" ? "لا توجد أحداث مسجلة بعد" : "No events recorded yet"}</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = "";
+        data.logs.forEach(l => {
+          const d = new Date(l.timestamp);
+          const timeStr = isNaN(d) ? (l.timestamp || "-") : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          tbody.innerHTML += `
+            <tr>
+              <td>${timeStr}</td>
+              <td>${l.socket === 0 ? (currentLang === "ar" ? "الكل" : "All") : (l.socket || "-")}</td>
+              <td><b>${l.action}</b></td>
+              <td>${l.triggered_by}</td>
+              <td>${l.reason || "-"}</td>
+            </tr>
+          `;
+        });
+      } catch (e) {}
+    }
+
+    function exportExcel() {
+      if (!activeStripMac) return;
+      window.location.href = `/api/v1/strips/${activeStripMac}/export-energy`;
+    }
+
+    // WebSocket Auto-Reconnect & Live Sync
+    function connectWebSocket(mac) {
+      if (!mac) return;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(`${proto}//${location.host}/ws/strips/${mac}`);
+
+      ws.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          if (payload.event === "telemetry_update") {
+            if (activeStripData && activeStripData.mac === payload.mac) {
+              Object.assign(activeStripData, payload);
+            } else {
+              activeStripData = payload;
+            }
+            updateTopBar(activeStripData);
+            renderSockets();
+          } else if (payload.event === "status_change") {
+            if (activeStripData && activeStripData.mac === payload.mac) {
+              activeStripData.online = payload.online;
+              updateTopBar(activeStripData);
+            }
+          } else if (payload.event === "child_lock_triggered" || payload.event === "child_lock_tamper") {
+            showToast("⚠️ " + (payload.message || "تنبيه: تم إحباط محاولة فصل المخرج أثناء تفعيل قفل الأطفال"), 5000);
+          } else if (payload.event === "voltage_trip") {
+            showToast("🚨 " + payload.message);
+          } else if (payload.event === "voltage_recovered") {
+            showToast("✅ " + payload.message);
+          }
+        } catch (e) {}
+      };
+
+      ws.onclose = () => {
+        setTimeout(() => connectWebSocket(mac), 3000);
+      };
+    }
+
+    // --- Step 6: Auth, PIN Lock, Family Sharing & Migration Handlers ---
+    let cachedGoogleClientId = "";
+
+    function switchAuthTab(tab) {
+      const tabSignin = document.getElementById("tab-login-signin");
+      const tabSignup = document.getElementById("tab-login-signup");
+      const tabInvite = document.getElementById("tab-login-invite");
+
+      const boxSignin = document.getElementById("auth-tab-signin-content");
+      const boxSignup = document.getElementById("auth-tab-signup-content");
+      const boxInvite = document.getElementById("auth-tab-invite-content");
+
+      const tabs = [
+        { id: "signin", btn: tabSignin, box: boxSignin },
+        { id: "signup", btn: tabSignup, box: boxSignup },
+        { id: "invite", btn: tabInvite, box: boxInvite }
+      ];
+
+      tabs.forEach(t => {
+        if (!t.btn || !t.box) return;
+        if (t.id === tab) {
+          t.btn.style.borderColor = "var(--accent)";
+          t.btn.style.color = "var(--accent)";
+          t.btn.style.fontWeight = "700";
+          t.box.style.display = "block";
+        } else {
+          t.btn.style.borderColor = "var(--card-border)";
+          t.btn.style.color = "inherit";
+          t.btn.style.fontWeight = "normal";
+          t.box.style.display = "none";
+        }
+      });
+    }
+
+    function checkSignupPasswordRules(pwd) {
+      const len = pwd.length >= 6;
+      const el = document.getElementById("su-rule-len");
+      if (el) el.style.color = len ? "var(--green)" : "var(--text-muted)";
+    }
+
+    async function submitRegister() {
+      const name = (document.getElementById("inp-signup-name")?.value || "").trim();
+      const email = (document.getElementById("inp-signup-email")?.value || "").trim().toLowerCase();
+      const password = document.getElementById("inp-signup-password")?.value || "";
+
+      if (!name || !email || !password) {
+        showToast(currentLang === "ar" ? "يرجى ملء كافة الحقول المطلوبة" : "Please fill in all fields");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/v1/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ full_name: name, email, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(currentLang === "ar" ? `تم إنشاء الحساب بنجاح! مرحباً بك، ${data.name}` : `Account created successfully! Welcome, ${data.name}`);
+          closeModal("modal-login");
+          await checkAuthStatus();
+          fetchStrips();
+        } else {
+          showToast(data.detail || "Registration failed");
+        }
+      } catch (e) {
+        showToast(currentLang === "ar" ? "خطأ في الاتصال بالخادم" : "Network error during registration");
+      }
+    }
+
+    async function handleGoogleSignIn() {
+      if (cachedGoogleClientId && window.google && window.google.accounts) {
+        try {
+          google.accounts.id.initialize({
+            client_id: cachedGoogleClientId,
+            callback: async (response) => {
+              await sendGoogleCredentialToBackend(response.credential);
+            }
+          });
+          google.accounts.id.prompt();
+          return;
+        } catch (e) {
+          console.warn("Google GIS initialization error:", e);
+        }
+      }
+      showToast(currentLang === "ar" ? "تسجيل Google غير مفعل حالياً، يرجى استخدام البريد الإلكتروني وكلمة المرور" : "Google sign-in is disabled, please use email & password");
+    }
+
+    async function sendGoogleCredentialToBackend(cred) {
+      try {
+        const res = await fetch("/api/v1/auth/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ credential: cred })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`${currentLang === "ar" ? "مرحباً بك عبر Google" : "Welcome via Google"}, ${data.name}!`);
+          closeModal("modal-login");
+          await checkAuthStatus();
+          fetchStrips();
+        } else {
+          showToast(data.detail || "Google authentication failed");
+        }
+      } catch (e) {
+        showToast(currentLang === "ar" ? "خطأ في التحقق من حساب Google" : "Google sign-in network error");
+      }
+    }
+
+    function checkPasswordRuleDisplay(pwd) {
+      const len = pwd.length >= 8;
+      const upper = /[A-Z]/.test(pwd);
+      const lower = /[a-z]/.test(pwd);
+      const num = /[0-9]/.test(pwd);
+      const sym = /[^A-Za-z0-9]/.test(pwd);
+
+      const setRule = (id, valid) => {
+        const el = document.getElementById(id);
+        if (el) el.style.color = valid ? "var(--green)" : "var(--text-muted)";
+      };
+      setRule("pw-rule-len", len);
+      setRule("pw-rule-upper", upper);
+      setRule("pw-rule-lower", lower);
+      setRule("pw-rule-num", num);
+      setRule("pw-rule-sym", sym);
+    }
+
+    async function submitAdminSetup() {
+      const name = document.getElementById("setup-admin-name").value.trim();
+      const email = document.getElementById("setup-admin-email").value.trim();
+      const password = document.getElementById("setup-admin-password").value;
+      const pin = document.getElementById("setup-admin-pin").value.trim();
+
+      if (!name || !email || !password) {
+        showToast("Please fill in name, email and password");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/v1/auth/setup-admin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ full_name: name, name, email, password, pin_code: pin, pin })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(currentLang === "ar" ? "تم إنشاء حساب المدير بنجاح!" : "Admin account created successfully!");
+          closeModal("modal-admin-setup");
+          await checkAuthStatus();
+          fetchStrips();
+        } else {
+          showToast(data.detail || "Setup failed");
+        }
+      } catch (e) {
+        showToast("Network error during setup");
+      }
+    }
+
+    async function submitInviteLogin() {
+      const code = document.getElementById("inp-invite-code").value.trim().toUpperCase();
+      if (!code) {
+        showToast(currentLang === "ar" ? "يرجى إدخال كود الدعوة" : "Please enter invite code");
+        return;
+      }
+      try {
+        const res = await fetch("/api/v1/auth/login-invite", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ invite_code: code })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`${currentLang === "ar" ? "مرحباً" : "Welcome"}, ${data.name}!`);
+          closeModal("modal-login");
+          await checkAuthStatus();
+          fetchStrips();
+        } else {
+          showToast(data.detail || "Invalid invite code");
+        }
+      } catch (e) {
+        showToast("Login error");
+      }
+    }
+
+    async function submitEmailLogin() {
+      const email = document.getElementById("inp-login-email").value.trim();
+      const password = document.getElementById("inp-login-password").value;
+      if (!email || !password) {
+        showToast(currentLang === "ar" ? "يرجى إدخال البريد الإلكتروني وكلمة المرور" : "Please enter email and password");
+        return;
+      }
+      try {
+        const res = await fetch("/api/v1/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`${currentLang === "ar" ? "مرحباً بعودتك" : "Welcome back"}, ${data.name}!`);
+          closeModal("modal-login");
+          await checkAuthStatus();
+          fetchStrips();
+        } else {
+          showToast(data.detail || "Login failed");
+        }
+      } catch (e) {
+        showToast("Login error");
+      }
+    }
+
+    async function logoutUser() {
+      try {
+        await fetch("/api/v1/auth/logout", { method: "POST" });
+        currentUser = null;
+        showToast(currentLang === "ar" ? "تم تسجيل الخروج" : "Logged out");
+        await checkAuthStatus();
+      } catch (e) {
+        showToast("Logout error");
+      }
+    }
+
+    function updateLockUi() {
+      const btnLock = document.getElementById("btn-lock");
+      if (!btnLock) return;
+      if (isDashboardLocked) {
+        btnLock.style.background = "rgba(239, 68, 68, 0.25)";
+        btnLock.style.borderColor = "rgba(239, 68, 68, 0.6)";
+        btnLock.style.color = "#f87171";
+        btnLock.style.fontWeight = "700";
+        const txt = (I18N[currentLang] && I18N[currentLang].locked_btn) || (currentLang === "ar" ? "مُقفل" : "Locked");
+        btnLock.innerHTML = `🔐 <span data-i="locked_btn">${txt}</span>`;
+      } else {
+        btnLock.style.background = "";
+        btnLock.style.borderColor = "";
+        btnLock.style.color = "";
+        btnLock.style.fontWeight = "";
+        const txt = (I18N[currentLang] && I18N[currentLang].lock_btn) || (currentLang === "ar" ? "قفل" : "Lock");
+        btnLock.innerHTML = `🔒 <span data-i="lock_btn">${txt}</span>`;
+      }
+    }
+
+    function handleLockBtnClick() {
+      if (isDashboardLocked) {
+        promptPinLock();
+      } else {
+        isDashboardLocked = true;
+        localStorage.setItem("na7la_dash_locked", "true");
+        updateLockUi();
+        showToast(currentLang === "ar" ? "🔒 تم قفل لوحة التحكم - الفيش محمية برمز PIN" : "🔒 Dashboard locked - Outlets protected");
+      }
+    }
+
+    function togglePinView(view) {
+      const vVerify = document.getElementById("pin-view-verify");
+      const vSetup = document.getElementById("pin-view-setup");
+      const vChange = document.getElementById("pin-view-change");
+      if (vVerify) vVerify.style.display = view === "verify" ? "block" : "none";
+      if (vSetup) vSetup.style.display = view === "setup" ? "block" : "none";
+      if (vChange) vChange.style.display = view === "change" ? "block" : "none";
+
+      if (view === "verify") {
+        const inp = document.getElementById("inp-unlock-pin");
+        if (inp) setTimeout(() => inp.focus(), 100);
+      } else if (view === "setup") {
+        const inp = document.getElementById("inp-setup-pin");
+        if (inp) setTimeout(() => inp.focus(), 100);
+      } else if (view === "change") {
+        const inp = document.getElementById("inp-change-curr");
+        if (inp) setTimeout(() => inp.focus(), 100);
+      }
+    }
+
+    function promptPinLock(reasonText) {
+      const inp = document.getElementById("inp-unlock-pin");
+      if (inp) inp.value = "";
+      const msgEl = document.getElementById("pin-prompt-msg");
+      if (msgEl) {
+        if (reasonText) {
+          msgEl.textContent = reasonText;
+          msgEl.style.color = "var(--red)";
+        } else {
+          msgEl.textContent = (I18N[currentLang] && I18N[currentLang].pin_hint) || (currentLang === "ar" ? "أدخل رمز PIN أو كلمة مرور حسابك" : "Enter 4-digit PIN or your account password");
+          msgEl.style.color = "var(--text-muted)";
+        }
+      }
+
+      // Check if user needs first-time PIN setup
+      if (!currentUserHasPin) {
+        togglePinView("setup");
+      } else {
+        togglePinView("verify");
+      }
+
+      openModal("modal-pin-prompt");
+    }
+
+    async function submitSetupPin() {
+      const pin = document.getElementById("inp-setup-pin").value.trim();
+      const confirmPin = document.getElementById("inp-setup-confirm-pin").value.trim();
+      if (!pin || pin.length < 4) {
+        showToast(currentLang === "ar" ? "يرجى كتابة رمز PIN مكون من 4 إلى 6 أرقام" : "PIN must be 4 to 6 digits");
+        return;
+      }
+      if (pin !== confirmPin) {
+        showToast(currentLang === "ar" ? "تأكيد رمز PIN غير متطابق" : "PIN confirmation does not match");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/v1/auth/set-pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin, confirm_pin: confirmPin })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          currentUserHasPin = true;
+          showToast(currentLang === "ar" ? "✅ تم تعيين رمز PIN بنجاح وتفعيل الحماية" : "✅ PIN set successfully!");
+          closeModal("modal-pin-prompt");
+          executePendingAction(pin);
+        } else {
+          showToast(data.detail || "Setup PIN failed");
+        }
+      } catch (e) {
+        showToast("Error setting PIN");
+      }
+    }
+
+    async function submitChangePin() {
+      const curr = document.getElementById("inp-change-curr").value.trim();
+      const newPin = document.getElementById("inp-change-new").value.trim();
+      const confirmPin = document.getElementById("inp-change-confirm").value.trim();
+      if (!curr) {
+        showToast(currentLang === "ar" ? "يرجى كتابة كلمة المرور الحالية أو الـ PIN القديم" : "Please enter current password or PIN");
+        return;
+      }
+      if (!newPin || newPin.length < 4) {
+        showToast(currentLang === "ar" ? "رمز PIN الجديد يجب أن يتكون من 4 إلى 6 أرقام" : "New PIN must be 4 to 6 digits");
+        return;
+      }
+      if (newPin !== confirmPin) {
+        showToast(currentLang === "ar" ? "تأكيد رمز PIN الجديد غير متطابق" : "New PIN confirmation does not match");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/v1/auth/change-pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ current_pin_or_password: curr, new_pin: newPin, confirm_pin: confirmPin })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          currentUserHasPin = true;
+          showToast(currentLang === "ar" ? "✅ تم تغيير رمز PIN بنجاح!" : "✅ PIN changed successfully!");
+          togglePinView("verify");
+        } else {
+          showToast(data.detail || "Change PIN failed");
+        }
+      } catch (e) {
+        showToast("Error changing PIN");
+      }
+    }
+
+    async function verifyUnlockPin() {
+      const pin = document.getElementById("inp-unlock-pin").value.trim();
+      if (!pin) {
+        showToast(currentLang === "ar" ? "يرجى كتابة رمز PIN أو كلمة المرور" : "Please enter PIN or password");
+        return;
+      }
+      try {
+        const res = await fetch("/api/v1/auth/verify-pin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pin })
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          showToast(currentLang === "ar" ? "✅ تم فك القفل بنجاح" : "Unlocked successfully");
+          isDashboardLocked = false;
+          localStorage.setItem("na7la_dash_locked", "false");
+          updateLockUi();
+          closeModal("modal-pin-prompt");
+          executePendingAction(pin);
+        } else if (data.needs_pin_setup) {
+          currentUserHasPin = false;
+          togglePinView("setup");
+        } else {
+          showToast(currentLang === "ar" ? "❌ رمز الـ PIN أو كلمة المرور غير صحيحة" : "Incorrect PIN or password");
+        }
+      } catch (e) {
+        showToast("Verification error");
+      }
+    }
+
+    async function executePendingAction(pin) {
+      if (!pendingLockedAction) return;
+      const act = pendingLockedAction;
+      pendingLockedAction = null;
+
+      if (act.type === "socket") {
+        toggleSocket(act.idx, true);
+      } else if (act.type === "master") {
+        masterSwitch(act.action, true);
+      } else if (act.type === "unlock_socket") {
+        try {
+          const res = await fetch(`/api/v1/strips/${activeStripMac}/sockets/${act.idx}/lock`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ locked: false, pin })
+          });
+          if (res.ok) {
+            showToast(currentLang === "ar" ? `🔓 تم فك قفل المخرج #${act.idx}` : `🔓 Outlet #${act.idx} unlocked`);
+            fetchStrips();
+          }
+        } catch (e) {
+          showToast("Error unlocking outlet");
+        }
+      } else if (act.type === "lock_socket") {
+        try {
+          const res = await fetch(`/api/v1/strips/${activeStripMac}/sockets/${act.idx}/lock`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ locked: true })
+          });
+          if (res.ok) {
+            showToast(currentLang === "ar" ? `🔒 تم قفل المخرج #${act.idx}` : `🔒 Outlet #${act.idx} locked`);
+            fetchStrips();
+          }
+        } catch (e) {
+          showToast("Error locking outlet");
+        }
+      }
+    }
+
+    async function handleSocketLockClick(idx) {
+      if (!activeStripData) return;
+      const s = activeStripData.sockets.find(x => x.index === idx);
+      if (!s) return;
+
+      const isCurrentlyLocked = !!s.is_locked || !!s.is_router;
+      if (!isCurrentlyLocked) {
+        // If user has not set a PIN yet, prompt first-time setup
+        if (!currentUserHasPin) {
+          pendingLockedAction = { type: 'lock_socket', idx: idx };
+          promptPinLock(currentLang === "ar" ? "🛡️ يرجى تعيين رمز PIN أولاً لقفل وتأمين المقابس" : "🛡️ Please set up your PIN first to lock outlets");
+          return;
+        }
+        // Lock socket immediately
+        try {
+          const res = await fetch(`/api/v1/strips/${activeStripMac}/sockets/${idx}/lock`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ locked: true })
+          });
+          if (res.ok) {
+            s.is_locked = true;
+            updateSocketCard(s);
+            showToast(currentLang === "ar" ? `🔒 تم قفل المخرج #${idx} برمز PIN` : `🔒 Outlet #${idx} locked with PIN`);
+            fetchStrips();
+          }
+        } catch (e) {
+          showToast("Failed to lock outlet");
+        }
+      } else {
+        // Unlocking requires PIN
+        pendingLockedAction = { type: 'unlock_socket', idx: idx };
+        promptPinLock(currentLang === "ar" ? `🔓 أدخل رمز PIN لفك قفل المخرج #${idx}` : `🔓 Enter PIN to unlock outlet #${idx}`);
+      }
+    }
+
+    function openFamilyModal() {
+      if (!activeStripMac) return;
+      const wrap = document.getElementById("share-sockets-checkboxes");
+      if (wrap) {
+        const sockets = (activeStripData && activeStripData.sockets) ? activeStripData.sockets : [
+          { index: 1, name: "Socket 1" }, { index: 2, name: "Socket 2" }, { index: 3, name: "Socket 3" }, { index: 4, name: "Socket 4" }
+        ];
+        wrap.innerHTML = sockets.map(s => `
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; background: rgba(255,255,255,0.05); padding: 4px 8px; border-radius: 6px;">
+            <input type="checkbox" name="share-sock-chk" value="${s.index}" checked>
+            <span>#${s.index} ${escapeHtml(s.name)}</span>
+          </label>
+        `).join("");
+      }
+      document.getElementById("share-result-box").style.display = "none";
+      toggleShareSocketsBox();
+      openModal("modal-family");
+      loadFamilyShares();
+    }
+
+    function toggleShareSocketsBox() {
+      const perm = document.getElementById("share-perm").value;
+      const box = document.getElementById("share-sockets-box");
+      if (box) box.style.display = perm === "PARTIAL" ? "block" : "none";
+    }
+
+    async function loadFamilyShares() {
+      if (!activeStripMac) return;
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}/shares`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const container = document.getElementById("shares-list-container");
+        if (!container) return;
+        if (!data.shares || data.shares.length === 0) {
+          container.innerHTML = `<div style="text-align: center; color: var(--text-muted); font-size: 12px; padding: 12px;">${currentLang === "ar" ? "لا توجد مشاركات عائلية مفعلة بعد" : "No active family shares yet"}</div>`;
+          return;
+        }
+        container.innerHTML = data.shares.map(sh => `
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 6px;">
+                <span>${escapeHtml(sh.name)}</span>
+                <span class="badge-router" style="font-size: 10px;">${sh.permission_level}</span>
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 2px;">
+                ${sh.permission_level === "PARTIAL" ? (currentLang === "ar" ? "الفيش: " : "Outlets: ") + (sh.allowed_sockets || []).join(", ") : (currentLang === "ar" ? "تحكم كامل" : "All Outlets")}
+                ${sh.expires_at ? ` · ${currentLang === "ar" ? "ينتهي: " : "Expires: "}${new Date(sh.expires_at).toLocaleDateString()}` : ` · ${currentLang === "ar" ? "دائم" : "Permanent"}`}
+              </div>
+              <div style="font-size: 12px; color: var(--accent); font-weight: 800; margin-top: 2px; font-family: monospace; letter-spacing: 1px;">${sh.invite_code}</div>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn-micro" title="Copy Code" onclick="copyText('${sh.invite_code}')">📋</button>
+              <button class="btn-micro" title="Revoke" style="color: var(--red); border-color: rgba(239,68,68,0.3);" onclick="deleteFamilyShare(${sh.id})">🗑️</button>
+            </div>
+          </div>
+        `).join("");
+      } catch (e) {
+        console.error("loadFamilyShares error", e);
+      }
+    }
+
+    async function createFamilyShare() {
+      const name = document.getElementById("share-name").value.trim();
+      if (!name) {
+        showToast(currentLang === "ar" ? "يرجى كتابة اسم الفرد" : "Please enter member name");
+        return;
+      }
+      const perm = document.getElementById("share-perm").value;
+      const dur = parseInt(document.getElementById("share-duration").value) || 0;
+      let allowed = [1, 2, 3, 4];
+      if (perm === "PARTIAL") {
+        const checked = Array.from(document.querySelectorAll("input[name='share-sock-chk']:checked")).map(el => parseInt(el.value));
+        if (checked.length === 0) {
+          showToast(currentLang === "ar" ? "يرجى اختيار مخرج واحد على الأقل" : "Please select at least one outlet");
+          return;
+        }
+        allowed = checked;
+      }
+
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}/shares`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            permission_level: perm,
+            allowed_sockets: allowed,
+            duration_hours: dur
+          })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById("share-name").value = "";
+          document.getElementById("share-result-box").style.display = "block";
+          document.getElementById("share-code-display").textContent = data.share.invite_code;
+          loadFamilyShares();
+          showToast(I18N[currentLang].invite_code_generated);
+        } else {
+          showToast(data.detail || "Failed to create share");
+        }
+      } catch (e) {
+        showToast("Error creating share");
+      }
+    }
+
+    async function deleteFamilyShare(id) {
+      if (!confirm(currentLang === "ar" ? "هل تريد بالتأكيد إلغاء هذا الكود وحذفه؟" : "Are you sure you want to revoke and delete this invite?")) return;
+      try {
+        await fetch(`/api/v1/shares/${id}`, { method: "DELETE" });
+        showToast(currentLang === "ar" ? "تم إلغاء المشاركة" : "Share revoked");
+        loadFamilyShares();
+      } catch (e) {
+        showToast("Error deleting share");
+      }
+    }
+
+    function copyInviteCode() {
+      const code = document.getElementById("share-code-display").textContent;
+      copyText(code);
+    }
+
+    function copyText(txt) {
+      if (!txt) return;
+      navigator.clipboard.writeText(txt).then(() => {
+        showToast(I18N[currentLang].code_copied);
+      }).catch(() => {
+        showToast(txt);
+      });
+    }
+
+    function openMigrateModal() {
+      const alert = document.getElementById("migrate-alert");
+      if (alert) alert.style.display = "none";
+      openModal("modal-migrate");
+    }
+
+    async function applyServerMigration() {
+      const host = document.getElementById("inp-migrate-host").value.trim();
+      const port = parseInt(document.getElementById("inp-migrate-port").value) || 10086;
+      const alert = document.getElementById("migrate-alert");
+      if (!host) {
+        showToast(currentLang === "ar" ? "يرجى إدخال عنوان السيرفر" : "Please enter target VPS host");
+        return;
+      }
+      if (alert) {
+        alert.style.display = "block";
+        alert.style.background = "rgba(56, 189, 248, 0.15)";
+        alert.style.color = "#38bdf8";
+        alert.style.border = "1px solid rgba(56, 189, 248, 0.3)";
+        alert.textContent = currentLang === "ar" ? "جارٍ فحص الاتصال بالسيرفر السحابي..." : "Testing connectivity to cloud VPS...";
+      }
+
+      try {
+        const res = await fetch(`/api/v1/strips/${activeStripMac}/migrate-server`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target_host: host, target_port: port })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          if (alert) {
+            alert.style.background = "rgba(16, 185, 129, 0.15)";
+            alert.style.color = "var(--green)";
+            alert.style.border = "1px solid rgba(16, 185, 129, 0.4)";
+            alert.textContent = `✅ ${data.message}`;
+          }
+          showToast(I18N[currentLang].migration_success);
+          setTimeout(() => closeModal("modal-migrate"), 3000);
+        } else {
+          if (alert) {
+            alert.style.background = "rgba(239, 68, 68, 0.15)";
+            alert.style.color = "var(--red)";
+            alert.style.border = "1px solid rgba(239, 68, 68, 0.4)";
+            alert.textContent = `❌ ${data.detail || "Migration pre-flight failed"}`;
+          }
+        }
+      } catch (e) {
+        if (alert) {
+          alert.style.background = "rgba(239, 68, 68, 0.15)";
+          alert.style.color = "var(--red)";
+          alert.textContent = "Network error during migration request";
+        }
+      }
+    }
+
+    // --- Step 8: Admin User Management & Quotas ---
+    function openUserMgmtModal() {
+      openModal("modal-user-mgmt");
+      loadAdminUsers();
+    }
+
+    async function loadAdminUsers() {
+      const loading = document.getElementById("users-table-loading");
+      const container = document.getElementById("users-table-container");
+      const tbody = document.getElementById("users-table-body");
+      if (loading) loading.style.display = "block";
+      if (container) container.style.display = "none";
+      if (tbody) tbody.innerHTML = "";
+
+      // Load platform stats
+      try {
+        const statsRes = await fetch("/api/v1/admin/stats");
+        if (statsRes.ok) {
+          const stats = await statsRes.json();
+          document.getElementById("stat-total-users").textContent = stats.total_users ?? "-";
+          document.getElementById("stat-total-strips").textContent = stats.total_strips ?? "-";
+          document.getElementById("stat-online-strips").textContent = stats.online_strips ?? "-";
+        }
+      } catch (e) {
+        console.warn("Stats fetch warning:", e);
+      }
+
+      try {
+        const res = await fetch("/api/v1/admin/users");
+        if (!res.ok) {
+          if (loading) loading.innerHTML = `<span style="color: var(--red);">❌ ${currentLang === "ar" ? "تعذر تحميل المستخدمين (صلاحية مدير مطلوبة)" : "Failed to load users (Admin required)"}</span>`;
+          return;
+        }
+        const data = await res.json();
+        const users = data.users || [];
+
+        if (users.length === 0) {
+          if (loading) loading.innerHTML = `<span>${currentLang === "ar" ? "لا يوجد مستخدمين مسجلين" : "No users found"}</span>`;
+          return;
+        }
+
+        tbody.innerHTML = users.map(u => {
+          const isAdmin = u.role === "ADMIN";
+          const roleBadge = isAdmin
+            ? `<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 11px;">👑 Admin</span>`
+            : `<span style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); padding: 2px 8px; border-radius: 6px; font-size: 11px;">👤 User</span>`;
+
+          const quotaVal = u.max_strips || 1;
+
+          return `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); vertical-align: middle;">
+              <td style="padding: 10px 8px;">
+                <div style="font-weight: 700; color: #fff;">📧 ${u.full_name || u.email}</div>
+                <div style="font-size: 11px; color: var(--text-muted);">${u.email}</div>
+              </td>
+              <td style="padding: 10px 8px;">${roleBadge}</td>
+              <td style="padding: 10px 8px; text-align: center; font-weight: 700; color: var(--accent);">
+                ${u.strips_count}
+              </td>
+              <td style="padding: 10px 8px; text-align: center;">
+                ${isAdmin ? '<span style="color: var(--green); font-weight: 700;">∞ Unlimited</span>' : `
+                  <input type="number" id="inp-quota-${u.id}" class="form-input" style="width: 70px; text-align: center; padding: 4px; font-weight: 700;" value="${quotaVal}" min="1" max="100">
+                `}
+              </td>
+              <td style="padding: 10px 8px; text-align: right;">
+                ${isAdmin ? '<span style="color: var(--text-muted); font-size: 11px;">Admin</span>' : `
+                  <button class="btn-micro" style="padding: 4px 10px; font-size: 11px;" onclick="saveUserQuota(${u.id})">💾 ${currentLang === "ar" ? "حفظ" : "Save"}</button>
+                  <button class="btn-micro" style="padding: 4px 8px; font-size: 11px; color: var(--red); border-color: rgba(239,68,68,0.3); margin-left: 4px;" onclick="adminDeleteUser(${u.id}, '${u.email}')" title="Delete User">🗑️</button>
+                `}
+              </td>
+            </tr>
+          `;
+        }).join("");
+
+        if (loading) loading.style.display = "none";
+        if (container) container.style.display = "block";
+      } catch (err) {
+        if (loading) loading.innerHTML = `<span style="color: var(--red);">❌ ${err.message}</span>`;
+      }
+    }
+
+    async function saveUserQuota(userId) {
+      const inp = document.getElementById(`inp-quota-${userId}`);
+      if (!inp) return;
+      const newLimit = parseInt(inp.value);
+      if (!newLimit || newLimit < 1) {
+        showToast(currentLang === "ar" ? "يرجى إدخال رقم صحيح (1 على الأقل)" : "Please enter a valid limit (at least 1)");
+        return;
+      }
+      try {
+        const res = await fetch(`/api/v1/admin/users/${userId}/quota`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ max_strips: newLimit })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`✅ ${data.message || (currentLang === "ar" ? "تم تحديث الكوتا بنجاح" : "Quota updated")}`);
+        } else {
+          showToast(`❌ ${data.detail || "Failed to update quota"}`);
+        }
+      } catch (e) {
+        showToast("❌ Network error saving quota");
+      }
+    }
+
+    async function adminDeleteUser(userId, email) {
+      if (!confirm(currentLang === "ar" ? `هل أنت متأكد من حذف حساب العميل ${email} وفك ارتباط أجهزته؟` : `Are you sure you want to delete user ${email}?`)) return;
+      try {
+        const res = await fetch(`/api/v1/admin/users/${userId}`, { method: "DELETE" });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(`✅ ${data.message || "User deleted"}`);
+          loadAdminUsers();
+        } else {
+          showToast(`❌ ${data.detail || "Delete failed"}`);
+        }
+      } catch (e) {
+        showToast("❌ Network error deleting user");
+      }
+    }
+
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", initApp);
+    } else {
+      initApp();
+    }
+  </script>
+</body>
+</html>

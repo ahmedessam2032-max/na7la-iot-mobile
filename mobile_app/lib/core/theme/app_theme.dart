@@ -4,12 +4,19 @@ import 'package:google_fonts/google_fonts.dart';
 class AppColors {
   // WattQ 1.0.27 Emerald Green Primary + Na7la Warm Accents
   static const Color emeraldActive = Color(0xFF10B981);
+  static const Color emeraldPrimary = Color(0xFF10B981);
   static const Color emeraldDeep = Color(0xFF059669);
+  static const Color emeraldDark = Color(0xFF059669);
   static const Color emeraldLightBg = Color(0xFFECFDF5);
 
   static const Color honeyYellow = Color(0xFFF59E0B);
+  static const Color warningAmber = Color(0xFFF59E0B);
   static const Color honeyAmber = Color(0xFFD97706);
   static const Color honeyGlow = Color(0xFFFBBF24);
+
+  // Telemetry Bar Colors
+  static const Color telemetryBarLight = Color(0xFFFFFBEB);
+  static const Color telemetryBarDark = Color(0xFF1E293B);
 
   // Clean Material 3 Light Palette (WattQ 1.0.27 Style)
   static const Color lightBg = Color(0xFFF8FAFC);
@@ -63,6 +70,21 @@ class AppColors {
 }
 
 class AppTheme {
+  static BoxDecoration cleanCardDecoration({
+    required bool isDark,
+    Color? surfaceColor,
+    double radius = 20.0,
+    double shadowOffset = 2.0,
+    Color? borderColor,
+  }) =>
+      inkCardDecoration(
+        isDark: isDark,
+        surfaceColor: surfaceColor,
+        radius: radius,
+        shadowOffset: shadowOffset,
+        borderColor: borderColor,
+      );
+
   static BoxDecoration inkCardDecoration({
     required bool isDark,
     Color? surfaceColor,

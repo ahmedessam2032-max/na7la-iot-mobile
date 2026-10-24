@@ -1,0 +1,10 @@
+VIDEO 2 (Registration 1):
+  Path: c:\Users\ahmed\Desktop\Na7la IoT - Antigravity\تسجيل المشترك\WhatsApp Video 2026-10-17 at 12.47.26 PM.mp4
+  Resolution: 392x850
+  FPS: 82.79, Total Frames: 5940, Duration: 71.75s (1.20 min)
+
+VIDEO 3 (Darwish Registration):
+  Path: c:\Users\ahmed\Desktop\Na7la IoT - Antigravity\تسجيل المشترك darwish-smart-power\تسجيل المشترك darwish-smart-power.mp4
+  Resolution: 392x850
+  FPS: 51.74, Total Frames: 6153, Duration: 118.92s (1.98 min)
+

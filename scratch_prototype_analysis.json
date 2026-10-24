@@ -1,0 +1,121 @@
+{
+  "total_chars": 126292,
+  "total_lines": 2263,
+  "branding": {
+    "wattq": [
+      "<title>WattQ - تحكم ذكي في طاقتك (ثيم النحلة)</",
+      "e text-watt-gradient leading-none\">WattQ</h1>",
+      "ة فلا ينفذ الويدجت الأوامر. استثنِ WattQ من توفير البطارية وفعل «التشغيل ال",
+      "تم فتح إعدادات استثناء البطارية لـ WattQ')\" class=\"w-full py-3 rounded-2xl",
+      "ata-i18n=\"widget_warn_btn\">استثناء WattQ من توفير البطارية</span>"
+    ],
+    "walid": [
+      "-[#EA7B1C] font-inter text-[10px]\">walidsmart.com</div>"
+    ],
+    "صلاح": [
+      "abold text-[#F5A31A]\">مهندس / وليد صلاح</div>"
+    ],
+    "مهندس": [
+      "ss=\"font-extrabold text-[#F5A31A]\">مهندس / وليد صلاح</div>"
+    ],
+    "eng": [
+      "teRenameCounter()\" type=\"text\" maxlength=\"40\" value=\"MTTL 9394B53\" class=",
+      "<input type=\"password\" maxlength=\"8\" placeholder=\"كلمة السر (4 -",
+      "<input type=\"password\" maxlength=\"8\" placeholder=\"تأكيد كلمة السر",
+      "31A]\"></i><span class=\"font-inter\">English</span></div>",
+      "harCounter').textContent = `${val.length}/40`;"
+    ],
+    "اشتراك": [
+      "-i18n=\"pricing_sub_btn\">الأسعار والاشتراك</span>",
+      "<span>الأسعار والاشتراك</span>",
+      "PRICING & SUBSCRIPTION (الأسعار والاشتراك) -->",
+      "xt-base text-[#F7E84A]\">الأسعار والاشتراك</h2>",
+      "pricing_sub_btn: 'الأسعار والاشتراك',"
+    ],
+    "100": [
+      "adient(135deg, #F7E84A 0%, #F5A31A 100%);",
+      ", #181818 0%, #2b2618 45%, #F5A31A 100%);",
+      ", #F7E84A 0%, #F5A31A 65%, #EA7B1C 100%);",
+      "adient(135deg, #F7E84A 0%, #F5A31A 100%);",
+      "radient(90deg, #F5A31A 0%, #F7E84A 100%);"
+    ]
+  },
+  "total_ids": 109,
+  "sample_ids": [
+    "accStripRatioRow",
+    "accStripRatioTop",
+    "bioMenuText",
+    "childLockCardBanner",
+    "childLockModalStatusText",
+    "deleteModalStripName",
+    "emptyStripsState",
+    "fabAddStrip",
+    "headerMainTitle",
+    "headerSubTitle",
+    "headerTitleBox",
+    "mainTopHeader",
+    "menuChildLockBadge",
+    "modal-add-strip",
+    "modal-auto-off",
+    "modal-change-password",
+    "modal-child-lock",
+    "modal-cycle-timer",
+    "modal-delete-strip",
+    "modal-new-schedule",
+    "modal-one-timer",
+    "modal-pass-lock",
+    "modal-rename",
+    "modal-serial-link",
+    "modal-share",
+    "modal-voltage",
+    "modal-watt-limit",
+    "nav-account",
+    "nav-strips",
+    "outletsGrid",
+    "page-strip-status",
+    "renameStripInput",
+    "schedSheetStripName",
+    "sideDrawerOverlay",
+    "statStripsCount",
+    "statsOutletsList",
+    "stripCardContainer",
+    "stripConnectionBadge",
+    "stripContextMenu",
+    "stripStatusText",
+    "stripTitleDisplay",
+    "tab-account",
+    "tab-favorites",
+    "tab-schedules",
+    "tab-settings",
+    "tab-strips"
+  ],
+  "sample_funcs": [
+    "activateChildLockFromBtn",
+    "closeDrawer",
+    "closeModal",
+    "closeStripMenu",
+    "closeSubPage",
+    "confirmDeleteStrip",
+    "openDrawer",
+    "openModal",
+    "openStripMenu",
+    "openSubPage",
+    "renderOutlets",
+    "renderStatsPage",
+    "restoreDemoStrip",
+    "saveStripRename",
+    "switchBottomTab",
+    "switchStatsPeriod",
+    "syncChildLockUI",
+    "toggleAllOutlets",
+    "toggleChildLockState",
+    "toggleMacVisibility",
+    "togglePillSelect",
+    "toggleSettingSwitch",
+    "toggleSingleOutlet",
+    "toggleStripBiometric",
+    "toggleStripOnlineSimulation",
+    "updateOrderQty",
+    "updateRenameCounter"
+  ]
+}

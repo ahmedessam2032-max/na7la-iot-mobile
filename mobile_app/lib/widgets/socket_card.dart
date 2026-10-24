@@ -8,6 +8,7 @@ class SocketCard extends StatelessWidget {
   final VoidCallback onLongPress;
   final VoidCallback? onLockToggle;
   final bool isCompact;
+  final bool? isDark;
 
   const SocketCard({
     super.key,
@@ -16,6 +17,7 @@ class SocketCard extends StatelessWidget {
     required this.onLongPress,
     this.onLockToggle,
     this.isCompact = true,
+    this.isDark,
   });
 
   IconData _resolveIcon(String iconName) {

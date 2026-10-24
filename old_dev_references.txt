@@ -1,0 +1,18 @@
+6: <title>WattQ - تحكم ذكي في طاقتك (ثيم النحلة)</title>
+260: <h1 id="headerMainTitle" class="text-2xl font-black tracking-wide text-watt-gradient leading-none">WattQ</h1>
+606: سامسونج وبعض الأجهزة توقف التطبيق في الخلفية فلا ينفذ الويدجت الأوامر. استثنِ WattQ من توفير البطارية وفعل «التشغيل التلقائي» إن وجدته.
+608: <button onclick="showToast('تم فتح إعدادات استثناء البطارية لـ WattQ')" class="w-full py-3 rounded-2xl bg-fab-gradient font-extrabold text-xs flex items-center justify-center gap-2 shadow-lg">
+610: <span data-i18n="widget_warn_btn">استثناء WattQ من توفير البطارية</span>
+843: <h2 class="text-xl font-black text-watt-gradient">WattQ</h2>
+915: <div class="font-extrabold text-[#F5A31A]">مهندس / وليد صلاح</div>
+916: <div class="text-[#EA7B1C] font-inter text-[10px]">walidsmart.com</div>
+1111: <h3 class="text-2xl font-black text-watt-gradient">WattQ</h3>
+1117: <h4 class="font-extrabold text-sm">ما هو WattQ؟</h4>
+1119: WattQ هو تطبيق ذكي للتحكم في المشتركات الكهربائية الذكية عن بعد من أي مكان في العالم مع حماية متكاملة للأطفال والجهد الكهربائي.
+1253: <h3 class="font-black text-base">فريق WattQ معاك!</h3>
+1260: <div class="flex justify-between"><span>الوصول لسيرفر WattQ</span><span class="font-inter">486 ms ✓</span></div>
+1721: widget_warn_desc: 'سامسونج وبعض الأجهزة توقف التطبيق في الخلفية فلا ينفذ الويدجت الأوامر. استثنِ WattQ من توفير البطارية.',
+1722: widget_warn_btn: 'استثناء WattQ من توفير البطارية',
+1789: widget_warn_desc: 'Samsung and some devices put the app to sleep, so widget taps cannot reach the server. Exempt WattQ from battery optimization.',
+1790: widget_warn_btn: 'Exempt WattQ from battery optimization',
+1958: mainTitle.textContent = 'WattQ';
