@@ -7,6 +7,7 @@ import '../../core/storage/secure_storage.dart';
 import '../../core/security/biometric_service.dart';
 import '../../core/localization/app_locale.dart';
 import '../../core/services/home_widget_service.dart';
+import '../../data/services/softap_service.dart';
 import '../../data/models/strip_model.dart';
 import '../../data/models/socket_model.dart';
 import '../../data/models/user_model.dart';
@@ -99,6 +100,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   Future<void> _initApp() async {
+    SoftApService.requestPermissions();
     _isDark = await SecureStorageService.isDarkMode();
     _tariffPrice = await SecureStorageService.getTariffPrice();
     _currentUser = await _repo.getAuthStatus();

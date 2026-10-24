@@ -38,6 +38,10 @@ class MainActivity: FlutterFragmentActivity() {
                             android.Manifest.permission.ACCESS_FINE_LOCATION,
                             android.Manifest.permission.ACCESS_COARSE_LOCATION
                         )
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            perms.add(android.Manifest.permission.BLUETOOTH_SCAN)
+                            perms.add(android.Manifest.permission.BLUETOOTH_CONNECT)
+                        }
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             perms.add(android.Manifest.permission.NEARBY_WIFI_DEVICES)
                             perms.add(android.Manifest.permission.POST_NOTIFICATIONS)
