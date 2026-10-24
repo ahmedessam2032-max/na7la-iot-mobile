@@ -114,9 +114,14 @@ class StripSession:
                 pass
 
     async def send_raw(self, cmd: str) -> None:
+        if self.writer.is_closing():
+            return
         self.last_cmd = cmd
-        self.writer.write((cmd + "\r\n").encode("ascii"))
-        await self.writer.drain()
+        try:
+            self.writer.write((cmd + "\r\n").encode("ascii"))
+            await self.writer.drain()
+        except Exception:
+            pass
 
     async def _refresh_unlocked(self, timeout: float = 3.5) -> bool:
         self.got_getinfo.clear()
