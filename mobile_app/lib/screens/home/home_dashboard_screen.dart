@@ -4,10 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/storage/secure_storage.dart';
-import '../../core/security/biometric_service.dart';
 import '../../core/localization/app_locale.dart';
 import '../../core/services/home_widget_service.dart';
-import '../../data/services/softap_service.dart';
 import '../../data/models/strip_model.dart';
 import '../../data/models/socket_model.dart';
 import '../../data/models/user_model.dart';
@@ -73,7 +71,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   void _startPeriodicPoll() {
     _autoPollTimer?.cancel();
-    _autoPollTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _autoPollTimer = Timer.periodic(const Duration(seconds: 6), (_) {
       if (mounted && !_isLoading && _strips.isNotEmpty) {
         _repo.getStrips().then((strips) {
           if (mounted && strips.isNotEmpty) {
@@ -100,7 +98,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   Future<void> _initApp() async {
-    SoftApService.requestPermissions();
+    // Permissions are requested ONLY when entering WizardScreen (Pairing), never on app launch.
     _isDark = await SecureStorageService.isDarkMode();
     _tariffPrice = await SecureStorageService.getTariffPrice();
     _currentUser = await _repo.getAuthStatus();
@@ -129,9 +127,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         );
         _connectWebSocket();
         HomeWidgetService.updateFromStrip(_selectedStrip!);
+      } else {
+        _selectedStrip = null;
       }
       _isLoading = false;
     });
+  }
+
+  Future<void> _openWizardAndRefresh() async {
+    final added = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => WizardScreen(isDark: _isDark)),
+    );
+    if (added == true && mounted) {
+      setState(() => _selectedTabIndex = 0);
+      await _loadStrips();
+      Future.delayed(const Duration(milliseconds: 1200), () {
+        if (mounted) _loadStrips();
+      });
+    }
   }
 
   void _connectWebSocket() {
@@ -183,46 +196,61 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
 
   void _onToggleSocket(SocketModel socket) {
     if (_selectedStrip == null) return;
+    final sockDisplayName = trOutletName(socket.name, socket.socketIndex);
 
     // 1. Check if Pinned State is active
     if (socket.isPinnedState) {
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              const Icon(Icons.push_pin_rounded, color: AppColors.emeraldPrimary),
-              const SizedBox(width: 8),
-              Text('المخرج مثبّت الحالة 📌', style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
+        builder: (ctx) => Directionality(
+          textDirection: AppLocaleController.instance.textDirection,
+          child: AlertDialog(
+            backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.push_pin_rounded, color: AppColors.emeraldPrimary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    trBi('المخرج مثبّت الحالة 📌', 'Outlet State Pinned 📌'),
+                    style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              trBi(
+                'تم تفعيل ميزة تثبيت الحالة الحالية على "$sockDisplayName". هل تريد إلغاء تثبيت الحالة وتبديل المخرج؟',
+                'Current state pinning is active on "$sockDisplayName". Do you want to unpin and toggle this outlet?',
+              ),
+              style: GoogleFonts.cairo(fontSize: 12, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(trBi('إلغاء', 'Cancel'), style: GoogleFonts.cairo(color: Colors.grey)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.emeraldPrimary,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  await _repo.configSocket(_selectedStrip!.macAddress, socket.socketIndex, {
+                    'is_pinned_state': false,
+                  });
+                  setState(() => socket.isPinnedState = false);
+                  _proceedSocketAuthAndFlip(socket);
+                },
+                child: Text(
+                  trBi('إلغاء التثبيت والتبديل', 'Unpin & Toggle'),
+                  style: GoogleFonts.cairo(fontWeight: FontWeight.w800),
+                ),
+              ),
             ],
           ),
-          content: Text(
-            'تم تفعيل ميزة تثبيت الحالة الحالية على "${socket.name}". هل تريد إلغاء تثبيت الحالة وتبديل المخرج؟',
-            style: GoogleFonts.cairo(fontSize: 12, height: 1.5),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('إلغاء', style: GoogleFonts.cairo(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.emeraldPrimary,
-                foregroundColor: Colors.white,
-              ),
-              onPressed: () async {
-                Navigator.pop(ctx);
-                await _repo.configSocket(_selectedStrip!.macAddress, socket.socketIndex, {
-                  'is_pinned_state': false,
-                });
-                setState(() => socket.isPinnedState = false);
-                _proceedSocketAuthAndFlip(socket);
-              },
-              child: Text('إلغاء التثبيت والتبديل', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
-            ),
-          ],
         ),
       );
       return;
@@ -232,50 +260,63 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     if (socket.isRouter && socket.state) {
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Row(
-            children: [
-              const Icon(Icons.router_rounded, color: Colors.redAccent),
-              const SizedBox(width: 8),
-              Text('تحذير فصل الراوتر 🌐', style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.redAccent)),
+        builder: (ctx) => Directionality(
+          textDirection: AppLocaleController.instance.textDirection,
+          child: AlertDialog(
+            backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                const Icon(Icons.router_rounded, color: Colors.redAccent),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    trBi('تحذير فصل الراوتر 🌐', 'Router Shutoff Warning 🌐'),
+                    style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: Colors.redAccent),
+                  ),
+                ),
+              ],
+            ),
+            content: Text(
+              trBi(
+                'أنت على وشك إيقاف مخرج الراوتر ($sockDisplayName). قد يؤدي ذلك إلى انقطاع اتصال الإنترنت عن المشترك.\n\nهل تريد استخدام "إعادة تشغيل الراوتر (5 ثوانٍ)" بدلاً من الإيقاف الدائم؟',
+                'You are about to turn OFF the router outlet ($sockDisplayName), which may disconnect the strip from Wi-Fi.\n\nWould you like to use "5s Router Restart" instead of turning it off permanently?',
+              ),
+              style: GoogleFonts.cairo(fontSize: 12, height: 1.5),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(trBi('تراجع', 'Cancel'), style: GoogleFonts.cairo(color: Colors.grey, fontWeight: FontWeight.w800)),
+              ),
+              OutlinedButton(
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  final res = await _repo.restartSocket(_selectedStrip!.macAddress, socket.socketIndex);
+                  final ok = res['ok'] == true;
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok
+                            ? trBi('🔄 جاري إعادة تشغيل الراوتر (فصل 5 ثوانٍ ثم تشغيل تلقائي)...', '🔄 Restarting router (5s power cycle)...')
+                            : trBi('❌ تعذر إرسال أمر إعادة التشغيل', '❌ Failed to send restart command')),
+                        backgroundColor: AppColors.emeraldPrimary,
+                      ),
+                    );
+                  }
+                },
+                child: Text(trBi('إعادة تشغيل 5ث 🔄', 'Restart 5s 🔄'), style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  _proceedSocketAuthAndFlip(socket);
+                },
+                child: Text(trBi('إيقاف رغم ذلك', 'Turn Off Anyway'), style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
+              ),
             ],
           ),
-          content: Text(
-            'أنت على وشك إيقاف مخرج الراوتر (${socket.name}). قد يؤدي ذلك إلى انقطاع اتصال الإنترنت عن المشترك.\n\nهل تريد استخدام "إعادة تشغيل الراوتر (5 ثوانٍ)" بدلاً من الإيقاف الدائم؟',
-            style: GoogleFonts.cairo(fontSize: 12, height: 1.5),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: Text('تراجع', style: GoogleFonts.cairo(color: Colors.grey, fontWeight: FontWeight.w800)),
-            ),
-            OutlinedButton(
-              onPressed: () async {
-                Navigator.pop(ctx);
-                final res = await _repo.restartSocket(_selectedStrip!.macAddress, socket.socketIndex);
-                final ok = res['ok'] == true;
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(ok ? '🔄 جاري إعادة تشغيل الراوتر (فصل 5 ثوانٍ ثم تشغيل تلقائي)...' : '❌ تعذر إرسال أمر إعادة التشغيل'),
-                      backgroundColor: AppColors.emeraldPrimary,
-                    ),
-                  );
-                }
-              },
-              child: Text('إعادة تشغيل 5ث 🔄', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-              onPressed: () {
-                Navigator.pop(ctx);
-                _proceedSocketAuthAndFlip(socket);
-              },
-              child: Text('إيقاف رغم ذلك', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
-            ),
-          ],
         ),
       );
       return;
@@ -285,11 +326,12 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   }
 
   void _proceedSocketAuthAndFlip(SocketModel socket) {
+    final sockDisplayName = trOutletName(socket.name, socket.socketIndex);
     if (socket.isLocked || (_selectedStrip?.biometricControl ?? false)) {
       showDialog(
         context: context,
         builder: (_) => PinBiometricDialog(
-          title: 'تأكيد تبديل: ${socket.name}',
+          title: trBi('تأكيد تبديل: $sockDisplayName', 'Confirm toggle: $sockDisplayName'),
           isDark: _isDark,
           onSuccessWithPin: (pin) => _flipSocketState(socket),
           onSuccess: () => _flipSocketState(socket),
@@ -309,7 +351,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     setState(() {
       _pendingSockets.add(socket.socketIndex);
       socket.state = newState;
-      // Propagate link group locally for instant UI feedback (backend also executes it on hardware)
+      // Propagate link group locally for instant UI feedback
       if (socket.linkGroup > 0) {
         for (final other in _selectedStrip!.sockets) {
           if (other.socketIndex != socket.socketIndex &&
@@ -337,17 +379,19 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           _pendingSockets.remove(socket.socketIndex);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ تعذر إرسال الأمر للمشترك، تحقق من الاتصال أو قفل الأطفال'),
+          SnackBar(
+            content: Text(trBi(
+              '❌ تعذر إرسال الأمر للمشترك، تحقق من الاتصال أو قفل الأطفال',
+              '❌ Failed to send command. Check strip connection or Child Lock.',
+            )),
             backgroundColor: Colors.redAccent,
-            duration: Duration(seconds: 2),
+            duration: const Duration(seconds: 2),
           ),
         );
       } else {
         setState(() {
           _pendingSockets.remove(socket.socketIndex);
         });
-        // If Doorbell Mode is active and we turned it ON, refresh strip after pulse
         if (newState && socket.doorbellMode) {
           Future.delayed(Duration(seconds: socket.doorbellPulseSec + 1), () {
             if (mounted) _loadStrips();
@@ -373,8 +417,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     }
     setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('🛡️ تم إيقاف الكل مع استثناء الراوتر والمخارج المقفولة/المثبتة!'),
+      SnackBar(
+        content: Text(trBi(
+          '🛡️ تم إيقاف الكل مع استثناء الراوتر والمخارج المقفولة/المثبتة!',
+          '🛡️ Turned OFF all outlets except Router and locked/pinned outlets!',
+        )),
         backgroundColor: AppColors.emeraldPrimary,
         behavior: SnackBarBehavior.floating,
       ),
@@ -391,8 +438,11 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     }
     setState(() {});
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('⚡ تم تشغيل جميع المخارج غير المقفولة'),
+      SnackBar(
+        content: Text(trBi(
+          '⚡ تم تشغيل جميع المخارج غير المقفولة',
+          '⚡ Turned ON all unlocked outlets',
+        )),
         backgroundColor: AppColors.emeraldPrimary,
         behavior: SnackBarBehavior.floating,
       ),
@@ -446,9 +496,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 children: [
                   _buildHeader(),
                   Expanded(
-                    child: _selectedStrip == null
-                        ? _buildEmptyState()
-                        : _buildActiveTabContent(),
+                    child: _buildActiveTabContent(),
                   ),
                   _buildBottomNav(),
                 ],
@@ -460,11 +508,10 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  // ===================== TOP APP BAR (WattQ 1.0.27 + Na7la) =====================
+  // ===================== TOP APP BAR =====================
 
   Widget _buildHeader() {
     final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
-    final textSecondary = _isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
     final cardBg = _isDark ? AppColors.cardSurfaceDark : Colors.white;
     final borderColor = _isDark ? AppColors.borderDark : AppColors.borderLight;
 
@@ -502,7 +549,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                     ),
                   ),
                   Text(
-                    'تحكم ذكي في طاقتك ⚡',
+                    trBi('تحكم ذكي في طاقتك ⚡', 'Smart Power Control ⚡'),
                     style: GoogleFonts.cairo(
                       fontSize: 10.5,
                       fontWeight: FontWeight.w700,
@@ -521,20 +568,20 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 GestureDetector(
                   onTap: _openAdminConsole,
                   child: Container(
-                    margin: const EdgeInsets.only(left: 8),
+                    margin: const EdgeInsets.symmetric(horizontal: 6),
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: AppColors.warningAmber.withOpacity(0.15),
+                      color: AppColors.emeraldPrimary.withOpacity(0.14),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.warningAmber, width: 1.2),
+                      border: Border.all(color: AppColors.emeraldPrimary, width: 1.2),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.admin_panel_settings_rounded, size: 15, color: AppColors.warningAmber),
+                        const Icon(Icons.admin_panel_settings_rounded, size: 15, color: AppColors.emeraldPrimary),
                         const SizedBox(width: 4),
                         Text(
-                          'الأدمن 👑',
+                          trBi('الأدمن 👑', 'Admin 👑'),
                           style: GoogleFonts.cairo(
                             fontSize: 10.5,
                             fontWeight: FontWeight.w900,
@@ -550,7 +597,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 icon: Icon(
                   _isDark ? Icons.wb_sunny_rounded : Icons.dark_mode_outlined,
                   size: 20,
-                  color: _isDark ? AppColors.warningAmber : textPrimary,
+                  color: _isDark ? AppColors.emeraldPrimary : textPrimary,
                 ),
                 style: IconButton.styleFrom(
                   backgroundColor: _isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight,
@@ -561,7 +608,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               IconButton(
                 onPressed: () => _scaffoldKey.currentState?.openDrawer(),
                 icon: Icon(Icons.menu_rounded, size: 22, color: textPrimary),
-                tooltip: 'القائمة الجانبية',
+                tooltip: trBi('القائمة الجانبية', 'Menu'),
                 style: IconButton.styleFrom(
                   backgroundColor: _isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -574,7 +621,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  // ===================== SIDE DRAWER (☰) — WattQ 1.0.27 + Eng. Ahmed Essam =====================
+  // ===================== SIDE DRAWER (☰) =====================
 
   Widget _buildSideDrawer() {
     final bg = _isDark ? AppColors.cardSurfaceDark : Colors.white;
@@ -619,7 +666,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          _currentUser?.fullName ?? 'مستخدم Na7la IoT',
+                          _currentUser?.fullName ?? trBi('مستخدم Na7la IoT', 'Na7la IoT User'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w900, color: textPrimary),
@@ -644,18 +691,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                 children: [
                   _buildDrawerItem(
                     icon: Icons.add_circle_outline_rounded,
-                    title: 'إضافة مشترك جديد (الواي فاي)',
+                    title: trBi('إضافة مشترك جديد (الواي فاي)', 'Add New Strip (Wi-Fi Wizard)'),
                     onTap: () async {
                       Navigator.pop(context);
-                      final added = await Navigator.of(context).push<bool>(
-                        MaterialPageRoute(builder: (_) => WizardScreen(isDark: _isDark)),
-                      );
-                      if (added == true) _loadStrips();
+                      await _openWizardAndRefresh();
                     },
                   ),
                   _buildDrawerItem(
                     icon: Icons.qr_code_scanner_rounded,
-                    title: 'ربط مشترك بالسيريال (MAC)',
+                    title: trBi('ربط مشترك بالسيريال (MAC)', 'Link Strip by Serial (MAC)'),
                     onTap: () {
                       Navigator.pop(context);
                       _openClaimBySerialDialog();
@@ -663,7 +707,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.auto_awesome_mosaic_rounded,
-                    title: 'المشاهد الذكية (Smart Scenes)',
+                    title: trBi('المشاهد الذكية (Smart Scenes)', 'Smart Scenes'),
                     onTap: () {
                       Navigator.pop(context);
                       _openCreateSceneDialog();
@@ -671,7 +715,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.analytics_outlined,
-                    title: 'مراقب الاستهلاك لجميع المشتركات',
+                    title: trBi('مراقب الاستهلاك لجميع المشتركات', 'All-Strips Energy Monitor'),
                     onTap: () {
                       Navigator.pop(context);
                       _openAllStripsEnergyMonitorSheet();
@@ -680,7 +724,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   Divider(height: 16, color: borderColor),
                   _buildDrawerItem(
                     icon: Icons.workspace_premium_outlined,
-                    title: 'الأسعار والاشتراك',
+                    title: trBi('الأسعار والاشتراك', 'Pricing & Subscription'),
                     onTap: () {
                       Navigator.pop(context);
                       _showPricingDialog();
@@ -688,7 +732,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.rate_review_outlined,
-                    title: 'إرسال مقترح / الدعم الفني',
+                    title: trBi('إرسال مقترح / الدعم الفني', 'Feedback & Technical Support'),
                     onTap: () {
                       Navigator.pop(context);
                       _openFeedbackAndSupportDialog();
@@ -696,7 +740,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.settings_outlined,
-                    title: 'الإعدادات والتنبيهات',
+                    title: trBi('الإعدادات والتنبيهات', 'Settings & Notifications'),
                     onTap: () {
                       Navigator.pop(context);
                       setState(() => _selectedTabIndex = 3);
@@ -704,7 +748,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                   _buildDrawerItem(
                     icon: Icons.info_outline_rounded,
-                    title: 'حول التطبيق',
+                    title: trBi('حول التطبيق', 'About Na7la IoT'),
                     onTap: () {
                       Navigator.pop(context);
                       _showAboutDialog();
@@ -713,7 +757,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   Divider(height: 16, color: borderColor),
                   _buildDrawerItem(
                     icon: Icons.logout_rounded,
-                    title: 'تسجيل الخروج',
+                    title: trBi('تسجيل الخروج', 'Sign Out'),
                     color: Colors.redAccent,
                     onTap: () {
                       Navigator.pop(context);
@@ -786,21 +830,21 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  // ===================== MAIN HOME TAB (WattQ 1.0.27 + Na7la) =====================
+  // ===================== MAIN TABS ROUTER (ALL 5 TABS ALWAYS ENABLED) =====================
 
   Widget _buildActiveTabContent() {
     switch (_selectedTabIndex) {
       case 0:
-        return _buildHomeTab();
+        return _selectedStrip == null ? _buildEmptyState() : _buildHomeTab();
       case 1:
         return SchedulesTab(
-          strip: _selectedStrip!,
+          strip: _selectedStrip,
           isDark: _isDark,
           onOpenScheduleSheet: _openDeepDive,
         );
       case 2:
         return FavoritesTab(
-          strip: _selectedStrip!,
+          strip: _selectedStrip,
           isDark: _isDark,
           onToggleSocket: _onToggleSocket,
           onOpenDeepDive: _openDeepDive,
@@ -808,7 +852,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         );
       case 3:
         return SettingsTab(
-          strip: _selectedStrip!,
+          strip: _selectedStrip,
           isDark: _isDark,
           isAdmin: _currentUser?.isAdmin ?? false,
           onToggleTheme: _toggleTheme,
@@ -867,7 +911,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 1. Top 3-Column Summary Card (Exact WattQ 1.0.27 Style)
+            // 1. Top 3-Column Summary Card
             Container(
               padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
               decoration: AppTheme.cleanCardDecoration(isDark: _isDark, radius: 18),
@@ -886,7 +930,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'المشتركات',
+                          trBi('المشتركات', 'Strips'),
                           style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w700, color: textSecondary),
                         ),
                       ],
@@ -906,7 +950,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'متصل',
+                          trBi('متصل', 'Online'),
                           style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w700, color: textSecondary),
                         ),
                       ],
@@ -929,7 +973,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          'إجمالي السحب',
+                          trBi('إجمالي السحب', 'Total Load'),
                           style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w700, color: textSecondary),
                         ),
                       ],
@@ -940,7 +984,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ),
             const SizedBox(height: 10),
 
-            // 2. Smart Scenes Pill Bar (+ مشهد جديد & Saved Scenes)
+            // 2. Smart Scenes Pill Bar (+ New Scene & Saved Scenes)
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
@@ -948,7 +992,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ActionChip(
                     avatar: const Icon(Icons.add_rounded, size: 16, color: AppColors.emeraldPrimary),
                     label: Text(
-                      'مشهد جديد',
+                      trBi('مشهد جديد', 'New Scene'),
                       style: GoogleFonts.cairo(
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
@@ -963,13 +1007,13 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   const SizedBox(width: 8),
                   ..._scenes.map((scene) {
                     return Padding(
-                      padding: const EdgeInsets.only(left: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
                       child: GestureDetector(
                         onLongPress: () => _confirmDeleteScene(scene),
                         child: ActionChip(
                           avatar: const Icon(Icons.play_circle_fill_rounded, size: 16, color: AppColors.emeraldPrimary),
                           label: Text(
-                            scene['name']?.toString() ?? 'مشهد',
+                            scene['name']?.toString() ?? trBi('مشهد', 'Scene'),
                             style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: textPrimary),
                           ),
                           backgroundColor: cardBg,
@@ -980,7 +1024,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                             if (mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text(ok ? '🎬 تم تنفيذ المشهد "${scene['name']}" بنجاح' : '❌ تعذر تنفيذ المشهد'),
+                                  content: Text(ok
+                                      ? trBi('🎬 تم تنفيذ المشهد "${scene['name']}" بنجاح', '🎬 Scene "${scene['name']}" executed!')
+                                      : trBi('❌ تعذر تنفيذ المشهد', '❌ Failed to execute scene')),
                                   backgroundColor: AppColors.emeraldPrimary,
                                 ),
                               );
@@ -1004,7 +1050,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   children: _strips.map((s) {
                     final isSel = s.macAddress == strip.macAddress;
                     return Padding(
-                      padding: const EdgeInsets.only(left: 8, bottom: 8),
+                      padding: const EdgeInsets.only(left: 8, right: 4, bottom: 8),
                       child: ChoiceChip(
                         selected: isSel,
                         selectedColor: AppColors.emeraldPrimary,
@@ -1028,7 +1074,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
               ),
             ],
 
-            // 3. Main Strip Container Card (Exact WattQ 1.0.27 Layout + Na7la Features)
+            // 3. Main Strip Container Card
             Container(
               padding: const EdgeInsets.all(14),
               decoration: AppTheme.cleanCardDecoration(isDark: _isDark, radius: 22),
@@ -1093,7 +1139,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              isOnline ? 'متصل' : 'غير متصل',
+                                              isOnline ? trBi('متصل', 'Online') : trBi('غير متصل', 'Offline'),
                                               style: GoogleFonts.cairo(
                                                 fontSize: 9.5,
                                                 fontWeight: FontWeight.w800,
@@ -1146,7 +1192,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       IconButton(
                         onPressed: _openDotsMenu,
                         icon: Icon(Icons.more_vert_rounded, color: textPrimary),
-                        tooltip: 'إعدادات المشترك',
+                        tooltip: trBi('إعدادات المشترك', 'Strip Settings'),
                         style: IconButton.styleFrom(
                           backgroundColor: _isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1156,16 +1202,14 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // 3.B Warm Cream / Dark Telemetry Bar (⚡ A | 🛡️ V | 🌡️ °C | ⚡ W)
+                  // 3.B Emerald Telemetry Bar (⚡ A | 🛡️ V | 🌡️ °C | ⚡ W)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
                       color: _isDark ? AppColors.telemetryBarDark : AppColors.telemetryBarLight,
                       borderRadius: BorderRadius.circular(14),
                       border: Border.all(
-                        color: _isDark
-                            ? AppColors.warningAmber.withOpacity(0.25)
-                            : const Color(0xFFFDE68A),
+                        color: AppColors.emeraldPrimary.withOpacity(_isDark ? 0.25 : 0.28),
                       ),
                     ),
                     child: Row(
@@ -1177,7 +1221,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                         Container(width: 1, height: 16, color: borderColor),
                         _buildTelemetryPill('🌡️ $displayTemp°C', displayTemp > 45 ? Colors.redAccent : textPrimary),
                         Container(width: 1, height: 16, color: borderColor),
-                        _buildTelemetryPill('⚡ ${totalWatts.toStringAsFixed(1)} W', AppColors.warningAmber),
+                        _buildTelemetryPill('⚡ ${totalWatts.toStringAsFixed(1)} W', AppColors.emeraldPrimary),
                       ],
                     ),
                   ),
@@ -1197,7 +1241,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                               const Icon(Icons.hub_outlined, size: 15, color: AppColors.emeraldPrimary),
                               const SizedBox(width: 6),
                               Text(
-                                'المجسم الحقيقي التفاعلي للمشترك',
+                                trBi('المجسم الحقيقي التفاعلي للمشترك', 'Interactive Hardware Digital Twin'),
                                 style: GoogleFonts.cairo(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w800,
@@ -1226,7 +1270,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   ],
                   const SizedBox(height: 6),
 
-                  // 3.D Symmetrical 2x2 Outlet Grid (Exact WattQ 1.0.27 Cards)
+                  // 3.D Symmetrical 2x2 Outlet Grid
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
@@ -1235,7 +1279,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       crossAxisCount: 2,
                       crossAxisSpacing: 10,
                       mainAxisSpacing: 10,
-                      childAspectRatio: 1.18,
+                      childAspectRatio: 0.74,
                     ),
                     itemBuilder: (context, index) {
                       final socket = strip.sockets[index];
@@ -1292,7 +1336,9 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
           color: anyOn ? Colors.redAccent : Colors.white,
         ),
         label: Text(
-          anyOn ? 'إيقاف الكل (الراوتر والمثبّت مستثنى)' : 'تشغيل جميع المخارج',
+          anyOn
+              ? trBi('إيقاف الكل (الراوتر والمثبّت مستثنى)', 'Turn All Off (Router & Pinned Exempt)')
+              : trBi('تشغيل جميع المخارج', 'Turn All Outlets On'),
           style: GoogleFonts.cairo(
             fontSize: 12.5,
             fontWeight: FontWeight.w900,
@@ -1308,7 +1354,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  // ===================== STRIP 3-DOTS MENU (⋮) — ALL 13 FEATURES WIRED TO BACKEND =====================
+  // ===================== STRIP 3-DOTS MENU (⋮) =====================
 
   void _openDotsMenu() {
     if (_selectedStrip == null) return;
@@ -1320,233 +1366,246 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => Container(
-        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-          border: Border(top: BorderSide(color: borderColor, width: 1.5)),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'إعدادات المشترك (${strip.stripName})',
-                    style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, size: 20),
-                    onPressed: () => Navigator.of(ctx).pop(),
-                  ),
-                ],
-              ),
-              Divider(height: 12, color: borderColor),
-
-              // 1. Rename Strip & Room
-              _buildDotsMenuItem(
-                icon: Icons.edit_outlined,
-                iconColor: AppColors.emeraldPrimary,
-                title: 'تغيير اسم المشترك والغرفة',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openStripSettingsDialog();
-                },
-              ),
-
-              // 2. Strip Schedule (Multi-Outlet)
-              _buildDotsMenuItem(
-                icon: Icons.schedule_rounded,
-                iconColor: AppColors.emeraldPrimary,
-                title: 'جدولة المشترك والمخارج',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  setState(() => _selectedTabIndex = 1);
-                },
-              ),
-
-              // 3. Child Lock (Physical Buttons Lock)
-              _buildDotsMenuItem(
-                icon: Icons.child_care_rounded,
-                iconColor: AppColors.warningAmber,
-                title: 'قفل أزرار المشترك الفيزيائية (Child Lock)',
-                trailing: _buildStatusPill(strip.childLock ? 'مفعل' : 'غير مفعل', strip.childLock),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openChildLockDialog();
-                },
-              ),
-
-              // 4. Biometric Control for Strip
-              _buildDotsMenuItem(
-                icon: Icons.fingerprint_rounded,
-                iconColor: AppColors.emeraldPrimary,
-                title: 'التحكم بالبصمة للمشترك',
-                trailing: _buildStatusPill(strip.biometricControl ? 'مفعل' : 'غير مفعل', strip.biometricControl),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final nextVal = !strip.biometricControl;
-                  final ok = await _repo.updateProtection(strip.macAddress, {
-                    'biometric_control': nextVal,
-                  });
-                  if (ok && mounted) {
-                    setState(() => strip.biometricControl = nextVal);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(nextVal ? '🔐 تم تفعيل حماية البصمة للمشترك' : '🔓 تم إلغاء حماية البصمة للمشترك'),
-                        backgroundColor: AppColors.emeraldPrimary,
-                      ),
-                    );
-                  }
-                },
-              ),
-
-              // 5. Watt & Voltage Limits + Exempt Outlets
-              _buildDotsMenuItem(
-                icon: Icons.shield_outlined,
-                iconColor: AppColors.emeraldPrimary,
-                title: 'حدود الواط والفولت واستثناء المخارج',
-                trailing: Text(
-                  '${strip.minVoltage.toInt()}V-${strip.maxVoltage.toInt()}V',
-                  style: GoogleFonts.jetBrainsMono(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openProtectionScreen();
-                },
-              ),
-
-              // 6. Power Return State (LAST / ON / OFF)
-              _buildDotsMenuItem(
-                icon: Icons.settings_backup_restore_rounded,
-                iconColor: AppColors.routerCyan,
-                title: 'حالة العودة بعد انقطاع الكهرباء',
-                trailing: Text(
-                  strip.powerReturnState == 'ON'
-                      ? 'تشغيل'
-                      : (strip.powerReturnState == 'OFF' ? 'إيقاف' : 'آخر حالة'),
-                  style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.routerCyan),
-                ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openPowerReturnDialog();
-                },
-              ),
-
-              // 7. Energy Monitor & 30-Day Run Log
-              _buildDotsMenuItem(
-                icon: Icons.bar_chart_rounded,
-                iconColor: AppColors.emeraldPrimary,
-                title: 'مراقب الاستهلاك وسجل الـ 30 يوماً',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openEnergyAnalytics();
-                },
-              ),
-
-              // 8. Strip Health & Diagnostics (24h & 7d)
-              _buildDotsMenuItem(
-                icon: Icons.monitor_heart_outlined,
-                iconColor: const Color(0xFFEF4444),
-                title: 'صحة المشترك والتشخيص (24 ساعة / 7 أيام)',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openDiagnosticsDialog();
-                },
-              ),
-
-              // 9. Real Activity Log
-              _buildDotsMenuItem(
-                icon: Icons.history_rounded,
-                iconColor: AppColors.warningAmber,
-                title: 'سجل النشاط الفعلي (Activity Log)',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openActivityLogSheet();
-                },
-              ),
-
-              // 10. Family Sharing (Strip or Single Outlet)
-              _buildDotsMenuItem(
-                icon: Icons.group_outlined,
-                iconColor: AppColors.emeraldPrimary,
-                title: 'مشاركة المشترك أو مخرج محدد مع العائلة',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _openFamilyScreen();
-                },
-              ),
-
-              // 11. Change Wi-Fi Network / Connection Mode
-              _buildDotsMenuItem(
-                icon: Icons.wifi_find_rounded,
-                iconColor: AppColors.routerCyan,
-                title: 'تغيير شبكة الواي فاي / وضع الاتصال',
-                onTap: () {
-                  Navigator.pop(ctx);
-                  showDialog(
-                    context: context,
-                    builder: (_) => ControllerModeDialog(
-                      isDark: _isDark,
-                      mac: strip.macAddress,
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: Container(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+            border: Border(top: BorderSide(color: borderColor, width: 1.5)),
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.4),
+                      borderRadius: BorderRadius.circular(4),
                     ),
-                  );
-                },
-              ),
-
-              // 12. OTA Firmware Update
-              _buildDotsMenuItem(
-                icon: Icons.system_update_alt_rounded,
-                iconColor: AppColors.emeraldPrimary,
-                title: 'تحديث الفيرموير الهوائي (OTA Update)',
-                trailing: Text(
-                  'v${strip.fwVersion}',
-                  style: GoogleFonts.jetBrainsMono(fontSize: 10, color: Colors.grey),
+                  ),
                 ),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  final res = await _repo.requestOtaUpdate(strip.macAddress);
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(res?['message']?.toString() ?? '☁️ تم فحص وإرسال طلب التحديث الهوائي للمشترك'),
-                        backgroundColor: AppColors.emeraldPrimary,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        trBi('إعدادات المشترك (${strip.stripName})', 'Strip Settings (${strip.stripName})'),
+                        style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                  ],
+                ),
+                Divider(height: 12, color: borderColor),
+
+                // 1. Rename Strip & Room
+                _buildDotsMenuItem(
+                  icon: Icons.edit_outlined,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('تغيير اسم المشترك والغرفة', 'Rename Strip & Room'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openStripSettingsDialog();
+                  },
+                ),
+
+                // 2. Strip Schedule (Multi-Outlet)
+                _buildDotsMenuItem(
+                  icon: Icons.schedule_rounded,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('جدولة المشترك والمخارج', 'Strip & Outlet Schedules'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    setState(() => _selectedTabIndex = 1);
+                  },
+                ),
+
+                // 3. Child Lock (Physical Buttons Lock)
+                _buildDotsMenuItem(
+                  icon: Icons.child_care_rounded,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('قفل أزرار المشترك الفيزيائية (Child Lock)', 'Physical Buttons Child Lock'),
+                  trailing: _buildStatusPill(
+                    strip.childLock ? trBi('مفعل', 'Active') : trBi('غير مفعل', 'Off'),
+                    strip.childLock,
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openChildLockDialog();
+                  },
+                ),
+
+                // 4. Biometric Control for Strip
+                _buildDotsMenuItem(
+                  icon: Icons.fingerprint_rounded,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('التحكم بالبصمة للمشترك', 'Biometric / PIN Strip Lock'),
+                  trailing: _buildStatusPill(
+                    strip.biometricControl ? trBi('مفعل', 'Active') : trBi('غير مفعل', 'Off'),
+                    strip.biometricControl,
+                  ),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final nextVal = !strip.biometricControl;
+                    final ok = await _repo.updateProtection(strip.macAddress, {
+                      'biometric_control': nextVal,
+                    });
+                    if (ok && mounted) {
+                      setState(() => strip.biometricControl = nextVal);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(nextVal
+                              ? trBi('🔐 تم تفعيل حماية البصمة للمشترك', '🔐 Biometric protection enabled for strip')
+                              : trBi('🔓 تم إلغاء حماية البصمة للمشترك', '🔓 Biometric protection disabled for strip')),
+                          backgroundColor: AppColors.emeraldPrimary,
+                        ),
+                      );
+                    }
+                  },
+                ),
+
+                // 5. Watt & Voltage Limits + Exempt Outlets
+                _buildDotsMenuItem(
+                  icon: Icons.shield_outlined,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('حدود الواط والفولت واستثناء المخارج', 'Watt & Voltage Limits & Exemptions'),
+                  trailing: Text(
+                    '${strip.minVoltage.toInt()}V-${strip.maxVoltage.toInt()}V',
+                    style: GoogleFonts.jetBrainsMono(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.emeraldPrimary),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openProtectionScreen();
+                  },
+                ),
+
+                // 6. Power Return State (LAST / ON / OFF)
+                _buildDotsMenuItem(
+                  icon: Icons.settings_backup_restore_rounded,
+                  iconColor: AppColors.routerCyan,
+                  title: trBi('حالة العودة بعد انقطاع الكهرباء', 'Power-On State After Outage'),
+                  trailing: Text(
+                    strip.powerReturnState == 'ON'
+                        ? trBi('تشغيل', 'All ON')
+                        : (strip.powerReturnState == 'OFF' ? trBi('إيقاف', 'All OFF') : trBi('آخر حالة', 'Last State')),
+                    style: GoogleFonts.cairo(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.routerCyan),
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openPowerReturnDialog();
+                  },
+                ),
+
+                // 7. Energy Monitor & 30-Day Run Log
+                _buildDotsMenuItem(
+                  icon: Icons.bar_chart_rounded,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('مراقب الاستهلاك وسجل الـ 30 يوماً', 'Energy Monitor & 30-Day Log'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openEnergyAnalytics();
+                  },
+                ),
+
+                // 8. Strip Health & Diagnostics (24h & 7d)
+                _buildDotsMenuItem(
+                  icon: Icons.monitor_heart_outlined,
+                  iconColor: const Color(0xFFEF4444),
+                  title: trBi('صحة المشترك والتشخيص (24 ساعة / 7 أيام)', 'Strip Health & Diagnostics (24h / 7d)'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openDiagnosticsDialog();
+                  },
+                ),
+
+                // 9. Real Activity Log
+                _buildDotsMenuItem(
+                  icon: Icons.history_rounded,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('سجل النشاط الفعلي (Activity Log)', 'Real-Time Activity Log'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openActivityLogSheet();
+                  },
+                ),
+
+                // 10. Family Sharing (Strip or Single Outlet)
+                _buildDotsMenuItem(
+                  icon: Icons.group_outlined,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('مشاركة المشترك أو مخرج محدد مع العائلة', 'Family Sharing & Outlet Permissions'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _openFamilyScreen();
+                  },
+                ),
+
+                // 11. Change Wi-Fi Network / Connection Mode
+                _buildDotsMenuItem(
+                  icon: Icons.wifi_find_rounded,
+                  iconColor: AppColors.routerCyan,
+                  title: trBi('تغيير شبكة الواي فاي / وضع الاتصال', 'Change Wi-Fi / Connection Mode'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    showDialog(
+                      context: context,
+                      builder: (_) => ControllerModeDialog(
+                        isDark: _isDark,
+                        mac: strip.macAddress,
                       ),
                     );
-                  }
-                },
-              ),
+                  },
+                ),
 
-              Divider(height: 16, color: borderColor),
+                // 12. OTA Firmware Update
+                _buildDotsMenuItem(
+                  icon: Icons.system_update_alt_rounded,
+                  iconColor: AppColors.emeraldPrimary,
+                  title: trBi('تحديث الفيرموير الهوائي (OTA Update)', 'Over-The-Air Firmware Update (OTA)'),
+                  trailing: Text(
+                    'v${strip.fwVersion}',
+                    style: GoogleFonts.jetBrainsMono(fontSize: 10, color: Colors.grey),
+                  ),
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final res = await _repo.requestOtaUpdate(strip.macAddress);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(res?['message']?.toString() ?? trBi('☁️ تم فحص وإرسال طلب التحديث الهوائي للمشترك', '☁️ Checked & requested OTA firmware update')),
+                          backgroundColor: AppColors.emeraldPrimary,
+                        ),
+                      );
+                    }
+                  },
+                ),
 
-              // 13. Delete / Unlink Strip
-              _buildDotsMenuItem(
-                icon: Icons.delete_forever_rounded,
-                iconColor: Colors.redAccent,
-                title: 'حذف المشترك وفك الارتباط',
-                isDanger: true,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _confirmDeleteStrip(strip);
-                },
-              ),
-            ],
+                Divider(height: 16, color: borderColor),
+
+                // 13. Delete / Unlink Strip
+                _buildDotsMenuItem(
+                  icon: Icons.delete_forever_rounded,
+                  iconColor: Colors.redAccent,
+                  title: trBi('حذف المشترك وفك الارتباط', 'Delete & Unlink Strip'),
+                  isDanger: true,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _confirmDeleteStrip(strip);
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1601,7 +1660,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
             ),
             if (trailing != null) trailing,
             const SizedBox(width: 4),
-            Icon(Icons.chevron_left_rounded, size: 18, color: isDanger ? Colors.redAccent : Colors.grey),
+            Icon(Icons.chevron_right_rounded, size: 18, color: isDanger ? Colors.redAccent : Colors.grey),
           ],
         ),
       ),
@@ -1613,72 +1672,86 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   // 1. Claim Strip by Serial (MAC)
   void _openClaimBySerialDialog() {
     final macCtrl = TextEditingController();
-    final nameCtrl = TextEditingController(text: 'مشترك ذكي');
+    final nameCtrl = TextEditingController(text: trBi('مشترك ذكي', 'Smart Strip'));
 
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('ربط مشترك بالسيريال (MAC) 🔗', style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: macCtrl,
-              style: GoogleFonts.jetBrainsMono(fontSize: 13, fontWeight: FontWeight.w800),
-              decoration: InputDecoration(
-                labelText: 'رقم السيريال / MAC Address',
-                hintText: 'مثال: AA11BB22CC33',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: AlertDialog(
+          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text(trBi('ربط مشترك بالسيريال (MAC) 🔗', 'Link Strip by Serial (MAC) 🔗'), style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: macCtrl,
+                style: GoogleFonts.jetBrainsMono(fontSize: 13, fontWeight: FontWeight.w800),
+                decoration: InputDecoration(
+                  labelText: trBi('رقم السيريال / MAC Address', 'Serial Number / MAC Address'),
+                  hintText: trBi('مثال: AA11BB22CC33', 'e.g. AA11BB22CC33'),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: nameCtrl,
-              style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
-              decoration: InputDecoration(
-                labelText: 'اسم المشترك',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 10),
+              TextField(
+                controller: nameCtrl,
+                style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
+                decoration: InputDecoration(
+                  labelText: trBi('اسم المشترك', 'Strip Name'),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                ),
               ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(trBi('إلغاء', 'Cancel'))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
+              onPressed: () async {
+                final mac = macCtrl.text.trim();
+                if (mac.isEmpty) return;
+                final res = await _repo.registerStrip(mac, name: nameCtrl.text.trim());
+                if (ctx.mounted) Navigator.pop(ctx);
+                if (res['ok'] == true || res['success'] == true) {
+                  await _loadStrips();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(trBi('✅ تم ربط المشترك بحسابك بنجاح', '✅ Strip linked to your account successfully')),
+                        backgroundColor: AppColors.emeraldPrimary,
+                      ),
+                    );
+                  }
+                } else if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('❌ ${res['detail'] ?? res['message'] ?? trBi("تعذر ربط المشترك", "Could not link strip")}'),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                }
+              },
+              child: Text(trBi('ربط الآن', 'Link Now'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
-            onPressed: () async {
-              final mac = macCtrl.text.trim();
-              if (mac.isEmpty) return;
-              final res = await _repo.registerStrip(mac, name: nameCtrl.text.trim());
-              if (ctx.mounted) Navigator.pop(ctx);
-              if (res['ok'] == true || res['success'] == true) {
-                await _loadStrips();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✅ تم ربط المشترك بحسابك بنجاح'), backgroundColor: AppColors.emeraldPrimary),
-                  );
-                }
-              } else if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('❌ ${res['detail'] ?? res['message'] ?? "تعذر ربط المشترك"}'),
-                    backgroundColor: Colors.redAccent,
-                  ),
-                );
-              }
-            },
-            child: Text('ربط الآن', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
-          ),
-        ],
       ),
     );
   }
 
   // 2. Smart Scenes Creation & Execution Modal
   void _openCreateSceneDialog() {
-    if (_selectedStrip == null) return;
+    if (_selectedStrip == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(trBi('يرجى إضافة مشترك أولاً لإنشاء مشهد ذكي', 'Please add a strip first to create a smart scene')),
+          backgroundColor: AppColors.emeraldPrimary,
+        ),
+      );
+      return;
+    }
     final nameCtrl = TextEditingController();
     final Map<int, bool?> socketActions = {
       for (final s in _selectedStrip!.sockets) s.socketIndex: s.isRouter ? null : false,
@@ -1687,83 +1760,95 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('إنشاء مشهد ذكي جديد 🎬', style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
-                  decoration: InputDecoration(
-                    labelText: 'اسم المشهد (مثال: وضع النوم / الخروج)',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('اختر حالة كل مخرج عند الضغط على المشهد:', style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 6),
-                ..._selectedStrip!.sockets.map((s) {
-                  final cur = socketActions[s.socketIndex];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text('#${s.socketIndex} ${s.name}', style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800)),
-                        ),
-                        SegmentedButton<bool?>(
-                          segments: const [
-                            ButtonSegment(value: null, label: Text('تجاهل', style: TextStyle(fontSize: 10))),
-                            ButtonSegment(value: true, label: Text('تشغيل', style: TextStyle(fontSize: 10))),
-                            ButtonSegment(value: false, label: Text('إيقاف', style: TextStyle(fontSize: 10))),
-                          ],
-                          selected: {cur},
-                          onSelectionChanged: (val) => setDialogState(() => socketActions[s.socketIndex] = val.first),
-                        ),
-                      ],
+        builder: (context, setDialogState) => Directionality(
+          textDirection: AppLocaleController.instance.textDirection,
+          child: AlertDialog(
+            backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(trBi('إنشاء مشهد ذكي جديد 🎬', 'Create New Smart Scene 🎬'), style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
+                    decoration: InputDecoration(
+                      labelText: trBi('اسم المشهد (مثال: وضع النوم / الخروج)', 'Scene Name (e.g. Sleep / Away)'),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                  );
-                }),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
-              onPressed: () async {
-                final name = nameCtrl.text.trim();
-                if (name.isEmpty) return;
-                final List<Map<String, dynamic>> actions = [];
-                socketActions.forEach((idx, state) {
-                  if (state != null) {
-                    actions.add({
-                      'mac': _selectedStrip!.macAddress,
-                      'socket_index': idx,
-                      'state': state,
-                    });
-                  }
-                });
-                final ok = await _repo.createScene(name: name, actions: actions);
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (ok) {
-                  await _loadScenes();
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('✅ تم حفظ المشهد الذكي على السيرفر بنجاح'), backgroundColor: AppColors.emeraldPrimary),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    trBi('اختر حالة كل مخرج عند الضغط على المشهد:', 'Select action for each outlet when triggered:'),
+                    style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 6),
+                  ..._selectedStrip!.sockets.map((s) {
+                    final cur = socketActions[s.socketIndex];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '#${s.socketIndex} ${trOutletName(s.name, s.socketIndex)}',
+                              style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800),
+                            ),
+                          ),
+                          SegmentedButton<bool?>(
+                            segments: [
+                              ButtonSegment(value: null, label: Text(trBi('تجاهل', 'Skip'), style: const TextStyle(fontSize: 10))),
+                              ButtonSegment(value: true, label: Text(trBi('تشغيل', 'ON'), style: const TextStyle(fontSize: 10))),
+                              ButtonSegment(value: false, label: Text(trBi('إيقاف', 'OFF'), style: const TextStyle(fontSize: 10))),
+                            ],
+                            selected: {cur},
+                            onSelectionChanged: (val) => setDialogState(() => socketActions[s.socketIndex] = val.first),
+                          ),
+                        ],
+                      ),
                     );
-                  }
-                }
-              },
-              child: Text('حفظ المشهد', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+                  }),
+                ],
+              ),
             ),
-          ],
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(trBi('إلغاء', 'Cancel'))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
+                onPressed: () async {
+                  final name = nameCtrl.text.trim();
+                  if (name.isEmpty) return;
+                  final List<Map<String, dynamic>> actions = [];
+                  socketActions.forEach((idx, state) {
+                    if (state != null) {
+                      actions.add({
+                        'mac': _selectedStrip!.macAddress,
+                        'socket_index': idx,
+                        'state': state,
+                      });
+                    }
+                  });
+                  final ok = await _repo.createScene(name: name, actions: actions);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (ok) {
+                    await _loadScenes();
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(trBi('✅ تم حفظ المشهد الذكي على السيرفر بنجاح', '✅ Smart scene saved to server')),
+                          backgroundColor: AppColors.emeraldPrimary,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: Text(trBi('حفظ المشهد', 'Save Scene'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1772,22 +1857,28 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void _confirmDeleteScene(Map<String, dynamic> scene) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-        title: Text('حذف المشهد', style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
-        content: Text('هل تريد حذف المشهد "${scene['name']}"؟', style: GoogleFonts.cairo(fontSize: 12)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _repo.deleteScene(scene['id'] as int);
-              _loadScenes();
-            },
-            child: const Text('حذف'),
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: AlertDialog(
+          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+          title: Text(trBi('حذف المشهد', 'Delete Scene'), style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
+          content: Text(
+            trBi('هل تريد حذف المشهد "${scene['name']}"؟', 'Delete scene "${scene['name']}"?'),
+            style: GoogleFonts.cairo(fontSize: 12),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(trBi('إلغاء', 'Cancel'))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _repo.deleteScene(scene['id'] as int);
+                _loadScenes();
+              },
+              child: Text(trBi('حذف', 'Delete')),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1798,96 +1889,103 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => FutureBuilder<Map<String, dynamic>?>(
-        future: _repo.getAllStripsEnergyMonitor(),
-        builder: (context, snapshot) {
-          final bg = _isDark ? AppColors.cardSurfaceDark : Colors.white;
-          final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
-          final data = snapshot.data;
-          final items = (data?['strips'] as List?) ?? [];
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: FutureBuilder<Map<String, dynamic>?>(
+          future: _repo.getAllStripsEnergyMonitor(),
+          builder: (context, snapshot) {
+            final bg = _isDark ? AppColors.cardSurfaceDark : Colors.white;
+            final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+            final data = snapshot.data;
+            final items = (data?['strips'] as List?) ?? [];
+            final egpUnit = trBi('ج.م', 'EGP');
 
-          return Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  '📊 مراقب الاستهلاك لجميع المشتركات',
-                  style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
-                ),
-                const SizedBox(height: 12),
-                if (snapshot.connectionState == ConnectionState.waiting)
-                  const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator(color: AppColors.emeraldPrimary)),
-                  )
-                else ...[
-                  Container(
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: AppColors.emeraldPrimary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: AppColors.emeraldPrimary.withOpacity(0.4)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Column(
-                          children: [
-                            Text(
-                              '${(data?['total_live_watt'] ?? 0).toString()} W',
-                              style: GoogleFonts.jetBrainsMono(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary),
-                            ),
-                            Text('السحب اللحظي الكلي', style: GoogleFonts.cairo(fontSize: 10)),
-                          ],
-                        ),
-                        Column(
-                          children: [
-                            Text(
-                              '${(data?['total_month_kwh'] ?? 0).toString()} kWh',
-                              style: GoogleFonts.jetBrainsMono(fontSize: 16, fontWeight: FontWeight.w900, color: textPrimary),
-                            ),
-                            Text('استهلاك 30 يوماً', style: GoogleFonts.cairo(fontSize: 10)),
-                          ],
-                        ),
-                        Column(
-                          children: [
-                            Text(
-                              '${(data?['total_month_cost_egp'] ?? 0).toString()} ج.م',
-                              style: GoogleFonts.jetBrainsMono(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.warningAmber),
-                            ),
-                            Text('التكلفة بالشرائح', style: GoogleFonts.cairo(fontSize: 10)),
-                          ],
-                        ),
-                      ],
-                    ),
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    trBi('📊 مراقب الاستهلاك لجميع المشتركات', '📊 All-Strips Energy Monitor'),
+                    style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
                   ),
                   const SizedBox(height: 12),
-                  ...items.map((st) {
-                    return ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        Icons.power_rounded,
-                        color: st['online'] == true ? AppColors.emeraldPrimary : Colors.grey,
+                  if (snapshot.connectionState == ConnectionState.waiting)
+                    const Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Center(child: CircularProgressIndicator(color: AppColors.emeraldPrimary)),
+                    )
+                  else ...[
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: AppColors.emeraldPrimary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: AppColors.emeraldPrimary.withOpacity(0.4)),
                       ),
-                      title: Text(st['name']?.toString() ?? '', style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800)),
-                      subtitle: Text('استهلاك الشهر: ${st['month_kwh']} kWh • ${st['month_cost_egp']} ج.م', style: GoogleFonts.cairo(fontSize: 11)),
-                      trailing: Text(
-                        '${st['live_watt']} W',
-                        style: GoogleFonts.jetBrainsMono(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          Column(
+                            children: [
+                              Text(
+                                '${(data?['total_live_watt'] ?? 0).toString()} W',
+                                style: GoogleFonts.jetBrainsMono(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary),
+                              ),
+                              Text(trBi('السحب اللحظي الكلي', 'Total Live Load'), style: GoogleFonts.cairo(fontSize: 10)),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Text(
+                                '${(data?['total_month_kwh'] ?? 0).toString()} kWh',
+                                style: GoogleFonts.jetBrainsMono(fontSize: 16, fontWeight: FontWeight.w900, color: textPrimary),
+                              ),
+                              Text(trBi('استهلاك 30 يوماً', '30-Day Usage'), style: GoogleFonts.cairo(fontSize: 10)),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Text(
+                                '${(data?['total_month_cost_egp'] ?? 0).toString()} $egpUnit',
+                                style: GoogleFonts.jetBrainsMono(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary),
+                              ),
+                              Text(trBi('التكلفة بالشرائح', 'Tiered Cost'), style: GoogleFonts.cairo(fontSize: 10)),
+                            ],
+                          ),
+                        ],
                       ),
-                    );
-                  }),
+                    ),
+                    const SizedBox(height: 12),
+                    ...items.map((st) {
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
+                          Icons.power_rounded,
+                          color: st['online'] == true ? AppColors.emeraldPrimary : Colors.grey,
+                        ),
+                        title: Text(st['name']?.toString() ?? '', style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800)),
+                        subtitle: Text(
+                          trBi('استهلاك الشهر: ${st['month_kwh']} kWh • ${st['month_cost_egp']} ج.م', 'Monthly: ${st['month_kwh']} kWh • ${st['month_cost_egp']} EGP'),
+                          style: GoogleFonts.cairo(fontSize: 11),
+                        ),
+                        trailing: Text(
+                          '${st['live_watt']} W',
+                          style: GoogleFonts.jetBrainsMono(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary),
+                        ),
+                      );
+                    }),
+                  ],
                 ],
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1901,59 +1999,65 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: Text('حالة العودة بعد انقطاع الكهرباء 🔌', style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              RadioListTile<String>(
-                value: 'LAST',
-                groupValue: current,
-                activeColor: AppColors.emeraldPrimary,
-                title: Text('العودة لآخر حالة قبل الانقطاع 🔄', style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800)),
-                onChanged: (v) => setDialogState(() => current = v!),
-              ),
-              RadioListTile<String>(
-                value: 'ON',
-                groupValue: current,
-                activeColor: AppColors.emeraldPrimary,
-                title: Text('تشغيل جميع المخارج دائماً ⚡', style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800)),
-                onChanged: (v) => setDialogState(() => current = v!),
-              ),
-              RadioListTile<String>(
-                value: 'OFF',
-                groupValue: current,
-                activeColor: AppColors.emeraldPrimary,
-                title: Text('إبقاء جميع المخارج مغلقة للأمان ⏻', style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800)),
-                onChanged: (v) => setDialogState(() => current = v!),
+        builder: (context, setDialogState) => Directionality(
+          textDirection: AppLocaleController.instance.textDirection,
+          child: AlertDialog(
+            backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Text(trBi('حالة العودة بعد انقطاع الكهرباء 🔌', 'Power-On State After Outage 🔌'), style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<String>(
+                  value: 'LAST',
+                  groupValue: current,
+                  activeColor: AppColors.emeraldPrimary,
+                  title: Text(trBi('العودة لآخر حالة قبل الانقطاع 🔄', 'Restore Last State Before Outage 🔄'), style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                  onChanged: (v) => setDialogState(() => current = v!),
+                ),
+                RadioListTile<String>(
+                  value: 'ON',
+                  groupValue: current,
+                  activeColor: AppColors.emeraldPrimary,
+                  title: Text(trBi('تشغيل جميع المخارج دائماً ⚡', 'Turn All Outlets ON ⚡'), style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                  onChanged: (v) => setDialogState(() => current = v!),
+                ),
+                RadioListTile<String>(
+                  value: 'OFF',
+                  groupValue: current,
+                  activeColor: AppColors.emeraldPrimary,
+                  title: Text(trBi('إبقاء جميع المخارج مغلقة للأمان ⏻', 'Keep All Outlets OFF for Safety ⏻'), style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                  onChanged: (v) => setDialogState(() => current = v!),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(trBi('إلغاء', 'Cancel'))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
+                onPressed: () async {
+                  final ok = await _repo.updateProtection(strip.macAddress, {'power_return_state': current});
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (ok && mounted) {
+                    setState(() => strip.powerReturnState = current);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(trBi('✅ تم حفظ حالة العودة بعد انقطاع الكهرباء', '✅ Power return state saved')),
+                        backgroundColor: AppColors.emeraldPrimary,
+                      ),
+                    );
+                  }
+                },
+                child: Text(trBi('حفظ', 'Save'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
               ),
             ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
-              onPressed: () async {
-                final ok = await _repo.updateProtection(strip.macAddress, {'power_return_state': current});
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (ok && mounted) {
-                  setState(() => strip.powerReturnState = current);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✅ تم حفظ حالة العودة بعد انقطاع الكهرباء'), backgroundColor: AppColors.emeraldPrimary),
-                  );
-                }
-              },
-              child: Text('حفظ', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
-            ),
-          ],
         ),
       ),
     );
   }
 
-  // 5. Real Strip Health & Diagnostics Sheet (24h & 7d from GET /api/v1/strips/{mac}/health)
+  // 5. Real Strip Health & Diagnostics Sheet
   void _openDiagnosticsDialog() {
     if (_selectedStrip == null) return;
     final strip = _selectedStrip!;
@@ -1962,105 +2066,154 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => FutureBuilder<Map<String, dynamic>?>(
-        future: _repo.getStripHealth(strip.macAddress),
-        builder: (context, snapshot) {
-          final bg = _isDark ? AppColors.cardSurfaceDark : Colors.white;
-          final mutedBg = _isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight;
-          final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
-          final textSecondary = _isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
-          final h = snapshot.data;
-          final p24 = h?['power_24h'] as Map<String, dynamic>?;
-          final p7d = h?['power_7d'] as Map<String, dynamic>?;
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: FutureBuilder<Map<String, dynamic>?>(
+          future: _repo.getStripHealth(strip.macAddress),
+          builder: (context, snapshot) {
+            final bg = _isDark ? AppColors.cardSurfaceDark : Colors.white;
+            final mutedBg = _isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight;
+            final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+            final textSecondary = _isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+            final h = snapshot.data;
+            final p24 = h?['power_24h'] as Map<String, dynamic>?;
+            final p7d = h?['power_7d'] as Map<String, dynamic>?;
 
-          return Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(Icons.monitor_heart_rounded, color: Color(0xFFEF4444)),
-                          const SizedBox(width: 8),
-                          Text(
-                            'صحة المشترك والتشخيص (Strip Health)',
-                            style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
-                          ),
-                        ],
+            return Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.monitor_heart_rounded, color: Color(0xFFEF4444)),
+                            const SizedBox(width: 8),
+                            Text(
+                              trBi('صحة المشترك والتشخيص (Strip Health)', 'Strip Health & Diagnostics'),
+                              style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (snapshot.connectionState == ConnectionState.waiting)
+                      const Padding(
+                        padding: EdgeInsets.all(30),
+                        child: Center(child: CircularProgressIndicator(color: AppColors.emeraldPrimary)),
+                      )
+                    else ...[
+                      // 24h & 7d Power Draw Summary
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: mutedBg,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              trBi('⚡ سحب الطاقة خلال 24 ساعة:', '⚡ 24-Hour Power Draw:'),
+                              style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('${trBi("الأدنى", "Min")}: ${p24?['min_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
+                                Text('${trBi("المتوسط", "Avg")}: ${p24?['avg_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
+                                Text('${trBi("الأقصى", "Peak")}: ${p24?['max_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary)),
+                              ],
+                            ),
+                            const Divider(height: 16),
+                            Text(
+                              trBi('📅 سحب الطاقة خلال 7 أيام:', '📅 7-Day Power Draw:'),
+                              style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.routerCyan),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text('${trBi("الأدنى", "Min")}: ${p7d?['min_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
+                                Text('${trBi("المتوسط", "Avg")}: ${p7d?['avg_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
+                                Text('${trBi("الأقصى", "Peak")}: ${p7d?['max_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary)),
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.close_rounded),
-                        onPressed: () => Navigator.pop(ctx),
+                      const SizedBox(height: 12),
+                      _buildDiagRow(
+                        trBi('حالة الاتصال بالسحابة', 'Cloud Status'),
+                        (h?['online'] ?? strip.isOnline) ? trBi('🟢 متصل (Online)', '🟢 Online') : trBi('🔴 غير متصل', '🔴 Offline'),
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('الجهد الكهربائي ونطاق الحماية', 'Grid Voltage & Guard Range'),
+                        '${h?['current_voltage'] ?? strip.voltage}V (${h?['voltage_range'] ?? "175-250V"})',
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('مرات فصل حماية الجهد', 'Voltage Guard Trip Count'),
+                        '${h?['voltage_breach_count'] ?? strip.voltageBreachCount}',
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('حرارة لوحة المشترك', 'Board Temperature'),
+                        '${h?['board_temp_c'] ?? 28} °C (Max ${h?['max_temp_c'] ?? 75}°C)',
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('قوة إشارة الواي فاي (RSSI)', 'Wi-Fi Signal (RSSI)'),
+                        '${h?['wifi_rssi_dbm'] ?? -48} dBm',
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('نسبة الاستقرار والاتصال (Uptime)', 'Cloud Uptime'),
+                        '${h?['uptime_percent'] ?? 99.8}%',
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('عدد مرات الانقطاع', 'Disconnect Count'),
+                        '${h?['disconnect_count'] ?? 0}',
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('عنوان IP المحلي', 'Local IP Address'),
+                        h?['ip_address']?.toString() ?? strip.ipAddress ?? '-',
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('إصدار الفيرموير (MCU)', 'Firmware Version (MCU)'),
+                        'v${h?['fw_version'] ?? strip.fwVersion}',
+                        textPrimary,
+                      ),
+                      _buildDiagRow(
+                        trBi('معرف الهاردوير (MAC)', 'Hardware MAC'),
+                        strip.macAddress,
+                        textSecondary,
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 10),
-                  if (snapshot.connectionState == ConnectionState.waiting)
-                    const Padding(
-                      padding: EdgeInsets.all(30),
-                      child: Center(child: CircularProgressIndicator(color: AppColors.emeraldPrimary)),
-                    )
-                  else ...[
-                    // 24h & 7d Power Draw Summary
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: mutedBg,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('⚡ سحب الطاقة خلال 24 ساعة:', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary)),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('الأدنى: ${p24?['min_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
-                              Text('المتوسط: ${p24?['avg_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
-                              Text('الأقصى: ${p24?['max_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.warningAmber)),
-                            ],
-                          ),
-                          const Divider(height: 16),
-                          Text('📅 سحب الطاقة خلال 7 أيام:', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900, color: AppColors.routerCyan)),
-                          const SizedBox(height: 6),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text('الأدنى: ${p7d?['min_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
-                              Text('المتوسط: ${p7d?['avg_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w800)),
-                              Text('الأقصى: ${p7d?['max_watt'] ?? 0}W', style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.warningAmber)),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildDiagRow('حالة الاتصال بالسحابة', (h?['online'] ?? strip.isOnline) ? '🟢 متصل (Online)' : '🔴 غير متصل', textPrimary),
-                    _buildDiagRow('الجهد الكهربائي ونطاق الحماية', '${h?['current_voltage'] ?? strip.voltage}V (${h?['voltage_range'] ?? "175-250V"})', textPrimary),
-                    _buildDiagRow('مرات فصل حماية الجهد', '${h?['voltage_breach_count'] ?? strip.voltageBreachCount} مرة', textPrimary),
-                    _buildDiagRow('حرارة لوحة المشترك', '${h?['board_temp_c'] ?? 28} °C (الحد ${h?['max_temp_c'] ?? 75}°C)', textPrimary),
-                    _buildDiagRow('قوة إشارة الواي فاي (RSSI)', '${h?['wifi_rssi_dbm'] ?? -48} dBm (${h?['wifi_quality'] ?? "ممتازة"})', textPrimary),
-                    _buildDiagRow('نسبة الاستقرار والاتصال (Uptime)', '${h?['uptime_percent'] ?? 99.8}%', textPrimary),
-                    _buildDiagRow('عدد مرات الانقطاع', '${h?['disconnect_count'] ?? 0} مرة', textPrimary),
-                    _buildDiagRow('عنوان IP المحلي', h?['ip_address']?.toString() ?? strip.ipAddress ?? '-', textPrimary),
-                    _buildDiagRow('إصدار الفيرموير (MCU)', 'v${h?['fw_version'] ?? strip.fwVersion}', textPrimary),
-                    _buildDiagRow('معرف الهاردوير (MAC)', strip.macAddress, textSecondary),
                   ],
-                ],
+                ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -2071,7 +2224,8 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w700, color: textPrimary)),
+          Flexible(child: Text(label, style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w700, color: textPrimary))),
+          const SizedBox(width: 8),
           Directionality(
             textDirection: TextDirection.ltr,
             child: Text(
@@ -2084,7 +2238,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  // 6. Real Activity Log Sheet (Fetches from GET /api/v1/strips/{mac}/logs)
+  // 6. Real Activity Log Sheet
   void _openActivityLogSheet() {
     if (_selectedStrip == null) return;
     final mac = _selectedStrip!.macAddress;
@@ -2093,90 +2247,93 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (ctx) => FutureBuilder<List<Map<String, dynamic>>>(
-        future: _repo.getStripLogs(mac),
-        builder: (context, snapshot) {
-          final bg = _isDark ? AppColors.cardSurfaceDark : Colors.white;
-          final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
-          final logs = snapshot.data ?? [];
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: _repo.getStripLogs(mac),
+          builder: (context, snapshot) {
+            final bg = _isDark ? AppColors.cardSurfaceDark : Colors.white;
+            final textPrimary = _isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+            final logs = snapshot.data ?? [];
 
-          return Container(
-            constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      '📜 سجل النشاط الفعلي للمشترك',
-                      style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const Divider(),
-                if (snapshot.connectionState == ConnectionState.waiting)
-                  const Expanded(
-                    child: Center(child: CircularProgressIndicator(color: AppColors.emeraldPrimary)),
-                  )
-                else if (logs.isEmpty)
-                  Expanded(
-                    child: Center(
-                      child: Text('لا توجد أحداث مسجلة بعد', style: GoogleFonts.cairo(fontSize: 12)),
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: ListView.separated(
-                      itemCount: logs.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, idx) {
-                        final log = logs[idx];
-                        final severity = (log['severity'] ?? 'INFO').toString().toUpperCase();
-                        Color iconColor = AppColors.emeraldPrimary;
-                        IconData icon = Icons.check_circle_outline_rounded;
-                        if (severity == 'CRITICAL' || severity == 'DANGER') {
-                          iconColor = Colors.redAccent;
-                          icon = Icons.error_outline_rounded;
-                        } else if (severity == 'WARN' || severity == 'WARNING') {
-                          iconColor = AppColors.warningAmber;
-                          icon = Icons.warning_amber_rounded;
-                        }
-                        final ts = (log['created_at'] ?? '').toString().replaceFirst('T', ' ').split('.').first;
-                        return ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          leading: Icon(icon, color: iconColor, size: 20),
-                          title: Text(
-                            log['message']?.toString() ?? '',
-                            style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: textPrimary),
-                          ),
-                          subtitle: Text(
-                            '${log['category'] ?? "SYSTEM"} • $ts',
-                            style: GoogleFonts.jetBrainsMono(fontSize: 9.5, color: Colors.grey),
-                          ),
-                        );
-                      },
-                    ),
+            return Container(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.75),
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        trBi('📜 سجل النشاط الفعلي للمشترك', '📜 Real-Time Strip Activity Log'),
+                        style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(ctx),
+                      ),
+                    ],
                   ),
-              ],
-            ),
-          );
-        },
+                  const Divider(),
+                  if (snapshot.connectionState == ConnectionState.waiting)
+                    const Expanded(
+                      child: Center(child: CircularProgressIndicator(color: AppColors.emeraldPrimary)),
+                    )
+                  else if (logs.isEmpty)
+                    Expanded(
+                      child: Center(
+                        child: Text(trBi('لا توجد أحداث مسجلة بعد', 'No events recorded yet'), style: GoogleFonts.cairo(fontSize: 12)),
+                      ),
+                    )
+                  else
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: logs.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, idx) {
+                          final log = logs[idx];
+                          final severity = (log['severity'] ?? 'INFO').toString().toUpperCase();
+                          Color iconColor = AppColors.emeraldPrimary;
+                          IconData icon = Icons.check_circle_outline_rounded;
+                          if (severity == 'CRITICAL' || severity == 'DANGER') {
+                            iconColor = Colors.redAccent;
+                            icon = Icons.error_outline_rounded;
+                          } else if (severity == 'WARN' || severity == 'WARNING') {
+                            iconColor = AppColors.warningAmber;
+                            icon = Icons.warning_amber_rounded;
+                          }
+                          final ts = (log['created_at'] ?? '').toString().replaceFirst('T', ' ').split('.').first;
+                          return ListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            leading: Icon(icon, color: iconColor, size: 20),
+                            title: Text(
+                              log['message']?.toString() ?? '',
+                              style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: textPrimary),
+                            ),
+                            subtitle: Text(
+                              '${log['category'] ?? "SYSTEM"} • $ts',
+                              style: GoogleFonts.jetBrainsMono(fontSize: 9.5, color: Colors.grey),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 
-  // 7. Feedback & Tech Support Dialog (POST /api/v1/feedback + WhatsApp Eng. Ahmed Essam)
+  // 7. Feedback & Tech Support Dialog
   void _openFeedbackAndSupportDialog() {
     final msgCtrl = TextEditingController();
     String category = 'suggestion';
@@ -2184,78 +2341,86 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-          title: Text('إرسال مقترح / الدعم الفني 💡', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'suggestion', label: Text('مقترح تطوير')),
-                    ButtonSegment(value: 'bug', label: Text('مشكلة فنية')),
-                  ],
-                  selected: {category},
-                  onSelectionChanged: (s) => setDialogState(() => category = s.first),
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: msgCtrl,
-                  maxLines: 3,
-                  style: GoogleFonts.cairo(fontSize: 12),
-                  decoration: InputDecoration(
-                    hintText: 'اكتب مقترحك أو ملاحظتك هنا وسيتم إرسالها مباشرة للمهندس أحمد عصام...',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        builder: (context, setDialogState) => Directionality(
+          textDirection: AppLocaleController.instance.textDirection,
+          child: AlertDialog(
+            backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+            title: Text(trBi('إرسال مقترح / الدعم الفني 💡', 'Feedback & Technical Support 💡'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SegmentedButton<String>(
+                    segments: [
+                      ButtonSegment(value: 'suggestion', label: Text(trBi('مقترح تطوير', 'Suggestion'))),
+                      ButtonSegment(value: 'bug', label: Text(trBi('مشكلة فنية', 'Bug Report'))),
+                    ],
+                    selected: {category},
+                    onSelectionChanged: (s) => setDialogState(() => category = s.first),
                   ),
-                ),
-                const SizedBox(height: 12),
-                const Divider(),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.emeraldPrimary),
-                  title: Text('واتساب المهندس أحمد عصام', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 12.5)),
-                  subtitle: Text('+20 115 284 3472', style: GoogleFonts.jetBrainsMono(fontSize: 11)),
-                  trailing: const Icon(Icons.open_in_new_rounded, size: 16),
-                  onTap: () {
-                    final msg = Uri.encodeComponent('مرحباً م. أحمد عصام، أحتاج إلى دعم فني في تطبيق Na7la IoT');
-                    _launchExternalUrl('https://wa.me/201152843472?text=$msg');
-                  },
-                ),
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.work_outline_rounded, color: Color(0xFF0A66C2)),
-                  title: Text('حساب LinkedIn الرسمي', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 12.5)),
-                  subtitle: Text('Eng. Ahmed Essam', style: GoogleFonts.cairo(fontSize: 11)),
-                  trailing: const Icon(Icons.open_in_new_rounded, size: 16),
-                  onTap: () => _launchExternalUrl('https://www.linkedin.com/in/ahmed-essam32'),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إغلاق')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
-              onPressed: () async {
-                final text = msgCtrl.text.trim();
-                if (text.isEmpty) return;
-                final ok = await _repo.submitFeedback(category, text);
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(ok ? '✅ تم إرسال رسالتك وحفظها في السيرفر بنجاح، شكراً لك!' : '❌ تعذر إرسال الرسالة'),
-                      backgroundColor: AppColors.emeraldPrimary,
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: msgCtrl,
+                    maxLines: 3,
+                    style: GoogleFonts.cairo(fontSize: 12),
+                    decoration: InputDecoration(
+                      hintText: trBi(
+                        'اكتب مقترحك أو ملاحظتك هنا وسيتم إرسالها مباشرة للمهندس أحمد عصام...',
+                        'Write your feedback or issue here to send it directly to Eng. Ahmed Essam...',
+                      ),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                  );
-                }
-              },
-              child: Text('إرسال المقترح 🚀', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+                  ),
+                  const SizedBox(height: 12),
+                  const Divider(),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.chat_bubble_outline_rounded, color: AppColors.emeraldPrimary),
+                    title: Text(trBi('واتساب المهندس أحمد عصام', 'WhatsApp Eng. Ahmed Essam'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 12.5)),
+                    subtitle: Text('+20 115 284 3472', style: GoogleFonts.jetBrainsMono(fontSize: 11)),
+                    trailing: const Icon(Icons.open_in_new_rounded, size: 16),
+                    onTap: () {
+                      final msg = Uri.encodeComponent('مرحباً م. أحمد عصام، أحتاج إلى دعم فني في تطبيق Na7la IoT');
+                      _launchExternalUrl('https://wa.me/201152843472?text=$msg');
+                    },
+                  ),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.work_outline_rounded, color: Color(0xFF0A66C2)),
+                    title: Text(trBi('حساب LinkedIn الرسمي', 'Official LinkedIn Profile'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 12.5)),
+                    subtitle: Text('Eng. Ahmed Essam', style: GoogleFonts.cairo(fontSize: 11)),
+                    trailing: const Icon(Icons.open_in_new_rounded, size: 16),
+                    onTap: () => _launchExternalUrl('https://www.linkedin.com/in/ahmed-essam32'),
+                  ),
+                ],
+              ),
             ),
-          ],
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(trBi('إغلاق', 'Close'))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
+                onPressed: () async {
+                  final text = msgCtrl.text.trim();
+                  if (text.isEmpty) return;
+                  final ok = await _repo.submitFeedback(category, text);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(ok
+                            ? trBi('✅ تم إرسال رسالتك وحفظها في السيرفر بنجاح، شكراً لك!', '✅ Feedback sent and saved successfully. Thank you!')
+                            : trBi('❌ تعذر إرسال الرسالة', '❌ Failed to send feedback')),
+                        backgroundColor: AppColors.emeraldPrimary,
+                      ),
+                    );
+                  }
+                },
+                child: Text(trBi('إرسال المقترح 🚀', 'Submit 🚀'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2269,53 +2434,66 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-          title: Row(
-            children: [
-              const Icon(Icons.child_care_rounded, color: AppColors.warningAmber, size: 26),
-              const SizedBox(width: 8),
-              Text('قفل أزرار المشترك (Child Lock)', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'يمنع قفل الأطفال فصل الأجهزة أو تشغيلها عند عبث الأطفال بالأزرار الفيزيائية للمشترك، ويحصر التحكم من داخل التطبيق فقط.',
-                style: GoogleFonts.cairo(fontSize: 11.5, height: 1.5),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text('تفعيل قفل الأزرار الفيزيائية', style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800)),
-                value: currentChildLock,
-                activeColor: AppColors.emeraldPrimary,
-                onChanged: (val) => setDialogState(() => currentChildLock = val),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
-              onPressed: () async {
-                final ok = await _repo.updateChildLock(_selectedStrip!.macAddress, currentChildLock);
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (ok && mounted) {
-                  setState(() => _selectedStrip!.childLock = currentChildLock);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(currentChildLock ? '👶 تم تفعيل قفل الأطفال بنجاح' : '🔓 تم تعطيل قفل الأطفال'),
-                      backgroundColor: AppColors.emeraldPrimary,
-                    ),
-                  );
-                }
-              },
-              child: Text('حفظ', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+        builder: (context, setDialogState) => Directionality(
+          textDirection: AppLocaleController.instance.textDirection,
+          child: AlertDialog(
+            backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+            title: Row(
+              children: [
+                const Icon(Icons.child_care_rounded, color: AppColors.emeraldPrimary, size: 26),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    trBi('قفل أزرار المشترك (Child Lock)', 'Physical Buttons Child Lock'),
+                    style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15),
+                  ),
+                ),
+              ],
             ),
-          ],
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  trBi(
+                    'يمنع قفل الأطفال فصل الأجهزة أو تشغيلها عند عبث الأطفال بالأزرار الفيزيائية للمشترك، ويحصر التحكم من داخل التطبيق فقط.',
+                    'Child Lock disables the physical buttons on the power strip so children cannot accidentally toggle appliances, restricting control to the mobile app only.',
+                  ),
+                  style: GoogleFonts.cairo(fontSize: 11.5, height: 1.5),
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(trBi('تفعيل قفل الأزرار الفيزيائية', 'Lock Physical Strip Buttons'), style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w800)),
+                  value: currentChildLock,
+                  activeColor: AppColors.emeraldPrimary,
+                  onChanged: (val) => setDialogState(() => currentChildLock = val),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(trBi('إلغاء', 'Cancel'))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
+                onPressed: () async {
+                  final ok = await _repo.updateChildLock(_selectedStrip!.macAddress, currentChildLock);
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (ok && mounted) {
+                    setState(() => _selectedStrip!.childLock = currentChildLock);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(currentChildLock
+                            ? trBi('👶 تم تفعيل قفل الأطفال بنجاح', '👶 Child Lock enabled')
+                            : trBi('🔓 تم تعطيل قفل الأطفال', '🔓 Child Lock disabled')),
+                        backgroundColor: AppColors.emeraldPrimary,
+                      ),
+                    );
+                  }
+                },
+                child: Text(trBi('حفظ', 'Save'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -2330,66 +2508,72 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-          title: Text('تعديل اسم ومكان المشترك ✏️', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: InputDecoration(
-                  labelText: 'اسم المشترك',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        builder: (context, setDialogState) => Directionality(
+          textDirection: AppLocaleController.instance.textDirection,
+          child: AlertDialog(
+            backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+            title: Text(trBi('تعديل اسم ومكان المشترك ✏️', 'Edit Strip Name & Room ✏️'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(
+                    labelText: trBi('اسم المشترك', 'Strip Name'),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
                 ),
-                style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                value: ['living', 'office', 'bedroom', 'kitchen'].contains(chosenRoom) ? chosenRoom : 'living',
-                items: const [
-                  DropdownMenuItem(value: 'living', child: Text('صالة المعيشة 🛋️')),
-                  DropdownMenuItem(value: 'office', child: Text('غرفة المكتب 💻')),
-                  DropdownMenuItem(value: 'bedroom', child: Text('غرفة النوم 🛏️')),
-                  DropdownMenuItem(value: 'kitchen', child: Text('المطبخ 🍳')),
-                ],
-                onChanged: (val) {
-                  if (val != null) setDialogState(() => chosenRoom = val);
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: ['living', 'office', 'bedroom', 'kitchen'].contains(chosenRoom) ? chosenRoom : 'living',
+                  items: [
+                    DropdownMenuItem(value: 'living', child: Text(trBi('صالة المعيشة 🛋️', 'Living Room 🛋️'))),
+                    DropdownMenuItem(value: 'office', child: Text(trBi('غرفة المكتب 💻', 'Office 💻'))),
+                    DropdownMenuItem(value: 'bedroom', child: Text(trBi('غرفة النوم 🛏️', 'Bedroom 🛏️'))),
+                    DropdownMenuItem(value: 'kitchen', child: Text(trBi('المطبخ 🍳', 'Kitchen 🍳'))),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setDialogState(() => chosenRoom = val);
+                  },
+                  decoration: InputDecoration(
+                    labelText: trBi('الغرفة', 'Room'),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx), child: Text(trBi('إلغاء', 'Cancel'))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
+                onPressed: () async {
+                  final newName = nameCtrl.text.trim();
+                  final success = await _repo.updateStripMetadata(
+                    _selectedStrip!.macAddress,
+                    name: newName,
+                    roomCategory: chosenRoom,
+                  );
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (success && mounted) {
+                    setState(() {
+                      _selectedStrip!.stripName = newName;
+                      _selectedStrip!.roomCategory = chosenRoom;
+                    });
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(trBi('✅ تم حفظ اسم المشترك بنجاح', '✅ Strip name updated successfully')),
+                        backgroundColor: AppColors.emeraldPrimary,
+                      ),
+                    );
+                  }
                 },
-                decoration: InputDecoration(
-                  labelText: 'الغرفة',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                ),
+                child: Text(trBi('حفظ', 'Save'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
               ),
             ],
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
-              onPressed: () async {
-                final newName = nameCtrl.text.trim();
-                final success = await _repo.updateStripMetadata(
-                  _selectedStrip!.macAddress,
-                  name: newName,
-                  roomCategory: chosenRoom,
-                );
-                if (ctx.mounted) Navigator.pop(ctx);
-                if (success && mounted) {
-                  setState(() {
-                    _selectedStrip!.stripName = newName;
-                    _selectedStrip!.roomCategory = chosenRoom;
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('✅ تم حفظ اسم المشترك بنجاح'), backgroundColor: AppColors.emeraldPrimary),
-                  );
-                }
-              },
-              child: Text('حفظ', style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
-            ),
-          ],
         ),
       ),
     );
@@ -2398,31 +2582,37 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void _confirmDeleteStrip(StripModel strip) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Text('تأكيد حذف المشترك ⚠️', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.redAccent)),
-        content: Text(
-          'هل أنت متأكد من حذف المشترك "${strip.stripName}" (${strip.macAddress})؟\nسيتم فك ربطه من حسابك على السيرفر.',
-          style: GoogleFonts.cairo(fontSize: 12, height: 1.5),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('إلغاء')),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final ok = await _repo.deleteStrip(strip.macAddress);
-              if (ok && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('تم حذف المشترك ${strip.stripName} بنجاح')),
-                );
-                _loadStrips();
-              }
-            },
-            child: const Text('تأكيد الحذف'),
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: AlertDialog(
+          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: Text(trBi('تأكيد حذف المشترك ⚠️', 'Confirm Strip Deletion ⚠️'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15, color: Colors.redAccent)),
+          content: Text(
+            trBi(
+              'هل أنت متأكد من حذف المشترك "${strip.stripName}" (${strip.macAddress})؟\nسيتم فك ربطه من حسابك على السيرفر.',
+              'Are you sure you want to delete "${strip.stripName}" (${strip.macAddress})?\nIt will be unlinked from your account.',
+            ),
+            style: GoogleFonts.cairo(fontSize: 12, height: 1.5),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(trBi('إلغاء', 'Cancel'))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+              onPressed: () async {
+                Navigator.pop(ctx);
+                final ok = await _repo.deleteStrip(strip.macAddress);
+                if (ok && mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(trBi('تم حذف المشترك ${strip.stripName} بنجاح', 'Strip ${strip.stripName} deleted'))),
+                  );
+                  _loadStrips();
+                }
+              },
+              child: Text(trBi('تأكيد الحذف', 'Delete')),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2430,23 +2620,26 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void _showQuotaUpgradeDialog(int quota) {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Text(_tr('quota_reached_title'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
-        content: Text(_tr('quota_reached_desc'), style: GoogleFonts.cairo(fontSize: 12, height: 1.5)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(_tr('btn_close'))),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              final msg = Uri.encodeComponent('مرحباً م. أحمد عصام، أود ترقية حسابي في Na7la IoT إلى خطة برو الاحترافية');
-              _launchExternalUrl('https://wa.me/201152843472?text=$msg');
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
-            child: Text(_tr('btn_upgrade_whatsapp'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
-          ),
-        ],
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: AlertDialog(
+          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: Text(_tr('quota_reached_title'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 15)),
+          content: Text(_tr('quota_reached_desc'), style: GoogleFonts.cairo(fontSize: 12, height: 1.5)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(_tr('btn_close'))),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                final msg = Uri.encodeComponent('مرحباً م. أحمد عصام، أود ترقية حسابي في Na7la IoT إلى خطة برو الاحترافية');
+                _launchExternalUrl('https://wa.me/201152843472?text=$msg');
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
+              child: Text(_tr('btn_upgrade_whatsapp'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2454,60 +2647,81 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void _showPricingDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Text(_tr('pricing_plans'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: _isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight,
-                borderRadius: BorderRadius.circular(14),
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: AlertDialog(
+          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: Text(_tr('pricing_plans'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trBi('الخطة المجانية (Free Tier)', 'Free Tier Plan'),
+                      style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.emeraldPrimary),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      trBi(
+                        '• ربط مشترك واحد مجاناً\n• مراقبة حية للواط والأمبير والفولت والحرارة\n• التحكم عن بُعد والجدولة السحابية',
+                        '• 1 Smart Strip included free\n• Live Watts, Amps, Voltage & Temperature\n• Remote Cloud Control & Schedules',
+                      ),
+                      style: GoogleFonts.cairo(fontSize: 11, height: 1.5),
+                    ),
+                  ],
+                ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('الخطة المجانية (Free Tier)', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.emeraldPrimary)),
-                  const SizedBox(height: 4),
-                  Text('• ربط مشترك واحد مجاناً\n• مراقبة حية للواط والأمبير والفولت والحرارة\n• التحكم عن بُعد والجدولة السحابية', style: GoogleFonts.cairo(fontSize: 11, height: 1.5)),
-                ],
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.emeraldPrimary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.emeraldPrimary, width: 1.5),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      trBi('خطة برو (Pro Tier) ⭐', 'Pro Tier Plan ⭐'),
+                      style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.emeraldPrimary),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      trBi(
+                        '• ربط حتى 15 مشتركاً ذكياً\n• سجل تشغيل كامل لـ 30 يوماً وتصدير Excel\n• أولوية قصوى للدعم الفني والضمان',
+                        '• Up to 15 Smart Strips\n• Full 30-Day Run Logs & Excel Export\n• Priority Technical Support & Warranty',
+                      ),
+                      style: GoogleFonts.cairo(fontSize: 11, height: 1.5),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.emeraldPrimary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.emeraldPrimary, width: 1.5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('خطة برو (Pro Tier) ⭐', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.emeraldPrimary)),
-                  const SizedBox(height: 4),
-                  Text('• ربط حتى 15 مشتركاً ذكياً\n• سجل تشغيل كامل لـ 30 يوماً وتصدير Excel\n• أولوية قصوى للدعم الفني والضمان', style: GoogleFonts.cairo(fontSize: 11, height: 1.5)),
-                ],
-              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(_tr('btn_close'))),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                final msg = Uri.encodeComponent('مرحباً م. أحمد عصام، أود ترقية حسابي في Na7la IoT إلى خطة برو الاحترافية');
+                _launchExternalUrl('https://wa.me/201152843472?text=$msg');
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
+              child: Text(_tr('btn_upgrade_whatsapp'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
             ),
           ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(_tr('btn_close'))),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              final msg = Uri.encodeComponent('مرحباً م. أحمد عصام، أود ترقية حسابي في Na7la IoT إلى خطة برو الاحترافية');
-              _launchExternalUrl('https://wa.me/201152843472?text=$msg');
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.emeraldPrimary, foregroundColor: Colors.white),
-            child: Text(_tr('btn_upgrade_whatsapp'), style: GoogleFonts.cairo(fontWeight: FontWeight.w800)),
-          ),
-        ],
       ),
     );
   }
@@ -2515,33 +2729,45 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   void _showAboutDialog() {
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-        title: Row(
-          children: [
-            Image.asset('assets/icons/app_icon.png', width: 28, height: 28),
-            const SizedBox(width: 8),
-            Text('Na7la IoT', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: AlertDialog(
+          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+          title: Row(
+            children: [
+              Image.asset('assets/icons/app_icon.png', width: 28, height: 28),
+              const SizedBox(width: 8),
+              Text('Na7la IoT', style: GoogleFonts.cairo(fontWeight: FontWeight.w900, fontSize: 16)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                trBi('الإصدار الاحترافي v2.0.0', 'Professional Release v2.0.0'),
+                style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w800, fontSize: 12.5, color: AppColors.emeraldPrimary),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                trBi('تطوير وبرمجة: م. أحمد عصام (Eng. Ahmed Essam)', 'Engineered by: Eng. Ahmed Essam'),
+                style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                trBi(
+                  'منظومة مصرية ذكية متكاملة للتحكم في المشتركات الذكية ومراقبة الطاقة وحساب الفاتورة بالشرائح المصرية وحماية الأجهزة الحساسة.',
+                  'An integrated smart power strip ecosystem for real-time energy monitoring, Egypt tiered bill calculation, and intelligent appliance protection.',
+                ),
+                style: GoogleFonts.cairo(fontSize: 11, height: 1.5),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(_tr('btn_close'))),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('الإصدار الاحترافي v2.0.0', style: GoogleFonts.jetBrainsMono(fontWeight: FontWeight.w800, fontSize: 12.5, color: AppColors.emeraldPrimary)),
-            const SizedBox(height: 6),
-            Text('تطوير وبرمجة: م. أحمد عصام (Eng. Ahmed Essam)', style: GoogleFonts.cairo(fontWeight: FontWeight.w800, fontSize: 12)),
-            const SizedBox(height: 8),
-            Text(
-              'منظومة مصرية ذكية متكاملة للتحكم في المشتركات الذكية ومراقبة الطاقة وحساب الفاتورة بالشرائح المصرية وحماية الأجهزة الحساسة.',
-              style: GoogleFonts.cairo(fontSize: 11, height: 1.5),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: Text(_tr('btn_close'))),
-        ],
       ),
     );
   }
@@ -2549,18 +2775,24 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
   Future<void> _confirmLogout() async {
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
-        title: Text('تسجيل الخروج', style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
-        content: Text('هل أنت متأكد من رغبتك في تسجيل الخروج؟', style: GoogleFonts.cairo(fontSize: 12)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
-            child: const Text('خروج'),
+      builder: (ctx) => Directionality(
+        textDirection: AppLocaleController.instance.textDirection,
+        child: AlertDialog(
+          backgroundColor: _isDark ? AppColors.cardSurfaceDark : Colors.white,
+          title: Text(trBi('تسجيل الخروج', 'Sign Out'), style: GoogleFonts.cairo(fontWeight: FontWeight.w900)),
+          content: Text(
+            trBi('هل أنت متأكد من رغبتك في تسجيل الخروج؟', 'Are you sure you want to sign out?'),
+            style: GoogleFonts.cairo(fontSize: 12),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(trBi('إلغاء', 'Cancel'))),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+              child: Text(trBi('خروج', 'Sign Out')),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -2611,7 +2843,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(18),
             decoration: AppTheme.cleanCardDecoration(isDark: _isDark, radius: 22),
             child: Column(
               children: [
@@ -2619,14 +2851,17 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   aspectRatio: 1024 / 256,
                   child: Image.asset('assets/images/strip_body_transparent.png', fit: BoxFit.contain),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 Text(
-                  'أهلاً بك في Na7la IoT ⚡',
+                  trBi('أهلاً بك في Na7la IoT ⚡', 'Welcome to Na7la IoT ⚡'),
                   style: GoogleFonts.cairo(fontSize: 18, fontWeight: FontWeight.w900, color: textPrimary),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'لم يتم ربط أي مشترك بحسابك حتى الآن. يمكنك إضافة مشترك جديد عبر الواي فاي أو ربطه بالسيريال.',
+                  trBi(
+                    'لم يتم ربط أي مشترك بحسابك حتى الآن. يمكنك إضافة مشترك جديد عبر الواي فاي في 3 خطوات بسيطة أو ربطه بالسيريال.',
+                    'No power strip is linked to your account yet. Add a new strip via Wi-Fi in 3 guided steps or link it by serial number.',
+                  ),
                   textAlign: TextAlign.center,
                   style: GoogleFonts.cairo(fontSize: 12, color: textSecondary, height: 1.5),
                 ),
@@ -2635,18 +2870,17 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                   children: [
                     Expanded(
                       child: ElevatedButton.icon(
-                        onPressed: () async {
-                          final added = await Navigator.of(context).push<bool>(
-                            MaterialPageRoute(builder: (_) => WizardScreen(isDark: _isDark)),
-                          );
-                          if (added == true) _loadStrips();
-                        },
+                        onPressed: _openWizardAndRefresh,
                         icon: const Icon(Icons.wifi_rounded, size: 18),
-                        label: Text('إضافة عبر الواي فاي', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900)),
+                        label: Text(
+                          trBi('إضافة عبر الواي فاي', 'Add via Wi-Fi'),
+                          style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
+                        ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.emeraldPrimary,
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
                     ),
@@ -2655,11 +2889,15 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
                       child: OutlinedButton.icon(
                         onPressed: _openClaimBySerialDialog,
                         icon: const Icon(Icons.qr_code_rounded, size: 18),
-                        label: Text('ربط بالسيريال', style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900)),
+                        label: Text(
+                          trBi('ربط بالسيريال', 'Link by Serial'),
+                          style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
+                        ),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.emeraldPrimary,
                           side: const BorderSide(color: AppColors.emeraldPrimary),
                           padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                         ),
                       ),
                     ),
@@ -2673,7 +2911,7 @@ class _HomeDashboardScreenState extends State<HomeDashboardScreen> {
     );
   }
 
-  // ===================== BOTTOM NAVIGATION BAR (Material 3 Clean Style) =====================
+  // ===================== BOTTOM NAVIGATION BAR =====================
 
   Widget _buildBottomNav() {
     final cardBg = _isDark ? AppColors.cardSurfaceDark : Colors.white;

@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../core/theme/app_theme.dart';
+import '../../core/localization/app_locale.dart';
 import '../../data/models/strip_model.dart';
 import '../../data/models/socket_model.dart';
 import '../../widgets/socket_card.dart';
 
 class FavoritesTab extends StatelessWidget {
-  final StripModel strip;
+  final StripModel? strip;
   final bool isDark;
   final Function(SocketModel socket) onToggleSocket;
   final Function(SocketModel socket) onOpenDeepDive;
@@ -23,18 +24,17 @@ class FavoritesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Sockets that are marked favorite, or socket 4 (Router) / socket 1
-    final favoriteSockets = strip.sockets.where((s) => s.isFavorite).toList();
+    final favoriteSockets = strip?.sockets.where((s) => s.isFavorite).toList() ?? [];
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (favoriteSockets.isNotEmpty) ...[
+          if (favoriteSockets.isNotEmpty && strip != null) ...[
             Text(
-              '⭐ المخارج المفضلة (تحكم فوري)',
-              style: GoogleFonts.cairo(fontSize: 13, fontWeight: FontWeight.w900),
+              trBi('⭐ المخارج المفضلة (تحكم فوري)', '⭐ Favorite Outlets (Quick Control)'),
+              style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),
             GridView.builder(
@@ -45,21 +45,20 @@ class FavoritesTab extends StatelessWidget {
                 crossAxisCount: 2,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
-                childAspectRatio: 1.1,
+                childAspectRatio: 0.74,
               ),
               itemBuilder: (context, index) {
                 final s = favoriteSockets[index];
                 return SocketCard(
                   socket: s,
                   isDark: isDark,
-                  voltage: strip.voltage,
+                  voltage: strip!.voltage,
                   onToggle: () => onToggleSocket(s),
                   onOpenDeepDive: () => onOpenDeepDive(s),
                 );
               },
             ),
           ] else ...[
-            // Empty State matching HTML #tab-favorites
             Container(
               margin: const EdgeInsets.only(top: 40),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 32),
@@ -78,19 +77,22 @@ class FavoritesTab extends StatelessWidget {
                     height: 60,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: AppColors.honeyYellow.withOpacity(0.15),
-                      border: Border.all(color: AppColors.honeyYellow, width: 2),
+                      color: AppColors.emeraldActive.withOpacity(0.14),
+                      border: Border.all(color: AppColors.emeraldActive.withOpacity(0.5), width: 1.6),
                     ),
-                    child: const Icon(Icons.star_outline_rounded, size: 30, color: AppColors.honeyYellow),
+                    child: const Icon(Icons.star_outline_rounded, size: 30, color: AppColors.emeraldActive),
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'لا توجد مخارج مفضلة بعد',
+                    trBi('لا توجد مخارج مفضلة بعد', 'No Favorite Outlets Yet'),
                     style: GoogleFonts.cairo(fontSize: 16, fontWeight: FontWeight.w900),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    'أضف المخارج التي تستخدمها كثيراً للتحكم فيها بلمسة واحدة من قائمة الإعدادات ⚙️.',
+                    trBi(
+                      'أضف المخارج التي تستخدمها كثيراً للتحكم فيها بلمسة واحدة من إعدادات المخرج ⚙️.',
+                      'Mark your frequently used outlets as favorites from the outlet settings menu ⚙️ for one-tap access.',
+                    ),
                     textAlign: TextAlign.center,
                     style: GoogleFonts.cairo(
                       fontSize: 11.5,
@@ -103,12 +105,13 @@ class FavoritesTab extends StatelessWidget {
                     onPressed: onGoToDashboard,
                     icon: const Icon(Icons.power_rounded, size: 16),
                     label: Text(
-                      'استعراض مخارج المشترك',
+                      trBi('استعراض مخارج المشترك', 'Browse Strip Outlets'),
                       style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w900),
                     ),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.honeyYellow,
-                      foregroundColor: AppColors.inkBlack,
+                      backgroundColor: AppColors.emeraldActive,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
                       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     ),

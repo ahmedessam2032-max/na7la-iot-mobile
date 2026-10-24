@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import '../constants/api_constants.dart';
+import '../localization/app_locale.dart';
 import '../storage/secure_storage.dart';
 
 class FileDownloaderService {
@@ -24,17 +25,17 @@ class FileDownloaderService {
         return {
           'success': true,
           'path': path,
-          'message': 'تم تجهيز وتحميل ملف التقرير ($fileName) بنجاح ✅',
+          'message': trBi('تم تجهيز وتحميل ملف التقرير ($fileName) بنجاح ✅', 'Report downloaded ($fileName) ✅'),
         };
       }
       return {
         'success': false,
-        'message': 'تعذر تحميل التقرير من السيرفر (${response.statusCode})',
+        'message': trBi('تعذر تحميل التقرير من السيرفر (${response.statusCode})', 'Failed to download report (${response.statusCode})'),
       };
     } catch (e) {
       return {
         'success': false,
-        'message': 'خطأ أثناء تصدير ملف الإكسل: $e',
+        'message': trBi('خطأ أثناء تصدير ملف الإكسل: $e', 'Error exporting Excel file: $e'),
       };
     }
   }

@@ -60,7 +60,7 @@ class DigitalTwinCard extends StatelessWidget {
                     style: GoogleFonts.cairo(
                       fontSize: 12,
                       fontWeight: FontWeight.w900,
-                      color: isDark ? Colors.white : AppColors.inkBlack,
+                      color: isDark ? Colors.white : AppColors.textPrimaryLight,
                     ),
                   ),
                 ],
@@ -68,13 +68,13 @@ class DigitalTwinCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: AppColors.honeyAmber.withOpacity(0.18),
+                  color: AppColors.emeraldPrimary.withOpacity(0.14),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.honeyAmber.withOpacity(0.4)),
+                  border: Border.all(color: AppColors.emeraldPrimary.withOpacity(0.35)),
                 ),
                 child: Text(
                   locale.tr('twin_interactive'),
-                  style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: AppColors.honeyAmber),
+                  style: GoogleFonts.cairo(fontSize: 9.5, fontWeight: FontWeight.w900, color: AppColors.emeraldPrimary),
                 ),
               ),
             ],

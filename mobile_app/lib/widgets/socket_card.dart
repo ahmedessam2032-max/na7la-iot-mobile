@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import '../core/localization/app_locale.dart';
 import '../core/theme/app_theme.dart';
 import '../data/models/socket_model.dart';
 
@@ -50,212 +52,271 @@ class SocketCard extends StatelessWidget {
     }
   }
 
+  String _formatDuration(int totalSeconds) {
+    if (totalSeconds <= 0) return '00:00:00';
+    final hours = (totalSeconds ~/ 3600).toString().padLeft(2, '0');
+    final minutes = ((totalSeconds % 3600) ~/ 60).toString().padLeft(2, '0');
+    final seconds = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$hours:$minutes:$seconds';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bool dark = isDark ?? (Theme.of(context).brightness == Brightness.dark);
     final bool isOn = socket.isOn;
-    final Color activeBase = AppColors.parseHexColor(socket.colorHex, fallback: AppColors.emeraldActive);
+    final Color activeBase = AppColors.parseHexColor(
+      socket.colorHex,
+      fallback: AppColors.emeraldActive,
+    );
     final Color activeDarker = HSLColor.fromColor(activeBase)
         .withLightness((HSLColor.fromColor(activeBase).lightness - 0.08).clamp(0.15, 0.85))
         .toColor();
 
-    final Color fgPrimary = isOn
-        ? Colors.white
-        : (isDark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight);
-    final Color fgSecondary = isOn
-        ? Colors.white.withOpacity(0.92)
-        : (isDark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight);
+    final Color textPrimary = dark ? AppColors.textPrimaryDark : AppColors.textPrimaryLight;
+    final Color textSecondary = dark ? AppColors.textSecondaryDark : AppColors.textSecondaryLight;
+    final Color cardBg = dark ? AppColors.cardMutedDark : Colors.white;
+    final Color borderColor = isOn
+        ? activeBase.withOpacity(dark ? 0.85 : 0.75)
+        : (dark ? AppColors.borderDark : AppColors.borderLight);
 
     final menuCallback = onOpenDeepDive ?? onLongPress;
 
+    final int timerSec = socket.autoOffDelaySec ?? 0;
+    final bool hasActiveTimer = timerSec > 0 || socket.doorbellMode;
+    final String timerDisplay = socket.doorbellMode
+        ? '🔔 ${socket.doorbellPulseSec}s'
+        : _formatDuration(timerSec);
+
+    final double tempVal = (socket.tempC ?? 28).toDouble();
+    final bool isHot = tempVal >= 55;
+
     return GestureDetector(
-      onTap: onToggle,
+      onTap: menuCallback,
       onLongPress: menuCallback,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        padding: const EdgeInsets.fromLTRB(10, 9, 10, 9),
         decoration: BoxDecoration(
-          gradient: isOn
-              ? LinearGradient(
-                  colors: [activeBase, activeDarker],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                )
-              : null,
-          color: isOn
-              ? null
-              : (isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight),
+          color: cardBg,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: isOn
-                ? Colors.white.withOpacity(0.18)
-                : (isDark ? AppColors.borderDark : AppColors.borderLight),
-            width: 1.1,
+            color: borderColor,
+            width: isOn ? 1.6 : 1.1,
           ),
           boxShadow: [
             if (isOn)
               BoxShadow(
-                color: activeBase.withOpacity(isDark ? 0.32 : 0.26),
+                color: activeBase.withOpacity(dark ? 0.22 : 0.14),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               )
             else
               BoxShadow(
-                color: Colors.black.withOpacity(isDark ? 0.18 : 0.03),
+                color: Colors.black.withOpacity(dark ? 0.18 : 0.03),
                 blurRadius: 6,
                 offset: const Offset(0, 2),
               ),
           ],
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            // Top Row: Amps + Active Feature Badges (Left in LTR / Right in RTL) & '⋮' Menu Button
+            // 1. Header: Circular Appliance Icon + Outlet Name + Status/Lock/Menu Icons
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // 3-Dots Outlet Menu Button
-                Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    onTap: menuCallback,
-                    borderRadius: BorderRadius.circular(10),
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: isOn
-                            ? Colors.black.withOpacity(0.16)
-                            : (isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.05)),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.more_vert_rounded,
-                        size: 17,
-                        color: fgPrimary,
-                      ),
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: isOn
+                        ? LinearGradient(
+                            colors: [activeBase, activeDarker],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          )
+                        : null,
+                    color: isOn
+                        ? null
+                        : (dark ? Colors.white.withOpacity(0.07) : const Color(0xFFF1F5F9)),
+                  ),
+                  child: Icon(
+                    _resolveIcon(socket.icon),
+                    size: 16,
+                    color: isOn ? Colors.white : textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    trOutletName(socket.name, socket.index),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.cairo(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w900,
+                      color: textPrimary,
+                      height: 1.15,
                     ),
                   ),
                 ),
-
-                // Amps + Active Badges (Link group, Doorbell, Pin state, Lock, Compressor)
-                Flexible(
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (socket.isPinnedState)
-                          _buildMiniBadge('📌', isOn, isDark),
-                        if (socket.isLocked || socket.isRouter)
-                          GestureDetector(
-                            onTap: onLockToggle,
-                            child: _buildMiniBadge('🔒', isOn, isDark),
-                          ),
-                        if (socket.doorbellMode)
-                          _buildMiniBadge('🔔', isOn, isDark),
-                        if (socket.linkGroup > 0)
-                          _buildMiniBadge('🔗${socket.linkGroup}', isOn, isDark),
-                        if (socket.compressorProtect)
-                          _buildMiniBadge('❄️', isOn, isDark),
-                        const SizedBox(width: 4),
-                        Directionality(
-                          textDirection: TextDirection.ltr,
-                          child: Text(
-                            '${socket.amp.toStringAsFixed(socket.amp > 0 && socket.amp < 0.1 ? 2 : 1)}A',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w800,
-                              color: fgSecondary,
-                            ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (socket.compressorProtect)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 2),
+                        child: Text('❄️', style: TextStyle(fontSize: 10)),
+                      ),
+                    if (socket.isPinnedState)
+                      const Padding(
+                        padding: EdgeInsets.only(right: 2),
+                        child: Text('📌', style: TextStyle(fontSize: 10)),
+                      ),
+                    if (socket.linkGroup > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 2),
+                        child: Text(
+                          '🔗${socket.linkGroup}',
+                          style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w800,
+                            color: textSecondary,
                           ),
                         ),
-                      ],
+                      ),
+                    GestureDetector(
+                      onTap: onLockToggle ?? menuCallback,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Icon(
+                          (socket.isLocked || socket.isRouter)
+                              ? Icons.lock_rounded
+                              : Icons.lock_open_rounded,
+                          size: 13.5,
+                          color: (socket.isLocked || socket.isRouter)
+                              ? const Color(0xFFF59E0B)
+                              : textSecondary.withOpacity(0.55),
+                        ),
+                      ),
                     ),
-                  ),
+                    InkWell(
+                      onTap: menuCallback,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Padding(
+                        padding: const EdgeInsets.all(2),
+                        child: Icon(
+                          Icons.more_vert_rounded,
+                          size: 16,
+                          color: textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
 
-            // Center: Icon + Bold Socket Name
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+            // 2. Thin Divider
+            Divider(
+              height: 8,
+              thickness: 0.8,
+              color: dark ? AppColors.borderDark : const Color(0xFFE2E8F0),
+            ),
+
+            // 3. Five Structured Smart-Meter Telemetry Rows
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
-                  Icon(
-                    _resolveIcon(socket.icon),
-                    size: 18,
-                    color: fgPrimary.withOpacity(isOn ? 0.95 : 0.7),
+                  _buildMetricRow(
+                    label: trBi('القدرة:', 'Power:'),
+                    value: '${socket.watt.toStringAsFixed(1)} W',
+                    labelColor: textSecondary,
+                    valueColor: isOn && socket.watt > 0 ? activeBase : textPrimary,
+                    isBoldValue: true,
                   ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Text(
-                      socket.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: fgPrimary,
-                        height: 1.15,
-                      ),
-                    ),
+                  _buildMetricRow(
+                    label: trBi('العداد:', 'Meter:'),
+                    value: '${socket.kwh.toStringAsFixed(3)} kWh',
+                    labelColor: textSecondary,
+                    valueColor: textPrimary,
+                  ),
+                  _buildMetricRow(
+                    label: trBi('التيار:', 'Current:'),
+                    value: '${socket.amp.toStringAsFixed(2)} A',
+                    labelColor: textSecondary,
+                    valueColor: textPrimary,
+                  ),
+                  _buildMetricRow(
+                    label: trBi('الحرارة:', 'Temp:'),
+                    value: '${tempVal.toStringAsFixed(1)} °C',
+                    labelColor: textSecondary,
+                    valueColor: isHot ? Colors.redAccent : textPrimary,
+                    isBoldValue: isHot,
+                  ),
+                  _buildTimerRow(
+                    label: trBi('المؤقت:', 'Timer:'),
+                    value: timerDisplay,
+                    hasActiveTimer: hasActiveTimer,
+                    activeBase: activeBase,
+                    labelColor: textSecondary,
+                    valueColor: textSecondary,
                   ),
                 ],
               ),
             ),
 
-            // Bottom Row: Watts (⚡ W) & Temperature (🌡️ °C)
-            Directionality(
-              textDirection: TextDirection.ltr,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
+            const SizedBox(height: 5),
+
+            // 4. Dedicated Bottom ON / OFF Pill Button
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onToggle,
+                borderRadius: BorderRadius.circular(11),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  height: 31,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: isOn
+                        ? LinearGradient(
+                            colors: [activeBase, activeDarker],
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                          )
+                        : null,
+                    color: isOn
+                        ? null
+                        : (dark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0)),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        Icons.bolt_rounded,
+                        Icons.power_settings_new_rounded,
                         size: 14,
-                        color: isOn ? Colors.yellowAccent : AppColors.honeyYellow,
+                        color: isOn ? Colors.white : textSecondary,
                       ),
-                      const SizedBox(width: 2),
+                      const SizedBox(width: 5),
                       Text(
-                        '${socket.watt.toStringAsFixed(1)} W',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                          color: fgSecondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.thermostat_rounded,
-                        size: 13,
-                        color: (socket.tempC ?? 28) >= 55
-                            ? Colors.redAccent
-                            : fgSecondary.withOpacity(0.85),
-                      ),
-                      const SizedBox(width: 1),
-                      Text(
-                        '${socket.tempC ?? 28}°',
-                        style: TextStyle(
+                        isOn
+                            ? trBi('تشغيل • ON', 'ON')
+                            : trBi('إيقاف • OFF', 'OFF'),
+                        style: GoogleFonts.cairo(
                           fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
-                          color: fgSecondary,
+                          fontWeight: FontWeight.w900,
+                          color: isOn ? Colors.white : textSecondary,
+                          height: 1.1,
                         ),
                       ),
                     ],
                   ),
-                ],
+                ),
               ),
             ),
           ],
@@ -264,24 +325,85 @@ class SocketCard extends StatelessWidget {
     );
   }
 
-  Widget _buildMiniBadge(String text, bool isOn, bool isDark) {
-    return Container(
-      margin: const EdgeInsets.only(right: 3),
-      padding: const EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
-      decoration: BoxDecoration(
-        color: isOn
-            ? Colors.black.withOpacity(0.20)
-            : (isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06)),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontSize: 9.5,
-          fontWeight: FontWeight.w800,
-          color: isOn ? Colors.white : (isDark ? Colors.white70 : Colors.black87),
+  Widget _buildMetricRow({
+    required String label,
+    required String value,
+    required Color labelColor,
+    required Color valueColor,
+    bool isBoldValue = false,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.cairo(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: labelColor,
+            height: 1.1,
+          ),
         ),
-      ),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Text(
+            value,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10.5,
+              fontWeight: isBoldValue ? FontWeight.w800 : FontWeight.w700,
+              color: valueColor,
+              height: 1.1,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimerRow({
+    required String label,
+    required String value,
+    required bool hasActiveTimer,
+    required Color activeBase,
+    required Color labelColor,
+    required Color valueColor,
+  }) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.cairo(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w700,
+            color: labelColor,
+            height: 1.1,
+          ),
+        ),
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: Container(
+            padding: hasActiveTimer
+                ? const EdgeInsets.symmetric(horizontal: 5, vertical: 1)
+                : EdgeInsets.zero,
+            decoration: hasActiveTimer
+                ? BoxDecoration(
+                    color: activeBase.withOpacity(0.14),
+                    borderRadius: BorderRadius.circular(5),
+                  )
+                : null,
+            child: Text(
+              value,
+              style: GoogleFonts.jetBrainsMono(
+                fontSize: 10,
+                fontWeight: hasActiveTimer ? FontWeight.w800 : FontWeight.w600,
+                color: hasActiveTimer ? activeBase : valueColor,
+                height: 1.1,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
+import '../localization/app_locale.dart';
 import '../storage/secure_storage.dart';
 
 class BiometricService {
@@ -30,7 +31,7 @@ class BiometricService {
 
   /// Trigger fingerprint / face / device security prompt
   static Future<bool> authenticateBiometric({
-    String reason = 'أكّد هويتك بالبصمة أو رمز الجهاز للمتابعة',
+    String? reason,
     bool biometricOnly = false,
   }) async {
     if (kIsWeb) return false;
@@ -39,7 +40,7 @@ class BiometricService {
       if (!isSupported) return false;
 
       return await _auth.authenticate(
-        localizedReason: reason,
+        localizedReason: reason ?? trBi('أكّد هويتك بالبصمة أو رمز الجهاز للمتابعة', 'Verify your identity with fingerprint or device passcode'),
         options: AuthenticationOptions(
           stickyAuth: true,
           biometricOnly: biometricOnly,

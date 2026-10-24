@@ -200,7 +200,7 @@ class AppTranslations {
       
       // About & Credits
       'developer_credit': 'المطور: أحمد عصام (Ahmed Essam)',
-      'app_version': 'Na7la IoT v1.3.6',
+      'app_version': 'Na7la IoT v2.0.0',
     },
     'en': {
       'app_title': 'Na7la IoT',
@@ -353,7 +353,7 @@ class AppTranslations {
       
       // About & Credits
       'developer_credit': 'Developer: Ahmed Essam',
-      'app_version': 'Na7la IoT v1.3.6',
+      'app_version': 'Na7la IoT v2.0.0',
     }
   };
 
@@ -366,4 +366,63 @@ class AppTranslations {
     }
     return key;
   }
+}
+
+/// Global bilingual helper that automatically returns Arabic or English
+/// according to [AppLocaleController.instance.isArabic].
+String trBi(String ar, String en) {
+  return AppLocaleController.instance.isArabic ? ar : en;
+}
+
+/// Automatically translates default Arabic/English outlet names when switching languages,
+/// while preserving custom user-defined outlet names.
+String trOutletName(String rawName, [int? outletIndex]) {
+  final isAr = AppLocaleController.instance.isArabic;
+  final trimmed = rawName.trim();
+  if (trimmed.isEmpty) {
+    final idx = outletIndex ?? 1;
+    return isAr ? 'مقبس $idx' : 'Outlet $idx';
+  }
+  const routerAr = {'راوتر الإنترنت', 'الراوتر', 'راوتر'};
+  const routerEn = {'Internet Router', 'Router'};
+  if (routerAr.contains(trimmed) || routerEn.contains(trimmed)) {
+    return isAr ? 'راوتر الإنترنت' : 'Internet Router';
+  }
+  final arMatch = RegExp(r'^(?:مقبس|المخرج|مخرج|فيشة|الفيشة)\s*(\d+)$').firstMatch(trimmed);
+  if (arMatch != null) {
+    final numStr = arMatch.group(1)!;
+    return isAr ? 'مقبس $numStr' : 'Outlet $numStr';
+  }
+  final enMatch = RegExp(r'^(?:Outlet|Socket)\s*(\d+)$', caseSensitive: false).firstMatch(trimmed);
+  if (enMatch != null) {
+    final numStr = enMatch.group(1)!;
+    return isAr ? 'مقبس $numStr' : 'Outlet $numStr';
+  }
+  return rawName;
+}
+
+/// Automatically translates default room names when switching languages.
+String trRoomName(String rawRoom) {
+  final isAr = AppLocaleController.instance.isArabic;
+  final trimmed = rawRoom.trim();
+  const mapArToEn = {
+    'غرفة المعيشة': 'Living Room',
+    'غرفة النوم': 'Bedroom',
+    'المكتب': 'Office',
+    'المطبخ': 'Kitchen',
+    'غرفة الأطفال': 'Kids Room',
+    'الصالة': 'Hall',
+    'عام': 'General',
+  };
+  if (!isAr && mapArToEn.containsKey(trimmed)) {
+    return mapArToEn[trimmed]!;
+  }
+  if (isAr) {
+    for (final entry in mapArToEn.entries) {
+      if (entry.value.toLowerCase() == trimmed.toLowerCase()) {
+        return entry.key;
+      }
+    }
+  }
+  return rawRoom;
 }

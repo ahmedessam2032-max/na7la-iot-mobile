@@ -15,7 +15,7 @@ class AppColors {
   static const Color honeyGlow = Color(0xFFFBBF24);
 
   // Telemetry Bar Colors
-  static const Color telemetryBarLight = Color(0xFFFFFBEB);
+  static const Color telemetryBarLight = Color(0xFFF0FDF4);
   static const Color telemetryBarDark = Color(0xFF1E293B);
 
   // Clean Material 3 Light Palette (WattQ 1.0.27 Style)
@@ -49,12 +49,12 @@ class AppColors {
 
   // 6 Outlet Custom Colors (WattQ 1.0.27)
   static const List<Map<String, dynamic>> outletPalette = [
-    {'hex': '#10B981', 'name': 'أخضر زمردي', 'color': Color(0xFF10B981)},
-    {'hex': '#EF4444', 'name': 'أحمر', 'color': Color(0xFFEF4444)},
-    {'hex': '#F97316', 'name': 'برتقالي', 'color': Color(0xFFF97316)},
-    {'hex': '#EAB308', 'name': 'أصفر ذهبي', 'color': Color(0xFFEAB308)},
-    {'hex': '#3B82F6', 'name': 'أزرق', 'color': Color(0xFF3B82F6)},
-    {'hex': '#8B5CF6', 'name': 'بنفسجي', 'color': Color(0xFF8B5CF6)},
+    {'hex': '#10B981', 'name': 'أخضر زمردي', 'nameEn': 'Emerald Green', 'color': Color(0xFF10B981)},
+    {'hex': '#EF4444', 'name': 'أحمر', 'nameEn': 'Coral Red', 'color': Color(0xFFEF4444)},
+    {'hex': '#F97316', 'name': 'برتقالي', 'nameEn': 'Warm Orange', 'color': Color(0xFFF97316)},
+    {'hex': '#EAB308', 'name': 'أصفر ذهبي', 'nameEn': 'Golden Amber', 'color': Color(0xFFEAB308)},
+    {'hex': '#3B82F6', 'name': 'أزرق', 'nameEn': 'Royal Blue', 'color': Color(0xFF3B82F6)},
+    {'hex': '#8B5CF6', 'name': 'بنفسجي', 'nameEn': 'Electric Violet', 'color': Color(0xFF8B5CF6)},
   ];
 
   static Color parseHexColor(String? hex, {Color fallback = emeraldActive}) {
@@ -124,7 +124,7 @@ class AppTheme {
       ),
       colorScheme: const ColorScheme.light(
         primary: AppColors.emeraldActive,
-        secondary: AppColors.honeyYellow,
+        secondary: AppColors.emeraldActive,
         surface: AppColors.cardSurfaceLight,
       ),
     );
@@ -145,7 +145,7 @@ class AppTheme {
       ),
       colorScheme: const ColorScheme.dark(
         primary: AppColors.emeraldActive,
-        secondary: AppColors.honeyYellow,
+        secondary: AppColors.emeraldActive,
         surface: AppColors.cardSurfaceDark,
       ),
     );

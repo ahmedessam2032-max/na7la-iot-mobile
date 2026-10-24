@@ -25,9 +25,12 @@ class WifiNetworkInfo {
 }
 
 class SoftApService {
+  static Future<bool> hasPermissions() async => true;
   static Future<bool> requestPermissions() async => true;
   static Future<bool> isLocationEnabled() async => true;
   static Future<bool> openLocationSettings() async => false;
+  static Future<bool> openWifiSettings() async => false;
+  static Future<bool> hasInternetConnection() async => true;
   static Future<String> getCurrentSsid() async => 'Web_Simulated_WiFi';
   static Future<List<WifiNetworkInfo>> scanNearbyWifiDetailed() async => [];
   static Future<List<String>> scanNearbyWifi() async => [];

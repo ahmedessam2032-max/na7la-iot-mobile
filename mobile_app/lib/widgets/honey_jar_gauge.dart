@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../core/localization/app_locale.dart';
 import '../core/theme/app_theme.dart';
 
 class HoneyJarGauge extends StatelessWidget {
@@ -22,20 +23,16 @@ class HoneyJarGauge extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Jar Lid
+        // Gauge Cap
         Container(
           width: 50,
           height: 8,
           decoration: BoxDecoration(
-            color: AppColors.inkBlack,
+            color: AppColors.emeraldPrimary,
             borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-            border: Border.all(
-              color: AppColors.honeyYellow.withOpacity(0.4),
-              width: 1.5,
-            ),
           ),
         ),
-        // Jar Glass Body
+        // Gauge Body
         Container(
           width: 82,
           height: 104,
@@ -43,8 +40,8 @@ class HoneyJarGauge extends StatelessWidget {
             color: isDark ? AppColors.cardMutedDark : AppColors.cardMutedLight,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: isDark ? AppColors.darkBorder : AppColors.inkBlack,
-              width: 2.5,
+              color: isDark ? AppColors.borderDark : AppColors.borderLight,
+              width: 1.5,
             ),
           ),
           clipBehavior: Clip.antiAlias,
@@ -64,25 +61,19 @@ class HoneyJarGauge extends StatelessWidget {
                     itemBuilder: (context, i) => Container(
                       height: 2,
                       margin: const EdgeInsets.only(bottom: 4),
-                      color: AppColors.inkBlack.withOpacity(0.5),
+                      color: AppColors.emeraldPrimary.withOpacity(0.35),
                     ),
                   ),
                 ),
               ),
-              // Animated Honey Liquid
+              // Animated Emerald Level
               AnimatedContainer(
                 duration: const Duration(milliseconds: 600),
                 curve: Curves.easeOutBack,
                 width: double.infinity,
                 height: 104 * percentage,
                 decoration: const BoxDecoration(
-                  color: AppColors.honeyAmber,
-                  border: Border(
-                    top: BorderSide(
-                      color: AppColors.inkBlack,
-                      width: 2.0,
-                    ),
-                  ),
+                  color: AppColors.emeraldPrimary,
                 ),
                 child: Container(
                   alignment: Alignment.bottomRight,
@@ -90,16 +81,15 @@ class HoneyJarGauge extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
-                      color: AppColors.inkBlack,
+                      color: Colors.black.withOpacity(0.28),
                       borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: AppColors.honeyYellow, width: 1),
                     ),
                     child: Text(
                       '$displayPct%',
                       style: GoogleFonts.jetBrainsMono(
                         fontSize: 9,
                         fontWeight: FontWeight.w900,
-                        color: AppColors.honeyYellow,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -110,11 +100,11 @@ class HoneyJarGauge extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'مؤشر الحمل الآمن',
+          trBi('مؤشر الحمل الآمن', 'Safe Load'),
           style: GoogleFonts.cairo(
             fontSize: 9,
             fontWeight: FontWeight.w800,
-            color: isDark ? Colors.white70 : AppColors.inkBlack.withOpacity(0.7),
+            color: isDark ? Colors.white70 : AppColors.textSecondaryLight,
           ),
         ),
       ],

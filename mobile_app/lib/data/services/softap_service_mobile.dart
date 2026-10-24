@@ -30,7 +30,17 @@ class WifiNetworkInfo {
 class SoftApService {
   static const MethodChannel _channel = MethodChannel('com.na7la.iot/native_wifi');
 
-  /// Request Location & Nearby Devices permissions
+  /// Check whether Wi-Fi & Location permissions are already granted
+  static Future<bool> hasPermissions() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('hasWifiPermissions');
+      return res ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Request Location & Nearby Wi-Fi Devices permissions (waits for actual user decision)
   static Future<bool> requestPermissions() async {
     try {
       final res = await _channel.invokeMethod<bool>('requestWifiPermissions');
@@ -57,6 +67,26 @@ class SoftApService {
       return res ?? false;
     } catch (_) {
       return false;
+    }
+  }
+
+  /// Open Android Wi-Fi quick panel / settings
+  static Future<bool> openWifiSettings() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('openWifiSettings');
+      return res ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Check whether the phone has restored internet connectivity after releasing SoftAP
+  static Future<bool> hasInternetConnection() async {
+    try {
+      final res = await _channel.invokeMethod<bool>('hasInternetConnection');
+      return res ?? true;
+    } catch (_) {
+      return true;
     }
   }
 

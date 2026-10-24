@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/localization/app_locale.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/models/strip_model.dart';
 import '../../data/repositories/strip_repository.dart';
@@ -88,15 +89,21 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
       widget.strip.biometricControl = _biometricControl;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('🛡️ تم حفظ وتطبيق إعدادات الحماية وحدود المشترك على السيرفر والهاردوير بنجاح'),
+        SnackBar(
+          content: Text(trBi(
+            '🛡️ تم حفظ وتطبيق إعدادات الحماية وحدود المشترك على السيرفر والهاردوير بنجاح',
+            '🛡️ Protection & power limits saved and synced to server and hardware!',
+          )),
           backgroundColor: AppColors.emeraldPrimary,
         ),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ فشل حفظ إعدادات الحماية، تحقق من الاتصال'),
+        SnackBar(
+          content: Text(trBi(
+            '❌ فشل حفظ إعدادات الحماية، تحقق من الاتصال',
+            '❌ Failed to save protection settings. Please check your connection.',
+          )),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -113,7 +120,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
     final borderColor = widget.isDark ? AppColors.borderDark : AppColors.borderLight;
 
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: AppLocaleController.instance.textDirection,
       child: Scaffold(
         backgroundColor: bg,
         appBar: AppBar(
@@ -123,7 +130,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'حدود الواط والفولت والحماية الذكية 🛡️',
+                trBi('حدود الواط والفولت والحماية الذكية 🛡️', 'Watt, Voltage & Smart Protection 🛡️'),
                 style: GoogleFonts.cairo(fontSize: 15, fontWeight: FontWeight.w900, color: textPrimary),
               ),
               Text(
@@ -134,7 +141,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
           ),
           actions: [
             Padding(
-              padding: const EdgeInsets.only(left: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Center(
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -176,11 +183,14 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '🛡️ حارس الجهد الكهربائي (Voltage Guard)',
+                                trBi('🛡️ حارس الجهد الكهربائي (Voltage Guard)', '🛡️ Voltage Guard Protection'),
                                 style: GoogleFonts.cairo(fontSize: 14, fontWeight: FontWeight.w900, color: textPrimary),
                               ),
                               Text(
-                                'فصل المخارج تلقائياً عند خروج فولت الكهرباء عن النطاق الآمن (عدد مرات الفصل: ${widget.strip.voltageBreachCount})',
+                                trBi(
+                                  'فصل المخارج تلقائياً عند خروج فولت الكهرباء عن النطاق الآمن (عدد مرات الفصل: ${widget.strip.voltageBreachCount})',
+                                  'Auto-cutoff outlets when grid voltage leaves safe range (Trip count: ${widget.strip.voltageBreachCount})',
+                                ),
                                 style: GoogleFonts.cairo(fontSize: 10.5, color: textSecondary),
                               ),
                             ],
@@ -207,7 +217,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'الحد الأدنى للفصل (Low Cut-off):',
+                                trBi('الحد الأدنى للفصل (Low Cut-off):', 'Low Voltage Cut-off:'),
                                 style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: textPrimary),
                               ),
                               Text(
@@ -232,7 +242,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'الحد الأقصى للفصل (High Cut-off):',
+                                trBi('الحد الأقصى للفصل (High Cut-off):', 'High Voltage Cut-off:'),
                                 style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: textPrimary),
                               ),
                               Text(
@@ -260,7 +270,10 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
 
                     // Voltage Exempt Outlets
                     Text(
-                      'استثناء مخارج من فصل الجهد (تبقى تعمل حتى لو تذبذب الجهد):',
+                      trBi(
+                        'استثناء مخارج من فصل الجهد (تبقى تعمل حتى لو تذبذب الجهد):',
+                        'Exempt outlets from voltage trip (stay ON during voltage fluctuations):',
+                      ),
                       style: GoogleFonts.cairo(fontSize: 11.5, fontWeight: FontWeight.w800, color: textPrimary),
                     ),
                     const SizedBox(height: 8),
@@ -275,7 +288,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                           checkmarkColor: AppColors.emeraldPrimary,
                           backgroundColor: mutedBg,
                           label: Text(
-                            '#${s.socketIndex} ${s.name}',
+                            '#${s.socketIndex} ${trOutletName(s.name, s.socketIndex)}',
                             style: GoogleFonts.cairo(
                               fontSize: 11,
                               fontWeight: FontWeight.w800,
@@ -301,11 +314,14 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        '🔄 إعادة التشغيل التلقائي عند استقرار الجهد',
+                        trBi('🔄 إعادة التشغيل التلقائي عند استقرار الجهد', '🔄 Auto-Recovery When Voltage Stabilizes'),
                         style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w800, color: textPrimary),
                       ),
                       subtitle: Text(
-                        'يعيد تشغيل المخارج المفصولة تلقائياً بعد عودة الفولت للنطاق الآمن',
+                        trBi(
+                          'يعيد تشغيل المخارج المفصولة تلقائياً بعد عودة الفولت للنطاق الآمن',
+                          'Automatically turns tripped outlets back ON once voltage returns to safe range',
+                        ),
                         style: GoogleFonts.cairo(fontSize: 10, color: textSecondary),
                       ),
                       value: _autoRecoverVoltage,
@@ -314,7 +330,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                     ),
                     if (_autoRecoverVoltage) ...[
                       Text(
-                        'مهلة التأخير قبل إعادة التشغيل (لحماية الكمبروسر):',
+                        trBi('مهلة التأخير قبل إعادة التشغيل (لحماية الكمبروسر):', 'Compressor Safety Delay Before Recovery:'),
                         style: GoogleFonts.cairo(fontSize: 11, fontWeight: FontWeight.w700, color: textSecondary),
                       ),
                       const SizedBox(height: 6),
@@ -334,7 +350,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                                   border: Border.all(color: isSel ? AppColors.emeraldPrimary : borderColor),
                                 ),
                                 child: Text(
-                                  sec >= 60 ? '${sec ~/ 60} د' : '$sec ث',
+                                  sec >= 60 ? trBi('${sec ~/ 60} د', '${sec ~/ 60}m') : trBi('$sec ث', '${sec}s'),
                                   style: GoogleFonts.cairo(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w800,
@@ -360,22 +376,25 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '🔌 حالة المشترك بعد انقطاع وعودة الكهرباء (Power Return)',
+                      trBi('🔌 حالة المشترك بعد انقطاع وعودة الكهرباء (Power Return)', '🔌 Power-On State After Outage'),
                       style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w900, color: textPrimary),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'اختر ماذا يفعل المشترك بالمخارج عند عودة التيار الكهربائي:',
+                      trBi(
+                        'اختر ماذا يفعل المشترك بالمخارج عند عودة التيار الكهربائي:',
+                        'Choose how outlets behave when grid power returns:',
+                      ),
                       style: GoogleFonts.cairo(fontSize: 10.5, color: textSecondary),
                     ),
                     const SizedBox(height: 10),
                     Row(
                       children: [
-                        _buildReturnStateChip('LAST', 'آخر حالة 🔄', textPrimary, mutedBg, borderColor),
+                        _buildReturnStateChip('LAST', trBi('آخر حالة 🔄', 'Last State 🔄'), textPrimary, mutedBg, borderColor),
                         const SizedBox(width: 8),
-                        _buildReturnStateChip('ON', 'تشغيل الكل ⚡', textPrimary, mutedBg, borderColor),
+                        _buildReturnStateChip('ON', trBi('تشغيل الكل ⚡', 'All ON ⚡'), textPrimary, mutedBg, borderColor),
                         const SizedBox(width: 8),
-                        _buildReturnStateChip('OFF', 'إيقاف الكل ⏻', textPrimary, mutedBg, borderColor),
+                        _buildReturnStateChip('OFF', trBi('إيقاف الكل ⏻', 'All OFF ⏻'), textPrimary, mutedBg, borderColor),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -387,7 +406,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '⚡ الحد الأقصى لقدرة المشترك الإجمالية:',
+                          trBi('⚡ الحد الأقصى لقدرة المشترك الإجمالية:', '⚡ Max Total Strip Power Limit:'),
                           style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w800, color: textPrimary),
                         ),
                         Text(
@@ -414,7 +433,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '🌡️ فصل الأمان الحراري للوحة المشترك:',
+                          trBi('🌡️ فصل الأمان الحراري للوحة المشترك:', '🌡️ Board Thermal Safety Cut-off:'),
                           style: GoogleFonts.cairo(fontSize: 12, fontWeight: FontWeight.w800, color: textPrimary),
                         ),
                         Text(
@@ -449,11 +468,14 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        '🚨 إسقاط الأحمال الذكي التدريجي (Smart Load Shedding)',
+                        trBi('🚨 إسقاط الأحمال الذكي التدريجي (Smart Load Shedding)', '🚨 Smart Load Shedding'),
                         style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w900, color: textPrimary),
                       ),
                       subtitle: Text(
-                        'فصل أعلى مخرج استهلاكاً تلقائياً عند تجاوز الحمل الكلي بدلاً من فصل المشترك بالكامل (مع حماية الراوتر)',
+                        trBi(
+                          'فصل أعلى مخرج استهلاكاً تلقائياً عند تجاوز الحمل الكلي بدلاً من فصل المشترك بالكامل (مع حماية الراوتر)',
+                          'Automatically shed highest-load non-critical outlet upon overload instead of tripping the whole strip',
+                        ),
                         style: GoogleFonts.cairo(fontSize: 10, color: textSecondary),
                       ),
                       value: _autoShedding,
@@ -464,11 +486,14 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        '🔐 اشتراط البصمة / PIN للتحكم في المشترك',
+                        trBi('🔐 اشتراط البصمة / PIN للتحكم في المشترك', '🔐 Require Biometric / PIN for Strip Control'),
                         style: GoogleFonts.cairo(fontSize: 12.5, fontWeight: FontWeight.w900, color: textPrimary),
                       ),
                       subtitle: Text(
-                        'طلب تأكيد البصمة أو رمز PIN قبل إيقاف أو تعديل إعدادات هذا المشترك',
+                        trBi(
+                          'طلب تأكيد البصمة أو رمز PIN قبل إيقاف أو تعديل إعدادات هذا المشترك',
+                          'Require fingerprint or PIN verification before toggling or modifying this strip',
+                        ),
                         style: GoogleFonts.cairo(fontSize: 10, color: textSecondary),
                       ),
                       value: _biometricControl,
@@ -493,7 +518,7 @@ class _ProtectionScreenState extends State<ProtectionScreen> {
                         )
                       : const Icon(Icons.check_circle_outline_rounded, size: 20),
                   label: Text(
-                    'حفظ وتطبيق جميع إعدادات الحماية على الهاردوير',
+                    trBi('حفظ وتطبيق جميع إعدادات الحماية على الهاردوير', 'Save & Sync Protection Settings to Hardware'),
                     style: GoogleFonts.cairo(fontSize: 13.5, fontWeight: FontWeight.w900),
                   ),
                   style: ElevatedButton.styleFrom(
